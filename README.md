@@ -32,6 +32,38 @@ I would like to implement Home Assistant intgeration which will effectively mana
 temperature sensors and targeting the right temperature on the main HVAC thermostat by setuped target temperatures for different rooms by user.
 It has to be clean code, nice, effective, fast, and safe! Also this component should be able to be installed over HACS into Home Assistant.
 
+## Project Architecture draft
+ - MAIN DEVICE (Device holding other climate zone subdevices)
+   - Temperature Sensor - Main climate target temperature value
+ - CLIMATE ZONE SUBDEVICE ( Climate device per room )
+   - name
+   - temperature sensor
+   - vavle switch
+   - target change threshold
+   - opening offset below target
+   - closing offset above target
+ - CONFIG
+   - All zones satisfied temperature target
+   - Minimum valves open
+   - Main climate min/max temperature
+   - Main climate target temperature change trashold
+ - CORE (Core logic)
+ - ASYNC JOB (Calculate main target temperature)
+   - find correct main climate target temperature and update main climate entity target temperature using hass.service.call method
+ - AUTOMATION (Listens to events nad runs correct async job from core logic)
+   - invoked only when one of zones temperature or target temperature has been changed
+   - invoke async job to find correct main climate target temperature
+ - COORDINATOR (Checks and holds values to be actual, something like sync controll)
+   - invoked periodically, for example
+ - LOGGER (Logging)
+   - INFO
+   - WARN
+   - ERROR
+   - DEBUG
+ - LOCALS (Translations (en, cz, sk, pl))
+ - TESTS
+ - DOCUMENTATION
+
 ## Integration Setup
 When creating integration, there will be inputs for:
  - Main Climate Entity reference - this will ne used as target entity to manage their target temperature
@@ -62,4 +94,20 @@ This zone climates does not driving valves, they are just informating about curr
 
 ## Core logic
 There should be some effective and quick automation to manage climate zones temperatures by opening and closing valves and setting up the right temperature on main climate entity temperature target.
-#TODO
+
+Probable there can be to separated (parallel) processes.
+
+
+# Sources and documentations
+## Home Assitant Developers Docs
+- Webpage: https://developers.home-assistant.io/
+- GitHub: https://github.com/home-assistant
+- Interesting urls:
+  - https://developers.home-assistant.io/blog/2024/03/13/deprecate_add_run_job/
+  - https://developers.home-assistant.io/docs/development_index
+  - https://github.com/home-assistant/core
+  - https://github.com/home-assistant/supervisor
+  - https://github.com/home-assistant/frontend
+  - https://www.thecandidstartup.org/2025/10/20/home-assistant-concurrency-model.html
+
+
