@@ -448,7 +448,7 @@ ha_multizone:valvelock:{valve_id} = {"locked_until": "2026-01-13T14:30:00Z"}
 
 1. **All zones satisfied**: Open valves for all satisfied zones (excluding disabled/OFF zones). If a zone was previously overheated and its valve was closed, it should now be opened to maintain stable temperatures at the configured main target.
 2. **All zones overheated**: Close all except minimum required valves, prioritizing fallback valves. Overheated zones are excluded from main target temperature calculation.
-3. **Multizone feature OFF**: Leave valves in current state - each zone manages its own valve manually. Safety check still runs to ensure minimum valves open, but user has manual control.
+3. **Multizone feature OFF**: Each zone manages its own valve automatically - underheated zones open their valves, overheated zones close their valves. Safety check still runs to ensure minimum valves open.
 4. **Zone turned OFF**: Close its valve (unless it's a required fallback)
 
 ### Pseudocode
@@ -468,9 +468,28 @@ def update_valves(zones, config, main_climate_state, multizone_enabled):
         List of valve actions to execute
     """
     if not multizone_enabled:
-        # Multizone feature OFF - leave valves as-is, user controls manually
+        # Multizone feature OFF - each zone manages its own valve
+        # Underheated zones open valves, overheated zones close valves
         # Safety check still ensures minimum valves open
-        return []
+        actions = []
+        
+        for zone in zones:
+            if zone.state == "OFF":
+                continue
+            
+            # Determine satisfaction (same logic as when multizone is on)
+            if main_climate_state == "HEATING":
+                if zone.current_temp < (zone.target_temp - config.opening_offset):
+                    actions.append({"valve_id": zone.valve_id, "action": "open"})
+                elif zone.current_temp > (zone.target_temp + config.closing_offset):
+                    actions.append({"valve_id": zone.valve_id, "action": "close"})
+            else:  # COOLING
+                if zone.current_temp > (zone.target_temp + config.opening_offset):
+                    actions.append({"valve_id": zone.valve_id, "action": "open"})
+                elif zone.current_temp < (zone.target_temp - config.closing_offset):
+                    actions.append({"valve_id": zone.valve_id, "action": "close"})
+        
+        return actions
     
     # Determine satisfaction state for each zone
     for zone in zones:
@@ -1440,26 +1459,32 @@ assert "kitchen_valve" in open_valves  # is_fallback_valve = true
 
 ---
 
-### Test 9: Multizone Feature OFF - Manual Control
+### Test 9: Multizone Feature OFF - Individual Zone Control
 
 **Purpose:** Verify system behavior when multizone feature is disabled
 
 **Setup:**
-- Initial: 3 valves open
+- Initial: Bedroom valve open (underheated), Kitchen valve open (satisfied), Living Room valve closed (overheated)
 - Multizone feature turned OFF
 
 **Expected Behavior:**
-1. No "Update valves" actions triggered
-2. Valves remain in current state (user controls manually)
-3. Safety check still runs to ensure minimum valves open
-4. Users can manually control each zone's valve
-5. Final state: valves unchanged from initial state
+1. Each zone manages its own valve based on satisfaction state
+2. Underheated zones: valves open
+3. Overheated zones: valves close
+4. Satisfied zones: maintain current valve state
+5. Safety check still runs to ensure minimum valves open
+6. No coordinated multi-zone logic (each zone independent)
+
+**Example:**
+- Bedroom (underheated, 19°C, target 21°C): valve OPEN
+- Kitchen (overheated, 23°C, target 20°C): valve CLOSE
+- Living Room (satisfied, 22°C, target 22°C): valve maintains current state
 
 **Rationale:**
-- When multizone OFF, user has manual control
+- When multizone OFF, each zone operates independently
+- Zones still react to temperature (underheated → open, overheated → close)
 - Cannot trust HVAC status alone (pump may still circulate)
 - Safety check ensures system protection
-- Each zone can control its own valve independently
 
 ---
 
