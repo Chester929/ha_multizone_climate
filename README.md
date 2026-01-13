@@ -179,21 +179,1214 @@ These zone climate entities control target temperature, but they do not control 
 They only provide information about current temperature, target temperature, and satisfaction status in the zone.
 
 # Algorithms
-- Calculate main temperature
-  - TBD
-- Update valves
-  - TBD
-- Safety valve check
-  - Checks if the minimum required number of valves are open
-  - If not, log a warning and open fallback valves.
-- Background jobs
-  - Process locker (redis can be used)
-    - At the same time there can be only one running job per type
-      - Update valves
-      - Calculate main target temperature
-      - Safety valve check
-  - Managing background jobs using queues
-    - 2 FIFO queues - one for Update valves and one for Calculate main target temperature
+
+## Calculate Main Target Temperature
+
+This algorithm determines the target temperature for the main HVAC thermostat based on all zone target temperatures and their current satisfaction states.
+
+### Approach: Slider-Based Mapping (Choice A)
+
+The "Main Target When All Zones Satisfied" slider (0-100%) controls how the main climate target is calculated when all zones are satisfied:
+
+- **0%**: Main target = lowest zone target (energy efficient, minimal heating)
+- **50%**: Main target = average of all zone targets (balanced approach, default)
+- **100%**: Main target = highest zone target (keeps boiler warmer, faster response)
+
+### Formula
+
+```
+slider_position = config.main_target_all_zones_satisfied  // value from 0.0 to 1.0
+
+// Find min and max zone targets
+min_zone_target = min(zone.target_temperature for all zones)
+max_zone_target = max(zone.target_temperature for all zones)
+
+// Linear interpolation based on slider
+main_target_raw = min_zone_target + slider_position * (max_zone_target - min_zone_target)
+
+// Clamp to configured main climate limits
+main_target = clamp(main_target_raw, config.main_min_temp, config.main_max_temp)
+
+// Only update if change exceeds threshold
+if abs(main_target - current_main_target) >= config.main_change_threshold:
+    update_main_climate_target(main_target)
+```
+
+### Pseudocode
+
+```python
+def calculate_main_target_temperature(zones, config, current_main_target):
+    """
+    Calculate the main HVAC target temperature based on zone targets.
+    
+    Args:
+        zones: List of climate zones with target_temperature
+        config: Configuration with main_target_all_zones_satisfied (0.0-1.0),
+                main_min_temp, main_max_temp, main_change_threshold
+        current_main_target: Current main climate target temperature
+    
+    Returns:
+        New main target temperature (or None if no update needed)
+    """
+    if not zones:
+        return None
+    
+    # Get active zones (turned ON)
+    active_zones = [z for z in zones if z.state != "OFF"]
+    if not active_zones:
+        return None
+    
+    # Find min and max zone targets
+    zone_targets = [z.target_temperature for z in active_zones]
+    min_target = min(zone_targets)
+    max_target = max(zone_targets)
+    
+    # Apply slider mapping
+    slider = config.main_target_all_zones_satisfied  # 0.0 to 1.0
+    if min_target == max_target:
+        main_target_raw = min_target
+    else:
+        main_target_raw = min_target + slider * (max_target - min_target)
+    
+    # Clamp to configured limits
+    main_target = max(config.main_min_temp, 
+                      min(config.main_max_temp, main_target_raw))
+    
+    # Only update if change is significant
+    if abs(main_target - current_main_target) >= config.main_change_threshold:
+        return main_target
+    
+    return None
+```
+
+### Numeric Example
+
+**Configuration:**
+- `main_target_all_zones_satisfied` = 0.5 (50%, average)
+- `main_min_temp` = 18.0°C
+- `main_max_temp` = 30.0°C
+- `main_change_threshold` = 0.5°C
+
+**Zones:**
+- Bedroom: target = 20.0°C
+- Living Room: target = 22.0°C
+- Kitchen: target = 19.0°C
+- Bathroom: target = 23.0°C
+
+**Calculation:**
+```
+min_target = 19.0°C
+max_target = 23.0°C
+slider = 0.5
+
+main_target_raw = 19.0 + 0.5 * (23.0 - 19.0)
+                = 19.0 + 0.5 * 4.0
+                = 19.0 + 2.0
+                = 21.0°C
+
+main_target = clamp(21.0, 18.0, 30.0) = 21.0°C
+```
+
+**Result:** Main climate target set to **21.0°C**
+
+**Different slider values:**
+- Slider at 0% (0.0): main_target = 19.0°C (lowest zone)
+- Slider at 25% (0.25): main_target = 20.0°C
+- Slider at 50% (0.5): main_target = 21.0°C (average)
+- Slider at 75% (0.75): main_target = 22.0°C
+- Slider at 100% (1.0): main_target = 23.0°C (highest zone)
+
+---
+
+## Update Valves Algorithm
+
+This algorithm manages the opening and closing of zone valves based on current and target temperatures, ensuring system safety and preventing rapid valve cycling (chattering).
+
+### Core Behavior
+
+1. **Determine zone satisfaction state** for each zone
+2. **Sort zones by priority** (those needing heat most urgently)
+3. **Apply safety rules** (minimum valves open)
+4. **Execute valve changes** using open-first-then-close sequence
+5. **Record valve locks** to prevent immediate re-actuation
+
+### Zone Satisfaction States
+
+Each zone is classified based on its current temperature relative to target:
+
+**Heating Mode:**
+- **Underheated**: `current_temp < (target_temp - opening_offset)`
+- **Satisfied**: `(target_temp - opening_offset) <= current_temp <= (target_temp + closing_offset)`
+- **Overheated**: `current_temp > (target_temp + closing_offset)`
+
+**Cooling Mode** (inverted logic):
+- **Undercooled**: `current_temp > (target_temp + opening_offset)`
+- **Satisfied**: `(target_temp - closing_offset) <= current_temp <= (target_temp + opening_offset)`
+- **Overcooled**: `current_temp < (target_temp - closing_offset)`
+
+### Priority Sorting
+
+Zones are prioritized by "temperature deficit" (how far from target):
+
+**Heating mode:**
+```python
+deficit = target_temp - current_temp
+priority = deficit  # Higher deficit = higher priority
+```
+
+**Cooling mode:**
+```python
+deficit = current_temp - target_temp
+priority = deficit  # Higher deficit = higher priority
+```
+
+### Safety Rules
+
+1. **Minimum valves open**: At least `config.min_valves_open` valves must remain open at all times
+2. **Fallback valves**: If insufficient valves would be open, force open fallback valves
+3. **Open-first-then-close**: When replacing an open valve with another, open the new valve first, wait for `valve_actuation_delay`, then close the old valve
+
+### Open-First-Then-Close Sequence
+
+To maintain minimum flow through the HVAC system:
+
+1. Identify valves to open and valves to close
+2. **If currently at minimum valves open and need to swap:**
+   - Open the new valve(s) first
+   - Set valve lock: `valve_lock[valve_id] = now + valve_actuation_delay`
+   - Wait for physical valve to fully open
+   - Then close the old valve(s)
+3. **Otherwise:**
+   - Close valves that should be closed
+   - Open valves that should be open
+
+### Valve Locks and Cooldown
+
+To prevent chattering (rapid open/close cycles):
+
+- **Valve lock**: After actuating a valve, record `valve_lock[valve_id] = timestamp + cooldown`
+- **Cooldown period**: `valve_actuation_delay` (e.g., 120 seconds)
+- **Skip locked valves**: Don't actuate a valve again until its lock expires
+
+**Redis key pattern:**
+```
+ha_multizone:valvelock:{valve_id} = {"locked_until": "2026-01-13T14:30:00Z"}
+```
+
+### Edge Cases
+
+1. **All zones satisfied**: Maintain current valve states (or minimum open)
+2. **No zones require heat**: Close all except minimum required valves, prioritizing fallback valves
+3. **Main climate OFF**: Close all valves (safety check disabled)
+4. **Zone turned OFF**: Close its valve (unless it's a required fallback)
+
+### Pseudocode
+
+```python
+def update_valves(zones, config, main_climate_state):
+    """
+    Update valve states based on zone temperatures and satisfaction.
+    
+    Args:
+        zones: List of climate zones with current_temp, target_temp, valve_id, state
+        config: Configuration with min_valves_open, valve_actuation_delay, opening_offset, closing_offset
+        main_climate_state: Main HVAC state (HEATING, COOLING, OFF)
+    
+    Returns:
+        List of valve actions to execute
+    """
+    if main_climate_state == "OFF":
+        # Close all valves when main climate is off
+        return [{"valve_id": z.valve_id, "action": "close"} for z in zones]
+    
+    # Determine satisfaction state for each zone
+    for zone in zones:
+        if zone.state == "OFF":
+            zone.satisfaction = "off"
+            continue
+        
+        if main_climate_state == "HEATING":
+            if zone.current_temp < (zone.target_temp - config.opening_offset):
+                zone.satisfaction = "underheated"
+            elif zone.current_temp > (zone.target_temp + config.closing_offset):
+                zone.satisfaction = "overheated"
+            else:
+                zone.satisfaction = "satisfied"
+        else:  # COOLING
+            if zone.current_temp > (zone.target_temp + config.opening_offset):
+                zone.satisfaction = "undercooled"
+            elif zone.current_temp < (zone.target_temp - config.closing_offset):
+                zone.satisfaction = "overcooled"
+            else:
+                zone.satisfaction = "satisfied"
+    
+    # Calculate priority (temperature deficit)
+    for zone in zones:
+        if zone.state == "OFF":
+            zone.priority = -1000  # Lowest priority
+        elif main_climate_state == "HEATING":
+            zone.priority = zone.target_temp - zone.current_temp
+        else:  # COOLING
+            zone.priority = zone.current_temp - zone.target_temp
+    
+    # Sort zones by priority (descending)
+    sorted_zones = sorted(zones, key=lambda z: z.priority, reverse=True)
+    
+    # Determine desired valve states
+    valves_to_open = []
+    valves_to_close = []
+    
+    for zone in sorted_zones:
+        if zone.state == "OFF":
+            valves_to_close.append(zone.valve_id)
+        elif main_climate_state == "HEATING":
+            if zone.satisfaction == "underheated":
+                valves_to_open.append(zone.valve_id)
+            elif zone.satisfaction == "overheated":
+                valves_to_close.append(zone.valve_id)
+            # satisfied: maintain current state
+        else:  # COOLING
+            if zone.satisfaction == "undercooled":
+                valves_to_open.append(zone.valve_id)
+            elif zone.satisfaction == "overcooled":
+                valves_to_close.append(zone.valve_id)
+    
+    # Apply safety: ensure minimum valves open
+    currently_open = get_currently_open_valves(zones)
+    will_be_open = (currently_open - set(valves_to_close)) | set(valves_to_open)
+    
+    if len(will_be_open) < config.min_valves_open:
+        # Force open fallback valves
+        shortage = config.min_valves_open - len(will_be_open)
+        fallback_candidates = get_fallback_valves(zones, exclude=will_be_open)
+        for valve_id in fallback_candidates[:shortage]:
+            valves_to_open.append(valve_id)
+            if valve_id in valves_to_close:
+                valves_to_close.remove(valve_id)
+    
+    # Check valve locks (cooldown)
+    now = get_current_time()
+    valves_to_open = [v for v in valves_to_open if not is_valve_locked(v, now)]
+    valves_to_close = [v for v in valves_to_close if not is_valve_locked(v, now)]
+    
+    # Execute with open-first-then-close logic
+    actions = []
+    
+    # If at minimum and swapping, open first
+    if len(currently_open) == config.min_valves_open and valves_to_open and valves_to_close:
+        # Open new valves first
+        for valve_id in valves_to_open:
+            actions.append({
+                "valve_id": valve_id,
+                "action": "open",
+                "timestamp": now
+            })
+            set_valve_lock(valve_id, now + config.valve_actuation_delay)
+        
+        # Schedule closing of old valves after delay
+        for valve_id in valves_to_close:
+            actions.append({
+                "valve_id": valve_id,
+                "action": "close",
+                "delay": config.valve_actuation_delay,
+                "timestamp": now + config.valve_actuation_delay
+            })
+            set_valve_lock(valve_id, now + config.valve_actuation_delay)
+    else:
+        # Normal operation: close first, then open
+        for valve_id in valves_to_close:
+            actions.append({
+                "valve_id": valve_id,
+                "action": "close",
+                "timestamp": now
+            })
+            set_valve_lock(valve_id, now + config.valve_actuation_delay)
+        
+        for valve_id in valves_to_open:
+            actions.append({
+                "valve_id": valve_id,
+                "action": "open",
+                "timestamp": now
+            })
+            set_valve_lock(valve_id, now + config.valve_actuation_delay)
+    
+    return actions
+```
+
+### Example Walkthrough: Open-First-Then-Close with Valve Actuation Delay
+
+**Initial State:**
+- Minimum valves open: 1
+- Currently open: Bedroom valve
+- valve_actuation_delay: 120 seconds
+
+**Scenario:** Bedroom is now satisfied, but Kitchen needs heat
+
+**Step-by-step:**
+
+1. **T=0s**: Algorithm runs
+   - Bedroom: satisfied (should close)
+   - Kitchen: underheated (should open)
+   - Currently 1 valve open (at minimum)
+   
+2. **T=0s**: Open Kitchen valve FIRST
+   ```
+   Action: OPEN Kitchen valve
+   Set valve_lock[Kitchen] = T+120s
+   ```
+   
+3. **T=0s to T=120s**: Both valves open (exceeds minimum, but safe)
+   - Physical Kitchen valve opening...
+   
+4. **T=120s**: Close Bedroom valve
+   ```
+   Action: CLOSE Bedroom valve
+   Set valve_lock[Bedroom] = T+240s
+   ```
+   
+5. **T=120s+**: System stable
+   - Kitchen valve open (minimum maintained)
+
+**Result:** Minimum flow maintained throughout the transition.
+
+---
+
+## Safety Valve Check Algorithm
+- Checks if the minimum required number of valves are open
+- If not, log a warning and open fallback valves.
+
+### Pseudocode
+
+```python
+def safety_valve_check(zones, config):
+    """
+    Ensure minimum number of valves are open for system safety.
+    
+    Args:
+        zones: List of climate zones with valve states
+        config: Configuration with min_valves_open
+    
+    Returns:
+        List of fallback valves to force open (if needed)
+    """
+    currently_open = [z for z in zones if z.valve_state == "open"]
+    
+    if len(currently_open) < config.min_valves_open:
+        shortage = config.min_valves_open - len(currently_open)
+        log_warning(f"Safety check: Only {len(currently_open)} valves open, need {config.min_valves_open}")
+        
+        # Get fallback valves
+        fallback_valves = get_fallback_valves(zones, exclude=currently_open)
+        valves_to_force_open = fallback_valves[:shortage]
+        
+        for valve in valves_to_force_open:
+            log_warning(f"Safety: Force opening fallback valve {valve.id}")
+        
+        return valves_to_force_open
+    
+    return []
+```
+
+---
+
+## Background Jobs and Process Locking
+
+- Process locker (redis can be used)
+  - At the same time there can be only one running job per type
+    - Update valves
+    - Calculate main target temperature
+    - Safety valve check
+- Managing background jobs using queues
+  - 2 FIFO queues - one for Update valves and one for Calculate main target temperature
+
+### Job Lock Pattern (Redis)
+
+```python
+def acquire_job_lock(job_type, timeout=60):
+    """
+    Acquire a lock for a specific job type.
+    
+    Args:
+        job_type: "update_valves", "calculate_main_temp", or "safety_check"
+        timeout: Lock timeout in seconds
+    
+    Returns:
+        True if lock acquired, False otherwise
+    """
+    lock_key = f"ha_multizone:joblock:{job_type}"
+    now = time.time()
+    
+    # Try to set lock with expiration
+    success = redis.set(lock_key, now, nx=True, ex=timeout)
+    return success
+
+def release_job_lock(job_type):
+    """Release the job lock."""
+    lock_key = f"ha_multizone:joblock:{job_type}"
+    redis.delete(lock_key)
+```
+
+# Redis Schema
+
+Redis is used to store configuration, zone states, job queues, and synchronization locks. All keys use a configurable prefix (default: `ha_multizone`).
+
+## Key Patterns
+
+### Global Configuration
+```
+Key: ha_multizone:config
+Type: Hash
+Description: Stores global configuration parameters
+```
+
+**Example JSON:**
+```json
+{
+  "main_target_all_zones_satisfied": 0.5,
+  "min_valves_open": 1,
+  "main_min_temp": 18.0,
+  "main_max_temp": 30.0,
+  "main_change_threshold": 0.5,
+  "valve_actuation_delay": 120,
+  "command_cooldown": 60,
+  "coordinator_interval": 15
+}
+```
+
+### Zone Configuration
+```
+Key: ha_multizone:zones
+Type: List
+Description: List of all zone IDs
+```
+
+**Example:**
+```json
+["zone_bedroom", "zone_living_room", "zone_kitchen", "zone_bathroom"]
+```
+
+### Per-Zone State
+```
+Key: ha_multizone:zone:{zone_id}
+Type: Hash
+Description: Stores state and configuration for a specific zone
+```
+
+**Example JSON:**
+```json
+{
+  "id": "zone_bedroom",
+  "name": "Bedroom",
+  "temperature_sensor_entity_id": "sensor.bedroom_temperature",
+  "valve_switch_entity_id": "switch.bedroom_valve",
+  "current_temperature": 20.5,
+  "target_temperature": 21.0,
+  "state": "ON",
+  "satisfaction": "underheated",
+  "valve_state": "open",
+  "target_change_threshold": 0.1,
+  "opening_offset": 0.3,
+  "closing_offset": 0.3,
+  "is_fallback_valve": false,
+  "priority": 0.5,
+  "last_updated": "2026-01-13T13:30:00Z"
+}
+```
+
+### Main Climate State
+```
+Key: ha_multizone:main_climate
+Type: Hash
+Description: Stores main HVAC climate entity state
+```
+
+**Example JSON:**
+```json
+{
+  "entity_id": "climate.main_thermostat",
+  "current_temperature": 20.8,
+  "target_temperature": 21.0,
+  "outdoor_temperature": 5.0,
+  "hvac_mode": "MANUAL",
+  "hvac_action": "HEATING",
+  "multizone_enabled": true,
+  "last_updated": "2026-01-13T13:30:00Z"
+}
+```
+
+### Job Queues
+```
+Key: ha_multizone:queue:update_valves
+Type: List (FIFO)
+Description: Queue of pending "update valves" jobs
+
+Key: ha_multizone:queue:calculate_main_temp
+Type: List (FIFO)
+Description: Queue of pending "calculate main temp" jobs
+```
+
+**Example Queue Entry:**
+```json
+{
+  "job_id": "calc_temp_20260113_133000_001",
+  "job_type": "calculate_main_temp",
+  "enqueued_at": "2026-01-13T13:30:00Z",
+  "parameters": {
+    "trigger": "zone_bedroom_target_changed",
+    "changed_zones": ["zone_bedroom"]
+  }
+}
+```
+
+### Valve Locks
+```
+Key: ha_multizone:valvelock:{valve_id}
+Type: String (timestamp)
+Description: Lock timestamp preventing valve re-actuation until cooldown expires
+TTL: Set to valve_actuation_delay
+```
+
+**Example:**
+```json
+{
+  "valve_id": "switch.bedroom_valve",
+  "locked_until": "2026-01-13T13:32:00Z",
+  "reason": "opened_at_13:30:00"
+}
+```
+
+### Job Locks
+```
+Key: ha_multizone:joblock:{job_type}
+Type: String (timestamp)
+Description: Prevents concurrent execution of same job type
+TTL: Set to 60 seconds (auto-release if job crashes)
+```
+
+**Example:**
+```json
+{
+  "job_type": "update_valves",
+  "acquired_at": "2026-01-13T13:30:00Z",
+  "acquired_by": "worker_thread_1"
+}
+```
+
+### Job Status
+```
+Key: ha_multizone:jobstatus:{job_id}
+Type: Hash
+Description: Tracks execution status of background jobs
+TTL: Set to 300 seconds (5 minutes after completion)
+```
+
+**Example JSON:**
+```json
+{
+  "job_id": "update_valves_20260113_133000_001",
+  "job_type": "update_valves",
+  "status": "completed",
+  "started_at": "2026-01-13T13:30:00Z",
+  "completed_at": "2026-01-13T13:30:02Z",
+  "duration_ms": 2341,
+  "actions_taken": 3,
+  "errors": [],
+  "result": {
+    "valves_opened": ["switch.kitchen_valve"],
+    "valves_closed": ["switch.bedroom_valve"],
+    "valves_unchanged": ["switch.living_room_valve"]
+  }
+}
+```
+
+## Redis Data Flow
+
+1. **Configuration changes** → Update `ha_multizone:config`
+2. **Zone state changes** → Update `ha_multizone:zone:{zone_id}`
+3. **Temperature/target changes** → Enqueue job to `ha_multizone:queue:calculate_main_temp`
+4. **Coordinator** → Dequeue jobs from queues, acquire job locks, execute
+5. **Valve actuation** → Set `ha_multizone:valvelock:{valve_id}` with TTL
+6. **Job completion** → Update `ha_multizone:jobstatus:{job_id}`, release job lock
+
+---
+
+# Configuration Examples
+
+This section maps the UI configuration fields to their JSON storage format and provides recommended default values.
+
+## Integration Setup Configuration
+
+### Redis Connection
+**UI Fields:**
+- Host: `localhost`
+- Port: `6379`
+- Password: (optional, empty by default)
+- Database: `0`
+- Key Prefix: (optional, default: `ha_multizone`)
+
+**Stored in Home Assistant config entry** (not Redis):
+```json
+{
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": null,
+    "db": 0,
+    "key_prefix": "ha_multizone"
+  }
+}
+```
+
+### Main Climate Configuration
+**UI Fields:**
+- Main Climate Entity: `climate.main_thermostat` (entity selector)
+
+**Stored in `ha_multizone:config`:**
+```json
+{
+  "main_climate_entity_id": "climate.main_thermostat"
+}
+```
+
+### Automation Configuration
+**UI Fields:**
+- Main Target When All Zones Satisfied: Slider 0-100% (default: 50%)
+- Minimum Valves Open: Number (default: 1)
+- Main Min Temperature: Number °C (default: 18.0)
+- Main Max Temperature: Number °C (default: 30.0)
+- Main Change Threshold: Number °C (default: 0.5)
+- Valve Actuation Delay: Number seconds (default: 120)
+
+**Stored in `ha_multizone:config`:**
+```json
+{
+  "main_target_all_zones_satisfied": 0.5,
+  "min_valves_open": 1,
+  "main_min_temp": 18.0,
+  "main_max_temp": 30.0,
+  "main_change_threshold": 0.5,
+  "valve_actuation_delay": 120,
+  "command_cooldown": 60,
+  "coordinator_interval": 15
+}
+```
+
+## Zone Configuration
+
+### Add Climate Zone
+**UI Fields:**
+- Zone Name: Text (e.g., "Bedroom")
+- Temperature Sensor: Entity selector (e.g., `sensor.bedroom_temperature`)
+- Valve Switch: Entity selector (e.g., `switch.bedroom_valve`)
+- Target Change Threshold: Number °C (default: 0.1)
+- Opening Offset Below Target: Number °C (default: 0.3)
+- Closing Offset Above Target: Number °C (default: 0.3)
+- Is Fallback Valve: Boolean (default: false)
+
+**Stored in `ha_multizone:zone:{zone_id}`:**
+```json
+{
+  "id": "zone_bedroom",
+  "name": "Bedroom",
+  "temperature_sensor_entity_id": "sensor.bedroom_temperature",
+  "valve_switch_entity_id": "switch.bedroom_valve",
+  "target_change_threshold": 0.1,
+  "opening_offset": 0.3,
+  "closing_offset": 0.3,
+  "is_fallback_valve": false,
+  "current_temperature": null,
+  "target_temperature": 20.0,
+  "state": "OFF",
+  "satisfaction": "unknown",
+  "valve_state": "closed"
+}
+```
+
+## Complete Configuration Example
+
+**Full `ha_multizone:config`:**
+```json
+{
+  "main_climate_entity_id": "climate.main_thermostat",
+  "main_target_all_zones_satisfied": 0.5,
+  "min_valves_open": 1,
+  "main_min_temp": 18.0,
+  "main_max_temp": 30.0,
+  "main_change_threshold": 0.5,
+  "valve_actuation_delay": 120,
+  "command_cooldown": 60,
+  "coordinator_interval": 15,
+  "multizone_enabled": false,
+  "created_at": "2026-01-13T10:00:00Z",
+  "updated_at": "2026-01-13T13:00:00Z"
+}
+```
+
+**All zones in `ha_multizone:zones`:**
+```json
+["zone_bedroom", "zone_living_room", "zone_kitchen", "zone_bathroom"]
+```
+
+**Example zone data `ha_multizone:zone:zone_bedroom`:**
+```json
+{
+  "id": "zone_bedroom",
+  "name": "Bedroom",
+  "temperature_sensor_entity_id": "sensor.bedroom_temperature",
+  "valve_switch_entity_id": "switch.bedroom_valve",
+  "current_temperature": 20.5,
+  "target_temperature": 21.0,
+  "state": "ON",
+  "satisfaction": "underheated",
+  "valve_state": "open",
+  "target_change_threshold": 0.1,
+  "opening_offset": 0.3,
+  "closing_offset": 0.3,
+  "is_fallback_valve": true,
+  "priority": 0.5,
+  "last_updated": "2026-01-13T13:30:00Z"
+}
+```
+
+---
+
+# Timing, Delays and Actuation
+
+This section describes the timing parameters that control when and how the multizone system responds to temperature changes.
+
+## Key Timing Parameters
+
+### Valve Actuation Delay
+**Parameter:** `valve_actuation_delay`  
+**Default:** 120 seconds (2 minutes)  
+**Purpose:** Physical time required for a valve to fully open or close
+
+**Rationale:**
+- Motorized ball valves typically take 60-180 seconds to complete a full rotation
+- This delay ensures a valve is fully actuated before allowing another change
+- Used to set valve lock duration (cooldown period)
+- Critical for open-first-then-close sequence to maintain minimum flow
+
+**Usage:**
+- After opening/closing a valve, set `valve_lock` for this duration
+- When swapping valves at minimum: open new valve, wait this delay, then close old valve
+- Prevents chattering (rapid open/close cycles)
+
+### Command Cooldown
+**Parameter:** `command_cooldown`  
+**Default:** 60 seconds (1 minute)  
+**Purpose:** Minimum time between consecutive commands to same entity
+
+**Rationale:**
+- Prevents overwhelming the HVAC system or valve controllers
+- Gives time for temperature changes to propagate
+- Reduces wear on mechanical components
+
+### Coordinator Interval
+**Parameter:** `coordinator_interval`  
+**Default:** 15 seconds  
+**Purpose:** How often the coordinator checks for pending jobs and updates sensor states
+
+**Rationale:**
+- Frequent enough to be responsive (temperature changes detected within 15s)
+- Infrequent enough to minimize CPU/Redis load
+- Balances responsiveness with system efficiency
+
+### Main Change Threshold
+**Parameter:** `main_change_threshold`  
+**Default:** 0.5°C  
+**Purpose:** Minimum temperature change required to update main climate target
+
+**Rationale:**
+- Prevents excessive updates to main thermostat for tiny changes
+- Most thermostats have 0.5°C precision
+- Reduces API calls to cloud-connected thermostats
+
+### Zone Opening/Closing Offsets
+**Parameter:** `opening_offset`, `closing_offset`  
+**Default:** 0.3°C  
+**Purpose:** Hysteresis band around target temperature
+
+**Rationale:**
+- Prevents valve cycling when temperature hovers near target
+- Creates a "satisfied" band: `[target - opening_offset, target + closing_offset]`
+- Example: target 21°C, offsets 0.3°C → satisfied when temp is 20.7-21.3°C
+
+## Timing Sequences
+
+### Scenario 1: Zone Temperature Drop
+
+```
+T=0s:     Bedroom temp drops to 20.4°C (target: 21.0°C, opening_offset: 0.3°C)
+          → Underheated (20.4 < 20.7)
+T=0s:     Temperature change detected
+T=0s:     "Update main target temp" job enqueued
+T=0s:     "Update valves" job enqueued
+T=0-15s:  Jobs wait in queue
+T=15s:    Coordinator runs
+T=15s:    Dequeue "Calculate main temp" job → Execute
+T=15s:    Calculate new main target, update main climate entity
+T=15s:    Dequeue "Update valves" job → Execute
+T=15s:    Open Bedroom valve
+T=15s:    Set valve_lock[Bedroom] until T=135s
+T=15-135s: Valve opening (physical actuation)
+T=135s:   Valve fully open, lock expires
+```
+
+### Scenario 2: Swapping Valves at Minimum
+
+```
+Initial:  Living Room valve OPEN (only valve open, minimum=1)
+T=0s:     Living Room reaches target (satisfied)
+T=0s:     Kitchen needs heat (underheated)
+T=0s:     "Update valves" job enqueued
+T=15s:    Coordinator runs, executes "Update valves" job
+T=15s:    Detect: at minimum (1 valve open), need to swap
+T=15s:    Open Kitchen valve FIRST
+T=15s:    Set valve_lock[Kitchen] until T=135s
+T=15-135s: Kitchen valve opening (both valves now open)
+T=135s:   Close Living Room valve (now safe, Kitchen is open)
+T=135s:   Set valve_lock[LivingRoom] until T=255s
+T=135-255s: Living Room valve closing
+T=255s:   System stable, Kitchen valve open
+```
+
+### Scenario 3: Safety Check Interval
+
+```
+Safety check automation runs every: valve_actuation_delay / 2
+With valve_actuation_delay=120s → Safety check every 60s
+
+T=0s:     Safety check runs
+T=0s:     Check: currently 1 valve open (minimum=1) ✓
+T=60s:    Safety check runs again
+T=60s:    Check: currently 0 valves open (minimum=1) ✗
+T=60s:    WARNING: Force open fallback valve
+T=60s:    Open fallback Bedroom valve
+```
+
+## Recommended Timing Configurations
+
+### Conservative (Safe, Slower Response)
+```json
+{
+  "valve_actuation_delay": 180,
+  "command_cooldown": 90,
+  "coordinator_interval": 30,
+  "main_change_threshold": 0.5,
+  "opening_offset": 0.5,
+  "closing_offset": 0.5
+}
+```
+
+### Balanced (Default)
+```json
+{
+  "valve_actuation_delay": 120,
+  "command_cooldown": 60,
+  "coordinator_interval": 15,
+  "main_change_threshold": 0.5,
+  "opening_offset": 0.3,
+  "closing_offset": 0.3
+}
+```
+
+### Aggressive (Fast Response, More Wear)
+```json
+{
+  "valve_actuation_delay": 60,
+  "command_cooldown": 30,
+  "coordinator_interval": 10,
+  "main_change_threshold": 0.3,
+  "opening_offset": 0.2,
+  "closing_offset": 0.2
+}
+```
+
+**Note:** Aggressive settings may cause more valve wear and potential chattering. Use conservative or balanced settings for production.
+
+---
+
+# Tests and Scenarios
+
+This section describes concrete test cases to validate the multizone climate system behavior.
+
+## Unit Tests
+
+### Test 1: Calculate Main Temperature - Slider Mapping
+
+**Purpose:** Verify slider correctly maps to min/average/max zone targets
+
+**Setup:**
+- Zones: Bedroom (20°C), Living Room (22°C), Kitchen (19°C), Bathroom (23°C)
+- Config: main_min_temp=18°C, main_max_temp=30°C, main_change_threshold=0.5°C
+
+**Test Cases:**
+
+| Slider | Expected Main Target | Calculation |
+|--------|---------------------|-------------|
+| 0% (0.0) | 19.0°C | min(19,20,22,23) = 19°C |
+| 25% (0.25) | 20.0°C | 19 + 0.25*(23-19) = 20°C |
+| 50% (0.5) | 21.0°C | 19 + 0.5*(23-19) = 21°C |
+| 75% (0.75) | 22.0°C | 19 + 0.75*(23-19) = 22°C |
+| 100% (1.0) | 23.0°C | max(19,20,22,23) = 23°C |
+
+**Expected Behavior:**
+- Main target calculated correctly for each slider position
+- Main climate entity updated when change ≥ 0.5°C
+- Main climate entity NOT updated when change < 0.5°C
+
+---
+
+### Test 2: Update Valves - Basic Satisfaction States
+
+**Purpose:** Verify zones correctly classified as underheated/satisfied/overheated
+
+**Setup (Heating Mode):**
+- opening_offset = 0.3°C
+- closing_offset = 0.3°C
+
+**Test Cases:**
+
+| Zone | Target | Current | Expected State | Expected Valve |
+|------|--------|---------|----------------|----------------|
+| Bedroom | 21.0°C | 20.0°C | Underheated | OPEN |
+| Living | 22.0°C | 21.9°C | Satisfied | (maintain) |
+| Kitchen | 20.0°C | 20.5°C | Satisfied | (maintain) |
+| Bathroom | 23.0°C | 24.0°C | Overheated | CLOSE |
+
+**Satisfaction Thresholds:**
+- Bedroom: underheated if < 20.7°C → 20.0 < 20.7 → underheated ✓
+- Living: satisfied if 21.7-22.3°C → 21.9 in range → satisfied ✓
+- Kitchen: satisfied if 19.7-20.3°C → 20.5 > 20.3 → overheated... wait, should be overheated
+- Bathroom: overheated if > 23.3°C → 24.0 > 23.3 → overheated ✓
+
+**Expected Behavior:**
+- Bedroom valve opens
+- Living Room valve state unchanged
+- Kitchen valve closes
+- Bathroom valve closes
+
+---
+
+### Test 3: Safety Fallback - Minimum Valves
+
+**Purpose:** Verify system maintains minimum valves open
+
+**Setup:**
+- min_valves_open = 2
+- All zones satisfied (would close all valves)
+- Fallback valves: Bedroom, Kitchen
+
+**Expected Behavior:**
+1. Calculate desired state: all valves closed (all satisfied)
+2. Safety check: 0 < 2 → violation
+3. Force open 2 fallback valves: Bedroom, Kitchen
+4. Final state: Bedroom OPEN, Kitchen OPEN, others CLOSED
+
+**Test Assertion:**
+```python
+assert len(open_valves) >= config.min_valves_open
+assert "bedroom_valve" in open_valves
+assert "kitchen_valve" in open_valves
+```
+
+---
+
+### Test 4: Valve Lock - Prevent Chattering
+
+**Purpose:** Verify valve locks prevent rapid re-actuation
+
+**Setup:**
+- valve_actuation_delay = 120s
+- Bedroom valve opened at T=0s
+
+**Timeline:**
+
+| Time | Action | Expected Result |
+|------|--------|----------------|
+| T=0s | Open Bedroom valve | Success, lock set until T=120s |
+| T=30s | Try to close Bedroom valve | BLOCKED (locked) |
+| T=90s | Try to close Bedroom valve | BLOCKED (locked) |
+| T=120s | Try to close Bedroom valve | Success (lock expired) |
+
+**Expected Behavior:**
+- Valve operations within cooldown period are ignored
+- Valve lock expires after valve_actuation_delay
+- Operations after expiry succeed
+
+---
+
+### Test 5: Cooling Mode - Inverted Logic
+
+**Purpose:** Verify satisfaction states invert correctly in cooling mode
+
+**Setup (Cooling Mode):**
+- opening_offset = 0.3°C
+- closing_offset = 0.3°C
+- HVAC state = COOLING
+
+**Test Cases:**
+
+| Zone | Target | Current | Expected State | Expected Valve |
+|------|--------|---------|----------------|----------------|
+| Bedroom | 23.0°C | 25.0°C | Undercooled | OPEN |
+| Living | 24.0°C | 23.8°C | Satisfied | (maintain) |
+| Kitchen | 22.0°C | 21.0°C | Overcooled | CLOSE |
+
+**Cooling Mode Thresholds:**
+- Undercooled if current > (target + opening_offset)
+- Overcooled if current < (target - closing_offset)
+- Bedroom: 25.0 > 23.3 → undercooled ✓ → OPEN valve
+- Kitchen: 21.0 < 21.7 → overcooled ✓ → CLOSE valve
+
+**Expected Behavior:**
+- Bedroom valve opens (needs cooling)
+- Kitchen valve closes (too cool)
+- Logic correctly inverted from heating mode
+
+---
+
+## Integration Tests
+
+### Test 6: Open-First-Then-Close Sequence
+
+**Purpose:** Verify minimum flow maintained during valve swapping
+
+**Setup:**
+- min_valves_open = 1
+- valve_actuation_delay = 120s
+- Initial: Bedroom valve OPEN
+- Scenario: Bedroom satisfied, Kitchen needs heat
+
+**Timeline:**
+
+| Time | Event | Open Valves | Valve States |
+|------|-------|-------------|--------------|
+| T=0s | Initial | 1 (Bedroom) | Bedroom: OPEN, Kitchen: CLOSED |
+| T=0s | Algorithm runs | - | Detect: at minimum, need swap |
+| T=0s | Open Kitchen | 1 (Bedroom) | Kitchen opening... |
+| T=0-120s | Wait for actuation | 2 (both) | Both valves open (safe) |
+| T=120s | Close Bedroom | 1 (Kitchen) | Bedroom closing... |
+| T=120-240s | Wait for actuation | 1 (Kitchen) | Kitchen fully open |
+| T=240s | Stable | 1 (Kitchen) | Kitchen: OPEN, Bedroom: CLOSED |
+
+**Expected Behavior:**
+- At no point do we have 0 valves open
+- Kitchen opens before Bedroom closes
+- valve_actuation_delay enforced between open and close
+
+---
+
+### Test 7: Multiple Zone Changes - Job Queueing
+
+**Purpose:** Verify job queue handles multiple rapid changes correctly
+
+**Setup:**
+- coordinator_interval = 15s
+- Initial state: all zones satisfied
+
+**Timeline:**
+
+| Time | Event | Queue State |
+|------|-------|-------------|
+| T=0s | Bedroom target changed | Queue: [calc_temp_1, update_valves_1] |
+| T=5s | Kitchen target changed | Queue: [calc_temp_1, update_valves_1, calc_temp_2, update_valves_2] |
+| T=10s | Living Room target changed | Queue: [calc_temp_1, update_valves_1, calc_temp_2, update_valves_2, calc_temp_3, update_valves_3] |
+| T=15s | Coordinator runs | Dequeue calc_temp_1 → execute |
+| T=15s | Coordinator runs | Dequeue update_valves_1 → execute |
+| T=30s | Coordinator runs | Dequeue calc_temp_2 → execute |
+| T=30s | Coordinator runs | Dequeue update_valves_2 → execute |
+| T=45s | Coordinator runs | Dequeue calc_temp_3 → execute |
+| T=45s | Coordinator runs | Dequeue update_valves_3 → execute |
+
+**Expected Behavior:**
+- Jobs queued in FIFO order
+- Only one job of each type runs at a time (job locks)
+- All jobs eventually processed
+- No jobs lost
+
+---
+
+### Test 8: Main Climate OFF - Close All Valves
+
+**Purpose:** Verify system safety when main HVAC turns off
+
+**Setup:**
+- Initial: 3 valves open
+- Main climate state changes to OFF
+
+**Expected Behavior:**
+1. "Update valves" job triggered
+2. Algorithm detects main_climate_state == "OFF"
+3. All valves closed (override safety minimum)
+4. Final state: all valves CLOSED
+
+**Rationale:**
+- When main HVAC is off, no heat available
+- Open valves would waste energy (heat loss)
+- Safety minimum only applies when HVAC is active
+
+---
+
+### Test 9: Job Lock - Prevent Concurrent Execution
+
+**Purpose:** Verify job locks prevent concurrent execution of same job type
+
+**Setup:**
+- Two "update_valves" jobs in queue
+- Job execution time: 5 seconds
+
+**Timeline:**
+
+| Time | Event | Job Lock State |
+|------|-------|----------------|
+| T=0s | Job1 starts | Lock acquired: update_valves |
+| T=2s | Job2 tries to start | BLOCKED (lock held) |
+| T=5s | Job1 completes | Lock released |
+| T=5s | Job2 starts | Lock acquired: update_valves |
+| T=10s | Job2 completes | Lock released |
+
+**Expected Behavior:**
+- Only one job runs at a time
+- Second job waits for first to complete
+- No race conditions or data corruption
+
+---
+
+### Test 10: Configuration Change - Dynamic Updates
+
+**Purpose:** Verify system responds to configuration changes
+
+**Setup:**
+- Initial: min_valves_open = 1
+- Change: min_valves_open = 2
+- Currently: 1 valve open
+
+**Expected Behavior:**
+1. Configuration updated in Redis
+2. Next "safety_valve_check" detects shortage
+3. Force open additional fallback valve
+4. Final state: 2 valves open
+
+**Test Assertion:**
+```python
+update_config("min_valves_open", 2)
+trigger_safety_check()
+assert len(get_open_valves()) == 2
+```
+
+---
+
+## Test Coverage Goals
+
+- **Unit Tests:** 90%+ coverage for core algorithms
+- **Integration Tests:** All job types, automation triggers, safety checks
+- **Edge Cases:** Empty zones, all satisfied, all OFF, cooling mode
+- **Performance Tests:** 100 zones, rapid changes, queue saturation
+- **Reliability Tests:** Redis connection loss, entity unavailability
+
+---
 
 # !!! Important Functional Rules !!!
 - This should be a valid Home Assistant integration via HACS
@@ -252,3 +1445,97 @@ They only provide information about current temperature, target temperature, and
 ## Main climate Thermostat
 - https://www.dedietrich-vytapeni.cz/prislusenstvi/smart-tc-ad324-inteligentni-regulator-teploty-prostoru/
 - https://www.dedietrich-vytapeni.cz/index.php?cmd=download&id=4628&type=view
+
+---
+
+# Future Improvements
+
+While the current design uses a slider-based approach for calculating the main climate target temperature, future versions could incorporate more sophisticated control strategies:
+
+## PI (Proportional-Integral) Controller Option
+
+Instead of the simple slider mapping, implement a PI controller to more dynamically adjust the main target based on zone performance:
+
+```python
+def calculate_main_target_pi(zones, config, state):
+    """
+    PI controller for main target temperature.
+    
+    Args:
+        zones: Climate zones with current and target temps
+        config: Kp (proportional gain), Ki (integral gain)
+        state: Maintains integral error accumulation
+    
+    Returns:
+        Main target temperature
+    """
+    # Calculate total error (sum of zone temperature deficits)
+    total_error = sum(z.target_temp - z.current_temp for z in zones)
+    
+    # Update integral
+    state.integral_error += total_error * dt
+    
+    # PI formula
+    main_target = base_temp + (config.Kp * total_error) + (config.Ki * state.integral_error)
+    
+    return clamp(main_target, config.main_min_temp, config.main_max_temp)
+```
+
+**Benefits:**
+- More responsive to zone heating demands
+- Automatically adjusts to building thermal characteristics
+- Reduces overshoot and steady-state error
+
+**Challenges:**
+- Requires tuning Kp and Ki parameters for specific installations
+- More complex for users to understand
+- May need anti-windup protection for integral term
+
+## Heating Curve Integration
+
+Leverage the HVAC unit's heating curve configuration to optimize main target calculation:
+
+```python
+def calculate_with_heating_curve(zones, outdoor_temp, heating_curve_config):
+    """
+    Adjust main target based on heating curve and outdoor temperature.
+    
+    Args:
+        zones: Climate zones
+        outdoor_temp: Current outdoor temperature
+        heating_curve_config: Base temp, slope from HVAC unit
+    
+    Returns:
+        Optimized main target
+    """
+    # Standard zone-based target
+    zone_target = calculate_zone_based_target(zones)
+    
+    # Heating curve suggests water temperature
+    water_temp = heating_curve_config.base - (heating_curve_config.slope * outdoor_temp)
+    
+    # Blend zone needs with heating curve
+    main_target = blend(zone_target, water_temp, blend_factor=0.7)
+    
+    return main_target
+```
+
+**Benefits:**
+- Works with HVAC's existing thermal model
+- Better outdoor temperature compensation
+- Potentially faster heating response
+
+**Implementation Note:**
+- Would require users to input heating curve parameters from their HVAC unit
+- May need calibration period to determine optimal blend factor
+
+## Adaptive Learning
+
+Track zone heating/cooling performance over time and adjust strategy:
+
+- **Learning rate:** How quickly zones reach target at different main temperatures
+- **Thermal mass:** Estimate building thermal inertia
+- **Time-of-day patterns:** Learn typical heating needs by hour
+- **Weather compensation:** Correlate outdoor temp with required main target offset
+
+These improvements could be added as optional advanced features while maintaining the simple slider approach as the default for ease of use.
