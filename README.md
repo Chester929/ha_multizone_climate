@@ -184,33 +184,67 @@ They only provide information about current temperature, target temperature, and
 
 This algorithm determines the target temperature for the main HVAC thermostat based on all zone target temperatures and their current satisfaction states.
 
-### Approach: Slider-Based Mapping (Choice A)
+### Approach: Slider-Based Mapping (Choice A) or True Average (Choice B)
+
+**Choice A - Slider-Based Linear Interpolation:**
 
 The "Main Target When All Zones Satisfied" slider (0-100%) controls how the main climate target is calculated when all zones are satisfied:
 
 - **0%**: Main target = lowest zone target (energy efficient, minimal heating)
-- **50%**: Main target = average of all zone targets (balanced approach, default)
+- **50%**: Main target = linear interpolation midpoint (balanced approach)
 - **100%**: Main target = highest zone target (keeps boiler warmer, faster response)
+
+**Choice B - True Average:**
+
+Calculate the arithmetic mean of all active zone targets (no slider needed):
+
+- Main target = average of all zone targets
+- Example: zones [20°C, 23°C, 24°C] → main target = 22.3°C (rounded to 22.5°C)
+
+**Note:** The implementation should support both approaches as a configuration option.
 
 ### Formula
 
+**Choice A - Slider-Based:**
 ```
 slider_position = config.main_target_all_zones_satisfied  // value from 0.0 to 1.0
 
-// Find min and max zone targets
-min_zone_target = min(zone.target_temperature for all zones)
-max_zone_target = max(zone.target_temperature for all zones)
+// Find min and max zone targets (excluding zones turned OFF)
+min_zone_target = min(zone.target_temperature for all active zones)
+max_zone_target = max(zone.target_temperature for all active zones)
 
 // Linear interpolation based on slider
 main_target_raw = min_zone_target + slider_position * (max_zone_target - min_zone_target)
 
+// Round to nearest 0.5°C increment
+main_target_rounded = round(main_target_raw * 2) / 2  // e.g., 22.3 → 22.5, 22.2 → 22.0
+
 // Clamp to configured main climate limits
-main_target = clamp(main_target_raw, config.main_min_temp, config.main_max_temp)
+main_target = clamp(main_target_rounded, config.main_min_temp, config.main_max_temp)
 
 // Only update if change exceeds threshold
 if abs(main_target - current_main_target) >= config.main_change_threshold:
     update_main_climate_target(main_target)
 ```
+
+**Choice B - True Average:**
+```
+// Calculate average of all active zone targets (excluding zones turned OFF and overheated zones)
+active_zone_targets = [zone.target_temperature for zone in zones if zone.state == "ON" and zone.satisfaction != "overheated"]
+main_target_raw = sum(active_zone_targets) / len(active_zone_targets)
+
+// Round to nearest 0.5°C increment
+main_target_rounded = round(main_target_raw * 2) / 2  // e.g., 22.3 → 22.5, 22.2 → 22.0
+
+// Clamp to configured main climate limits
+main_target = clamp(main_target_rounded, config.main_min_temp, config.main_max_temp)
+
+// Only update if change exceeds threshold
+if abs(main_target - current_main_target) >= config.main_change_threshold:
+    update_main_climate_target(main_target)
+```
+
+**Note:** User input should include a debounce of ~5 seconds to prevent excessive recalculations during rapid target adjustments.
 
 ### Pseudocode
 
@@ -221,7 +255,7 @@ def calculate_main_target_temperature(zones, config, current_main_target):
     
     Args:
         zones: List of climate zones with target_temperature
-        config: Configuration with main_target_all_zones_satisfied (0.0-1.0),
+        config: Configuration with main_target_all_zones_satisfied (0.0-1.0) or use_average_mode,
                 main_min_temp, main_max_temp, main_change_threshold
         current_main_target: Current main climate target temperature
     
@@ -231,26 +265,41 @@ def calculate_main_target_temperature(zones, config, current_main_target):
     if not zones:
         return None
     
-    # Get active zones (turned ON)
+    # Get active zones (turned ON) and exclude overheated zones
     active_zones = [z for z in zones if z.state != "OFF"]
     if not active_zones:
         return None
     
-    # Find min and max zone targets
-    zone_targets = [z.target_temperature for z in active_zones]
-    min_target = min(zone_targets)
-    max_target = max(zone_targets)
+    # Exclude overheated zones from main target calculation
+    non_overheated_zones = [z for z in active_zones if z.satisfaction != "overheated"]
     
-    # Apply slider mapping
-    slider = config.main_target_all_zones_satisfied  # 0.0 to 1.0
-    if min_target == max_target:
-        main_target_raw = min_target
+    if not non_overheated_zones:
+        # All zones are overheated - use fallback logic
+        zone_targets = [z.target_temperature for z in active_zones]
     else:
-        main_target_raw = min_target + slider * (max_target - min_target)
+        zone_targets = [z.target_temperature for z in non_overheated_zones]
+    
+    # Calculate main target based on chosen method
+    if config.use_average_mode:
+        # Choice B: True average
+        main_target_raw = sum(zone_targets) / len(zone_targets)
+    else:
+        # Choice A: Slider-based linear interpolation
+        min_target = min(zone_targets)
+        max_target = max(zone_targets)
+        
+        slider = config.main_target_all_zones_satisfied  # 0.0 to 1.0
+        if min_target == max_target:
+            main_target_raw = min_target
+        else:
+            main_target_raw = min_target + slider * (max_target - min_target)
+    
+    # Round to nearest 0.5°C increment
+    main_target_rounded = round(main_target_raw * 2) / 2
     
     # Clamp to configured limits
     main_target = max(config.main_min_temp, 
-                      min(config.main_max_temp, main_target_raw))
+                      min(config.main_max_temp, main_target_rounded))
     
     # Only update if change is significant
     if abs(main_target - current_main_target) >= config.main_change_threshold:
@@ -292,9 +341,15 @@ main_target = clamp(21.0, 18.0, 30.0) = 21.0°C
 **Different slider values:**
 - Slider at 0% (0.0): main_target = 19.0°C (lowest zone)
 - Slider at 25% (0.25): main_target = 20.0°C
-- Slider at 50% (0.5): main_target = 21.0°C (average)
+- Slider at 50% (0.5): main_target = 21.0°C (linear midpoint)
 - Slider at 75% (0.75): main_target = 22.0°C
 - Slider at 100% (1.0): main_target = 23.0°C (highest zone)
+
+**Using average mode (Choice B):**
+- Average = (19 + 20 + 22 + 23) / 4 = 21.0°C
+- With rounding: 21.0°C (already at 0.5 increment)
+
+**Note:** For zones [20°C, 23°C, 24°C], average = 22.333°C → rounded to 22.5°C
 
 ---
 
@@ -344,7 +399,7 @@ priority = deficit  # Higher deficit = higher priority
 
 1. **Minimum valves open**: At least `config.min_valves_open` valves must remain open at all times
 2. **Fallback valves**: If insufficient valves would be open, force open fallback valves
-3. **Open-first-then-close**: When replacing an open valve with another, open the new valve first, wait for `valve_actuation_delay`, then close the old valve
+3. **Open-first-then-close**: When at minimum valves open and need to swap, open the new valve first, wait for `valve_actuation_delay`, then close the old valve. Otherwise, valves can open and close simultaneously.
 
 ### Open-First-Then-Close Sequence
 
@@ -357,8 +412,7 @@ To maintain minimum flow through the HVAC system:
    - Wait for physical valve to fully open
    - Then close the old valve(s)
 3. **Otherwise:**
-   - Close valves that should be closed
-   - Open valves that should be open
+   - Valves can open and close simultaneously (no wait required)
 
 ### Valve Locks and Cooldown
 
@@ -375,15 +429,15 @@ ha_multizone:valvelock:{valve_id} = {"locked_until": "2026-01-13T14:30:00Z"}
 
 ### Edge Cases
 
-1. **All zones satisfied**: Maintain current valve states (or minimum open)
-2. **No zones require heat**: Close all except minimum required valves, prioritizing fallback valves
-3. **Main climate OFF**: Close all valves (safety check disabled)
+1. **All zones satisfied**: Keep valves as-is to maintain stable temperatures at configured main target
+2. **All zones overheated**: Close all except minimum required valves, prioritizing fallback valves. Overheated zones are excluded from main target temperature calculation.
+3. **Multizone feature OFF**: Leave valves in current state - each zone manages its own valve manually. Safety check still runs to ensure minimum valves open, but user has manual control.
 4. **Zone turned OFF**: Close its valve (unless it's a required fallback)
 
 ### Pseudocode
 
 ```python
-def update_valves(zones, config, main_climate_state):
+def update_valves(zones, config, main_climate_state, multizone_enabled):
     """
     Update valve states based on zone temperatures and satisfaction.
     
@@ -391,13 +445,15 @@ def update_valves(zones, config, main_climate_state):
         zones: List of climate zones with current_temp, target_temp, valve_id, state
         config: Configuration with min_valves_open, valve_actuation_delay, opening_offset, closing_offset
         main_climate_state: Main HVAC state (HEATING, COOLING, OFF)
+        multizone_enabled: Whether multizone feature is active
     
     Returns:
         List of valve actions to execute
     """
-    if main_climate_state == "OFF":
-        # Close all valves when main climate is off
-        return [{"valve_id": z.valve_id, "action": "close"} for z in zones]
+    if not multizone_enabled:
+        # Multizone feature OFF - leave valves as-is, user controls manually
+        # Safety check still ensures minimum valves open
+        return []
     
     # Determine satisfaction state for each zone
     for zone in zones:
@@ -469,10 +525,10 @@ def update_valves(zones, config, main_climate_state):
     valves_to_open = [v for v in valves_to_open if not is_valve_locked(v, now)]
     valves_to_close = [v for v in valves_to_close if not is_valve_locked(v, now)]
     
-    # Execute with open-first-then-close logic
+    # Execute with open-first-then-close logic (only when at minimum valves)
     actions = []
     
-    # If at minimum and swapping, open first
+    # If at minimum and swapping, open first and wait
     if len(currently_open) == config.min_valves_open and valves_to_open and valves_to_close:
         # Open new valves first
         for valve_id in valves_to_open:
@@ -493,7 +549,7 @@ def update_valves(zones, config, main_climate_state):
             })
             set_valve_lock(valve_id, now + config.valve_actuation_delay)
     else:
-        # Normal operation: close first, then open
+        # Normal operation: valves can open and close simultaneously
         for valve_id in valves_to_close:
             actions.append({
                 "valve_id": valve_id,
@@ -643,13 +699,15 @@ Description: Stores global configuration parameters
 ```json
 {
   "main_target_all_zones_satisfied": 0.5,
+  "use_average_mode": false,
   "min_valves_open": 1,
   "main_min_temp": 18.0,
   "main_max_temp": 30.0,
   "main_change_threshold": 0.5,
   "valve_actuation_delay": 120,
   "command_cooldown": 60,
-  "coordinator_interval": 15
+  "coordinator_interval": 15,
+  "job_status_ttl": 900
 }
 ```
 
@@ -777,7 +835,7 @@ TTL: Set to 60 seconds (auto-release if job crashes)
 Key: ha_multizone:jobstatus:{job_id}
 Type: Hash
 Description: Tracks execution status of background jobs
-TTL: Set to 300 seconds (5 minutes after completion)
+TTL: Configurable (default: 900 seconds / 15 minutes after completion)
 ```
 
 **Example JSON:**
@@ -850,24 +908,31 @@ This section maps the UI configuration fields to their JSON storage format and p
 
 ### Automation Configuration
 **UI Fields:**
-- Main Target When All Zones Satisfied: Slider 0-100% (default: 50%)
+- Main Target Calculation Mode: Choice (default: "Slider-based")
+  - Slider-based: Use linear interpolation with slider
+  - Average: Use arithmetic mean of all zone targets
+- Main Target When All Zones Satisfied: Slider 0-100% (default: 50%, only visible when Slider-based mode selected)
 - Minimum Valves Open: Number (default: 1)
 - Main Min Temperature: Number °C (default: 18.0)
 - Main Max Temperature: Number °C (default: 30.0)
 - Main Change Threshold: Number °C (default: 0.5)
 - Valve Actuation Delay: Number seconds (default: 120)
+- Coordinator Interval: Number seconds (default: 15)
+- Job Status TTL: Number seconds (default: 900 / 15 minutes)
 
 **Stored in `ha_multizone:config`:**
 ```json
 {
   "main_target_all_zones_satisfied": 0.5,
+  "use_average_mode": false,
   "min_valves_open": 1,
   "main_min_temp": 18.0,
   "main_max_temp": 30.0,
   "main_change_threshold": 0.5,
   "valve_actuation_delay": 120,
   "command_cooldown": 60,
-  "coordinator_interval": 15
+  "coordinator_interval": 15,
+  "job_status_ttl": 900
 }
 ```
 
@@ -881,7 +946,7 @@ This section maps the UI configuration fields to their JSON storage format and p
 - Target Change Threshold: Number °C (default: 0.1)
 - Opening Offset Below Target: Number °C (default: 0.3)
 - Closing Offset Above Target: Number °C (default: 0.3)
-- Is Fallback Valve: Boolean (default: false)
+- Priority Override: Boolean (default: false) - Force this valve to stay open when minimum valves requirement applies
 
 **Stored in `ha_multizone:zone:{zone_id}`:**
 ```json
@@ -893,7 +958,7 @@ This section maps the UI configuration fields to their JSON storage format and p
   "target_change_threshold": 0.1,
   "opening_offset": 0.3,
   "closing_offset": 0.3,
-  "is_fallback_valve": false,
+  "priority_override": false,
   "current_temperature": null,
   "target_temperature": 20.0,
   "state": "OFF",
@@ -909,6 +974,7 @@ This section maps the UI configuration fields to their JSON storage format and p
 {
   "main_climate_entity_id": "climate.main_thermostat",
   "main_target_all_zones_satisfied": 0.5,
+  "use_average_mode": false,
   "min_valves_open": 1,
   "main_min_temp": 18.0,
   "main_max_temp": 30.0,
@@ -916,6 +982,7 @@ This section maps the UI configuration fields to their JSON storage format and p
   "valve_actuation_delay": 120,
   "command_cooldown": 60,
   "coordinator_interval": 15,
+  "job_status_ttl": 900,
   "multizone_enabled": false,
   "created_at": "2026-01-13T10:00:00Z",
   "updated_at": "2026-01-13T13:00:00Z"
@@ -942,7 +1009,7 @@ This section maps the UI configuration fields to their JSON storage format and p
   "target_change_threshold": 0.1,
   "opening_offset": 0.3,
   "closing_offset": 0.3,
-  "is_fallback_valve": true,
+  "priority_override": true,
   "priority": 0.5,
   "last_updated": "2026-01-13T13:30:00Z"
 }
@@ -1001,6 +1068,9 @@ This section describes the timing parameters that control when and how the multi
 - Prevents excessive updates to main thermostat for tiny changes
 - Most thermostats have 0.5°C precision
 - Reduces API calls to cloud-connected thermostats
+- Target temperature is rounded to nearest 0.5°C increment (e.g., 22.3°C → 22.5°C, 22.2°C → 22.0°C)
+
+**Note:** User input changes should be debounced by ~5 seconds to prevent excessive recalculations during rapid adjustments.
 
 ### Zone Opening/Closing Offsets
 **Parameter:** `opening_offset`, `closing_offset`  
@@ -1113,28 +1183,38 @@ This section describes concrete test cases to validate the multizone climate sys
 
 ## Unit Tests
 
-### Test 1: Calculate Main Temperature - Slider Mapping
+### Test 1: Calculate Main Temperature - Slider Mapping and Average Mode
 
-**Purpose:** Verify slider correctly maps to min/average/max zone targets
+**Purpose:** Verify both calculation methods work correctly
 
 **Setup:**
 - Zones: Bedroom (20°C), Living Room (22°C), Kitchen (19°C), Bathroom (23°C)
 - Config: main_min_temp=18°C, main_max_temp=30°C, main_change_threshold=0.5°C
 
-**Test Cases:**
+**Test Cases - Choice A (Slider-based):**
 
-| Slider | Expected Main Target | Calculation |
-|--------|---------------------|-------------|
-| 0% (0.0) | 19.0°C | min(19,20,22,23) = 19°C |
-| 25% (0.25) | 20.0°C | 19 + 0.25*(23-19) = 20°C |
-| 50% (0.5) | 21.0°C | 19 + 0.5*(23-19) = 21°C |
-| 75% (0.75) | 22.0°C | 19 + 0.75*(23-19) = 22°C |
-| 100% (1.0) | 23.0°C | max(19,20,22,23) = 23°C |
+| Slider   | Expected Main Target | Calculation                    |
+|----------|----------------------|--------------------------------|
+| 0% (0.0) | 19.0°C               | min(19,20,22,23) = 19°C        |
+| 25% (0.25) | 20.0°C             | 19 + 0.25*(23-19) = 20°C       |
+| 50% (0.5) | 21.0°C              | 19 + 0.5*(23-19) = 21°C        |
+| 75% (0.75) | 22.0°C             | 19 + 0.75*(23-19) = 22°C       |
+| 100% (1.0) | 23.0°C             | max(19,20,22,23) = 23°C        |
+
+**Test Cases - Choice B (Average mode):**
+
+| Zones                    | Raw Average | Rounded | Expected |
+|--------------------------|-------------|---------|----------|
+| [19, 20, 22, 23]         | 21.0°C      | 21.0°C  | 21.0°C   |
+| [20, 23, 24]             | 22.33°C     | 22.5°C  | 22.5°C   |
+| [18.5, 21.2, 22.8]       | 20.83°C     | 21.0°C  | 21.0°C   |
 
 **Expected Behavior:**
-- Main target calculated correctly for each slider position
+- Main target calculated correctly for each method
+- Temperatures rounded to nearest 0.5°C increment
 - Main climate entity updated when change ≥ 0.5°C
 - Main climate entity NOT updated when change < 0.5°C
+- Overheated zones excluded from calculation
 
 ---
 
@@ -1148,17 +1228,17 @@ This section describes concrete test cases to validate the multizone climate sys
 
 **Test Cases:**
 
-| Zone | Target | Current | Expected State | Expected Valve |
-|------|--------|---------|----------------|----------------|
-| Bedroom | 21.0°C | 20.0°C | Underheated | OPEN |
-| Living | 22.0°C | 21.9°C | Satisfied | (maintain) |
-| Kitchen | 20.0°C | 20.5°C | Satisfied | (maintain) |
-| Bathroom | 23.0°C | 24.0°C | Overheated | CLOSE |
+| Zone       | Target | Current | Expected State | Expected Valve |
+|------------|--------|---------|----------------|----------------|
+| Bedroom    | 21.0°C | 20.0°C  | Underheated    | OPEN           |
+| Living     | 22.0°C | 21.9°C  | Satisfied      | (maintain)     |
+| Kitchen    | 20.0°C | 20.5°C  | Overheated     | CLOSE          |
+| Bathroom   | 23.0°C | 24.0°C  | Overheated     | CLOSE          |
 
 **Satisfaction Thresholds:**
 - Bedroom: underheated if < 20.7°C → 20.0 < 20.7 → underheated ✓
 - Living: satisfied if 21.7-22.3°C → 21.9 in range → satisfied ✓
-- Kitchen: satisfied if 19.7-20.3°C → 20.5 > 20.3 → overheated... wait, should be overheated
+- Kitchen: overheated if > 20.3°C → 20.5 > 20.3 → overheated ✓
 - Bathroom: overheated if > 23.3°C → 24.0 > 23.3 → overheated ✓
 
 **Expected Behavior:**
@@ -1166,6 +1246,7 @@ This section describes concrete test cases to validate the multizone climate sys
 - Living Room valve state unchanged
 - Kitchen valve closes
 - Bathroom valve closes
+- Overheated zones (Kitchen, Bathroom) excluded from main target calculation
 
 ---
 
@@ -1175,20 +1256,20 @@ This section describes concrete test cases to validate the multizone climate sys
 
 **Setup:**
 - min_valves_open = 2
-- All zones satisfied (would close all valves)
-- Fallback valves: Bedroom, Kitchen
+- All zones satisfied or overheated (would close all valves)
+- Priority override valves: Bedroom, Kitchen
 
 **Expected Behavior:**
-1. Calculate desired state: all valves closed (all satisfied)
+1. Calculate desired state: all valves would close (all satisfied/overheated)
 2. Safety check: 0 < 2 → violation
-3. Force open 2 fallback valves: Bedroom, Kitchen
+3. Force open 2 priority override valves: Bedroom, Kitchen
 4. Final state: Bedroom OPEN, Kitchen OPEN, others CLOSED
 
 **Test Assertion:**
 ```python
 assert len(open_valves) >= config.min_valves_open
-assert "bedroom_valve" in open_valves
-assert "kitchen_valve" in open_valves
+assert "bedroom_valve" in open_valves  # priority_override = true
+assert "kitchen_valve" in open_valves  # priority_override = true
 ```
 
 ---
@@ -1308,28 +1389,52 @@ assert "kitchen_valve" in open_valves
 
 ---
 
-### Test 8: Main Climate OFF - Close All Valves
+### Test 8: Multizone Feature OFF - Manual Control
+
+**Purpose:** Verify system behavior when multizone feature is disabled
+
+**Setup:**
+- Initial: 3 valves open
+- Multizone feature turned OFF
+
+**Expected Behavior:**
+1. No "Update valves" actions triggered
+2. Valves remain in current state (user controls manually)
+3. Safety check still runs to ensure minimum valves open
+4. Users can manually control each zone's valve
+5. Final state: valves unchanged from initial state
+
+**Rationale:**
+- When multizone OFF, user has manual control
+- Cannot trust HVAC status alone (pump may still circulate)
+- Safety check ensures system protection
+- Each zone can control its own valve independently
+
+---
+
+### Test 9: Main Climate OFF - No Automatic Changes
 
 **Purpose:** Verify system safety when main HVAC turns off
 
 **Setup:**
-- Initial: 3 valves open
+- Initial: 3 valves open, multizone feature enabled
 - Main climate state changes to OFF
 
 **Expected Behavior:**
-1. "Update valves" job triggered
-2. Algorithm detects main_climate_state == "OFF"
-3. All valves closed (override safety minimum)
-4. Final state: all valves CLOSED
+1. System behavior depends on multizone state
+2. If multizone enabled: continue managing valves (HVAC may still circulate)
+3. If multizone disabled: user has manual control
+4. Safety check always runs to maintain minimum valves
 
 **Rationale:**
-- When main HVAC is off, no heat available
-- Open valves would waste energy (heat loss)
-- Safety minimum only applies when HVAC is active
+- HVAC OFF doesn't necessarily mean no circulation
+- Pump may continue running in some systems
+- Multizone feature state determines control mode
+- Safety minimum always applies when multizone is active
 
 ---
 
-### Test 9: Job Lock - Prevent Concurrent Execution
+### Test 10: Job Lock - Prevent Concurrent Execution
 
 **Purpose:** Verify job locks prevent concurrent execution of same job type
 
@@ -1354,7 +1459,7 @@ assert "kitchen_valve" in open_valves
 
 ---
 
-### Test 10: Configuration Change - Dynamic Updates
+### Test 11: Configuration Change - Dynamic Updates
 
 **Purpose:** Verify system responds to configuration changes
 
