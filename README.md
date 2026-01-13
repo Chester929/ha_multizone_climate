@@ -371,19 +371,21 @@ Each zone is classified based on its current temperature relative to target. The
 
 **Heating Mode:**
 - **Underheated**: `current_temp < (target_temp - opening_offset)` → Valve opens
-  - **Becomes satisfied when**: `current_temp >= (target_temp - satisfaction_eps)` (zone has reached target while rising)
-- **Satisfied**: `(target_temp - satisfaction_eps) <= current_temp <= (target_temp + satisfaction_eps)` → Maintains temperature
-  - Valve may still be open or closed depending on opening_offset and closing_offset
+  - **Becomes satisfied when**: `current_temp >= (target_temp + satisfaction_eps)` (zone reaches target while rising)
+- **Satisfied**: Zone maintains satisfied status with hysteresis
+  - **Stays satisfied until**: `current_temp < (target_temp - opening_offset)` (falls below lower bound) OR `current_temp > (target_temp + closing_offset)` (rises above upper bound)
+  - Valve may be open or closed depending on current temperature vs opening_offset and closing_offset
 - **Overheated**: `current_temp > (target_temp + closing_offset)` → Valve closes
-  - **Becomes satisfied when**: `current_temp <= (target_temp + satisfaction_eps)` (zone has reached target while falling)
+  - **Becomes satisfied when**: `current_temp <= (target_temp - satisfaction_eps)` (zone reaches target while falling)
 
 **Cooling Mode** (inverted logic):
 - **Undercooled**: `current_temp > (target_temp + opening_offset)` → Valve opens
-  - **Becomes satisfied when**: `current_temp <= (target_temp + satisfaction_eps)` (zone has reached target while falling)
-- **Satisfied**: `(target_temp - satisfaction_eps) <= current_temp <= (target_temp + satisfaction_eps)` → Maintains temperature
-  - Valve may still be open or closed depending on opening_offset and closing_offset
+  - **Becomes satisfied when**: `current_temp <= (target_temp - satisfaction_eps)` (zone reaches target while falling)
+- **Satisfied**: Zone maintains satisfied status with hysteresis
+  - **Stays satisfied until**: `current_temp > (target_temp + opening_offset)` (rises above upper bound) OR `current_temp < (target_temp - closing_offset)` (falls below lower bound)
+  - Valve may be open or closed depending on current temperature vs opening_offset and closing_offset
 - **Overcooled**: `current_temp < (target_temp - closing_offset)` → Valve closes
-  - **Becomes satisfied when**: `current_temp >= (target_temp - satisfaction_eps)` (zone has reached target while rising)
+  - **Becomes satisfied when**: `current_temp >= (target_temp + satisfaction_eps)` (zone reaches target while rising)
 
 **Key Distinction:**
 - **Valve control** (opening/closing): Still uses `opening_offset` and `closing_offset` for hysteresis
@@ -394,9 +396,24 @@ Each zone is classified based on its current temperature relative to target. The
   - Provides a buffer zone around the target for satisfaction determination
 
 **Example (Heating Mode):**
-- Target: 21.0°C, opening_offset: 0.3°C, closing_offset: 0.3°C, satisfaction_eps: 0.1°C
-- Underheated zone (currently 20.5°C): Valve opens at 20.7°C, but zone becomes "satisfied" at 20.9°C (21.0 - 0.1)
-- Overheated zone (currently 21.5°C): Valve closes at 21.3°C, but zone becomes "satisfied" at 21.1°C (21.0 + 0.1)
+- Target: 22.0°C, opening_offset: 0.3°C, closing_offset: 0.3°C, satisfaction_eps: 0.1°C
+- Lower bound (underheated): 21.7°C, Upper bound (overheated): 22.3°C
+- Satisfaction transitions:
+  - Underheated → Satisfied: at 22.1°C (target + eps) while rising
+  - Satisfied → Overheated: at 22.4°C (above upper bound) while rising
+  - Overheated → Satisfied: at 21.9°C (target - eps) while falling
+  - Satisfied → Underheated: at 21.6°C (below lower bound) while falling
+- Example temperature flow:
+  - 20.0°C → Underheated (valve opens at 21.7°C)
+  - 21.8°C → Underheated (still below target + eps)
+  - 22.1°C → **Satisfied** (reached target + eps)
+  - 22.2°C → Satisfied (stays satisfied)
+  - 22.3°C → Satisfied (at upper bound, valve closes)
+  - 22.4°C → **Overheated** (exceeded upper bound)
+  - 22.0°C → Overheated (still above target - eps)
+  - 21.9°C → **Satisfied** (reached target - eps)
+  - 21.7°C → Satisfied (at lower bound, valve opens)
+  - 21.6°C → **Underheated** (fell below lower bound)
 
 ### Priority Sorting
 
@@ -511,61 +528,70 @@ def update_valves(zones, config, main_climate_state, multizone_enabled):
         return actions
     
     # Determine satisfaction state for each zone
-    # Note: Satisfaction uses satisfaction_eps (centered around target)
+    # Note: Satisfaction uses state machine with hysteresis
+    # - Enters satisfied when reaching target ± satisfaction_eps
+    # - Exits satisfied when crossing opening_offset or closing_offset bounds
     # Valve opening/closing still uses opening_offset and closing_offset
     for zone in zones:
         if zone.state == "OFF":
             zone.satisfaction = "off"
             continue
         
+        # Get previous satisfaction state (needed for hysteresis)
+        prev_satisfaction = zone.satisfaction if hasattr(zone, 'satisfaction') else None
+        
         if main_climate_state == "HEATING":
-            # Valve control logic (unchanged)
+            # Check if zone crosses outer bounds (forces state change)
             if zone.current_temp < (zone.target_temp - config.opening_offset):
-                # Zone is underheated, valve should be open
-                # But satisfaction depends on proximity to target
-                if zone.current_temp >= (zone.target_temp - config.satisfaction_eps):
-                    zone.satisfaction = "satisfied"  # Reached target while rising
-                else:
-                    zone.satisfaction = "underheated"
+                # Below lower bound - definitely underheated
+                zone.satisfaction = "underheated"
             elif zone.current_temp > (zone.target_temp + config.closing_offset):
-                # Zone is overheated, valve should be closed
-                # But satisfaction depends on proximity to target
-                if zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
-                    zone.satisfaction = "satisfied"  # Reached target while falling
-                else:
-                    zone.satisfaction = "overheated"
+                # Above upper bound - definitely overheated
+                zone.satisfaction = "overheated"
             else:
-                # Zone is in the hysteresis band - check satisfaction around target
-                if (zone.target_temp - config.satisfaction_eps) <= zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
-                    zone.satisfaction = "satisfied"
-                elif zone.current_temp < zone.target_temp:
-                    zone.satisfaction = "underheated"
+                # Within hysteresis band - check transitions based on previous state
+                if prev_satisfaction == "underheated":
+                    # Was underheated, check if reached satisfaction threshold
+                    if zone.current_temp >= (zone.target_temp + config.satisfaction_eps):
+                        zone.satisfaction = "satisfied"  # Reached target + eps while rising
+                    else:
+                        zone.satisfaction = "underheated"  # Still underheated
+                elif prev_satisfaction == "overheated":
+                    # Was overheated, check if reached satisfaction threshold
+                    if zone.current_temp <= (zone.target_temp - config.satisfaction_eps):
+                        zone.satisfaction = "satisfied"  # Reached target - eps while falling
+                    else:
+                        zone.satisfaction = "overheated"  # Still overheated
                 else:
-                    zone.satisfaction = "overheated"
+                    # Was satisfied or unknown - stay satisfied (within bounds)
+                    # Initialize as satisfied if unknown
+                    zone.satisfaction = "satisfied"
         else:  # COOLING
-            # Valve control logic (unchanged)
+            # Check if zone crosses outer bounds (forces state change)
             if zone.current_temp > (zone.target_temp + config.opening_offset):
-                # Zone is undercooled, valve should be open
-                # But satisfaction depends on proximity to target
-                if zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
-                    zone.satisfaction = "satisfied"  # Reached target while falling
-                else:
-                    zone.satisfaction = "undercooled"
+                # Above upper bound - definitely undercooled
+                zone.satisfaction = "undercooled"
             elif zone.current_temp < (zone.target_temp - config.closing_offset):
-                # Zone is overcooled, valve should be closed
-                # But satisfaction depends on proximity to target
-                if zone.current_temp >= (zone.target_temp - config.satisfaction_eps):
-                    zone.satisfaction = "satisfied"  # Reached target while rising
-                else:
-                    zone.satisfaction = "overcooled"
+                # Below lower bound - definitely overcooled
+                zone.satisfaction = "overcooled"
             else:
-                # Zone is in the hysteresis band - check satisfaction around target
-                if (zone.target_temp - config.satisfaction_eps) <= zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
-                    zone.satisfaction = "satisfied"
-                elif zone.current_temp > zone.target_temp:
-                    zone.satisfaction = "undercooled"
+                # Within hysteresis band - check transitions based on previous state
+                if prev_satisfaction == "undercooled":
+                    # Was undercooled, check if reached satisfaction threshold
+                    if zone.current_temp <= (zone.target_temp - config.satisfaction_eps):
+                        zone.satisfaction = "satisfied"  # Reached target - eps while falling
+                    else:
+                        zone.satisfaction = "undercooled"  # Still undercooled
+                elif prev_satisfaction == "overcooled":
+                    # Was overcooled, check if reached satisfaction threshold
+                    if zone.current_temp >= (zone.target_temp + config.satisfaction_eps):
+                        zone.satisfaction = "satisfied"  # Reached target + eps while rising
+                    else:
+                        zone.satisfaction = "overcooled"  # Still overcooled
                 else:
-                    zone.satisfaction = "overcooled"
+                    # Was satisfied or unknown - stay satisfied (within bounds)
+                    # Initialize as satisfied if unknown
+                    zone.satisfaction = "satisfied"
     
     # Calculate sort key (user priority + temperature deficit)
     for zone in zones:
@@ -1329,47 +1355,58 @@ This section describes concrete test cases to validate the multizone climate sys
 
 ---
 
-### Test 2: Update Valves - Basic Satisfaction States
+### Test 2: Update Valves - Satisfaction State Transitions with Hysteresis
 
-**Purpose:** Verify zones correctly classified with new satisfaction logic that uses satisfaction_eps
+**Purpose:** Verify zones correctly transition between satisfaction states using hysteresis
 
 **Setup (Heating Mode):**
-- opening_offset = 0.3°C
-- closing_offset = 0.3°C
+- Target: 22.0°C
+- opening_offset = 0.3°C (lower bound: 21.7°C)
+- closing_offset = 0.3°C (upper bound: 22.3°C)
 - satisfaction_eps = 0.1°C
 
-**Test Cases:**
+**State Transition Rules:**
+- Underheated → Satisfied: at 22.1°C (target + eps)
+- Satisfied → Overheated: at 22.4°C (> upper bound)
+- Overheated → Satisfied: at 21.9°C (target - eps)
+- Satisfied → Underheated: at 21.6°C (< lower bound)
 
-| Zone       | Target | Current | Valve Trigger | Satisfaction Status | Reasoning |
-|------------|--------|---------|---------------|---------------------|-----------|
-| Bedroom    | 21.0°C | 20.0°C  | OPEN (< 20.7) | Underheated         | 20.0 < 20.9 (target - eps) |
-| Living     | 22.0°C | 21.9°C  | No change     | Satisfied           | 21.9 >= 21.9 (target - eps) |
-| Kitchen    | 20.0°C | 20.5°C  | CLOSE (> 20.3) | Overheated         | 20.5 > 20.1 (target + eps) |
-| Bathroom   | 23.0°C | 24.0°C  | CLOSE (> 23.3) | Overheated         | 24.0 > 23.1 (target + eps) |
-| Study      | 21.0°C | 20.95°C | No change     | Satisfied           | 20.95 >= 20.9 (target - eps), zone rising to target |
-| Office     | 21.0°C | 21.05°C | No change     | Satisfied           | 21.05 <= 21.1 (target + eps), zone falling to target |
+**Test Case: Temperature Rising from Underheated**
 
-**Key Differences with New Logic:**
-- **Valve control** (when to open/close): Uses opening_offset (0.3°C) and closing_offset (0.3°C)
-  - Open when: current < (target - 0.3) = 20.7°C for 21°C target
-  - Close when: current > (target + 0.3) = 21.3°C for 21°C target
-- **Satisfaction determination**: Uses satisfaction_eps (0.1°C) around target
-  - Satisfied when: (target - 0.1) <= current <= (target + 0.1)
-  - For 21°C target: satisfied when 20.9°C to 21.1°C
+| Current Temp | Previous State | New State | Valve Action | Reasoning |
+|--------------|----------------|-----------|--------------|-----------|
+| 20.0°C | - | Underheated | OPEN | Below lower bound (21.7°C) |
+| 21.0°C | Underheated | Underheated | Open | Below target + eps (22.1°C) |
+| 21.7°C | Underheated | Underheated | Open | At lower bound, still below target + eps |
+| 22.0°C | Underheated | Underheated | Open | Below target + eps (22.1°C) |
+| 22.1°C | Underheated | **Satisfied** | Open | Reached target + eps while rising |
+| 22.2°C | Satisfied | Satisfied | Open | Stays satisfied (within bounds) |
+| 22.3°C | Satisfied | Satisfied | CLOSE | At upper bound, valve closes, stays satisfied |
+| 22.4°C | Satisfied | **Overheated** | Close | Exceeded upper bound |
+
+**Test Case: Temperature Falling from Overheated**
+
+| Current Temp | Previous State | New State | Valve Action | Reasoning |
+|--------------|----------------|-----------|--------------|-----------|
+| 24.0°C | - | Overheated | CLOSE | Above upper bound (22.3°C) |
+| 22.5°C | Overheated | Overheated | Close | Above target - eps (21.9°C) |
+| 22.3°C | Overheated | Overheated | Close | At upper bound, still above target - eps |
+| 22.0°C | Overheated | Overheated | Close | Above target - eps (21.9°C) |
+| 21.9°C | Overheated | **Satisfied** | Close | Reached target - eps while falling |
+| 21.8°C | Satisfied | Satisfied | Close | Stays satisfied (within bounds) |
+| 21.7°C | Satisfied | Satisfied | OPEN | At lower bound, valve opens, stays satisfied |
+| 21.6°C | Satisfied | **Underheated** | Open | Fell below lower bound |
+
+**Key Insight - Hysteresis:**
+- Once satisfied, zone stays satisfied until crossing outer bounds (opening_offset/closing_offset)
+- NOT just within satisfaction_eps range
+- This prevents rapid state flapping as temperature approaches target
 
 **Expected Behavior:**
-- Bedroom valve opens (underheated, needs heat)
-- Living Room: satisfied status (reached target while rising), valve maintains state
-- Kitchen valve closes (overheated, too hot)
-- Bathroom valve closes (overheated, too hot)
-- Study: satisfied status even though valve might still be open (rising toward target)
-- Office: satisfied status even though valve might be closed (falling toward target)
-- Overheated zones (Kitchen, Bathroom) excluded from main target calculation
-
-**Comparison with Old Logic:**
-- **Old**: Zone was satisfied when in the range [target - opening_offset, target + closing_offset] = [20.7, 21.3]
-- **New**: Zone is satisfied when in the range [target - satisfaction_eps, target + satisfaction_eps] = [20.9, 21.1]
-- This tighter satisfaction band around the actual target provides better feedback on zone status
+- Satisfaction state has proper hysteresis based on previous state
+- Valve control operates independently using opening_offset/closing_offset
+- Zone can be satisfied while valve is opening or closing
+- Overheated zones excluded from main target calculation
 
 ---
 
@@ -1482,60 +1519,85 @@ assert "kitchen_valve" in open_valves  # is_fallback_valve = true
 
 ---
 
-### Test 6a: Satisfaction Eps Behavior - Zone Status Transitions
+### Test 6a: Satisfaction Eps Behavior - Hysteresis State Machine
 
-**Purpose:** Verify satisfaction_eps parameter correctly determines when zones transition to satisfied status
+**Purpose:** Verify satisfaction_eps parameter controls state transitions with proper hysteresis
 
 **Setup (Heating Mode):**
 - Target temperature: 21.0°C
-- opening_offset: 0.3°C
-- closing_offset: 0.3°C
+- opening_offset: 0.3°C (lower bound: 20.7°C)
+- closing_offset: 0.3°C (upper bound: 21.3°C)
 - Test with different satisfaction_eps values
 
 **Scenario 1: satisfaction_eps = 0.0 (exact target)**
 
-| Current Temp | Valve Action | Satisfaction Status | Reasoning |
-|--------------|--------------|---------------------|-----------|
-| 20.6°C | OPEN (< 20.7) | Underheated | Not at exact target 21.0°C |
-| 20.9°C | No change | Underheated | Not at exact target 21.0°C |
-| 21.0°C | No change | Satisfied | Exactly at target |
-| 21.1°C | No change | Overheated | Above target |
-| 21.4°C | CLOSE (> 21.3) | Overheated | Above target + closing_offset |
+State transitions: Underheated → Satisfied at exactly 21.0°C, Overheated → Satisfied at exactly 21.0°C
 
-**Scenario 2: satisfaction_eps = 0.1°C (±0.1°C buffer)**
+| Temp Flow | Previous State | New State | Reasoning |
+|-----------|----------------|-----------|-----------|
+| 20.5°C | - | Underheated | Below lower bound (20.7°C) |
+| 20.9°C | Underheated | Underheated | Not yet at target (21.0°C) |
+| 21.0°C | Underheated | **Satisfied** | Reached exact target while rising |
+| 21.1°C | Satisfied | Satisfied | Stays satisfied (within bounds) |
+| 21.3°C | Satisfied | Satisfied | At upper bound, stays satisfied |
+| 21.4°C | Satisfied | **Overheated** | Exceeded upper bound (21.3°C) |
+| 21.0°C | Overheated | **Satisfied** | Reached exact target while falling |
+| 20.7°C | Satisfied | Satisfied | At lower bound, stays satisfied |
+| 20.6°C | Satisfied | **Underheated** | Fell below lower bound (20.7°C) |
 
-| Current Temp | Valve Action | Satisfaction Status | Reasoning |
-|--------------|--------------|---------------------|-----------|
-| 20.6°C | OPEN (< 20.7) | Underheated | Below (target - eps) = 20.9°C |
-| 20.9°C | No change | Satisfied | At (target - eps), zone rising to target |
-| 21.0°C | No change | Satisfied | At target |
-| 21.1°C | No change | Satisfied | At (target + eps), zone falling to target |
-| 21.2°C | No change | Overheated | Above (target + eps) = 21.1°C |
-| 21.4°C | CLOSE (> 21.3) | Overheated | Above target + closing_offset |
+**Scenario 2: satisfaction_eps = 0.1°C**
 
-**Scenario 3: satisfaction_eps = 0.2°C (±0.2°C buffer)**
+State transitions: Underheated → Satisfied at 21.1°C (target + eps), Overheated → Satisfied at 20.9°C (target - eps)
 
-| Current Temp | Valve Action | Satisfaction Status | Reasoning |
-|--------------|--------------|---------------------|-----------|
-| 20.6°C | OPEN (< 20.7) | Underheated | Below (target - eps) = 20.8°C |
-| 20.8°C | No change | Satisfied | At (target - eps), zone rising to target |
-| 21.0°C | No change | Satisfied | At target |
-| 21.2°C | No change | Satisfied | At (target + eps), zone falling to target |
-| 21.3°C | CLOSE (> 21.3) | Overheated | Above (target + eps) = 21.2°C but triggers valve close |
-| 21.4°C | CLOSE (> 21.3) | Overheated | Above target + closing_offset |
+| Temp Flow | Previous State | New State | Reasoning |
+|-----------|----------------|-----------|-----------|
+| 20.5°C | - | Underheated | Below lower bound (20.7°C) |
+| 20.9°C | Underheated | Underheated | Not yet at target + eps (21.1°C) |
+| 21.0°C | Underheated | Underheated | Still below target + eps (21.1°C) |
+| 21.1°C | Underheated | **Satisfied** | Reached target + eps while rising |
+| 21.2°C | Satisfied | Satisfied | Stays satisfied (within bounds) |
+| 21.3°C | Satisfied | Satisfied | At upper bound, stays satisfied |
+| 21.4°C | Satisfied | **Overheated** | Exceeded upper bound (21.3°C) |
+| 21.0°C | Overheated | Overheated | Still above target - eps (20.9°C) |
+| 20.9°C | Overheated | **Satisfied** | Reached target - eps while falling |
+| 20.8°C | Satisfied | Satisfied | Stays satisfied (within bounds) |
+| 20.7°C | Satisfied | Satisfied | At lower bound, stays satisfied |
+| 20.6°C | Satisfied | **Underheated** | Fell below lower bound (20.7°C) |
+
+**Scenario 3: satisfaction_eps = 0.2°C**
+
+State transitions: Underheated → Satisfied at 21.2°C (target + eps), Overheated → Satisfied at 20.8°C (target - eps)
+
+| Temp Flow | Previous State | New State | Reasoning |
+|-----------|----------------|-----------|-----------|
+| 20.5°C | - | Underheated | Below lower bound (20.7°C) |
+| 20.8°C | Underheated | Underheated | Not yet at target + eps (21.2°C) |
+| 21.0°C | Underheated | Underheated | Still below target + eps (21.2°C) |
+| 21.2°C | Underheated | **Satisfied** | Reached target + eps while rising |
+| 21.3°C | Satisfied | Satisfied | At upper bound, stays satisfied |
+| 21.4°C | Satisfied | **Overheated** | Exceeded upper bound (21.3°C) |
+| 21.0°C | Overheated | Overheated | Still above target - eps (20.8°C) |
+| 20.8°C | Overheated | **Satisfied** | Reached target - eps while falling |
+| 20.7°C | Satisfied | Satisfied | At lower bound, stays satisfied |
+| 20.6°C | Satisfied | **Underheated** | Fell below lower bound (20.7°C) |
 
 **Key Insights:**
-- **satisfaction_eps = 0.0**: Strictest - zone must be exactly at target to be satisfied
-- **satisfaction_eps = 0.1**: Balanced - provides small buffer for temperature fluctuations
-- **satisfaction_eps = 0.2**: More lenient - wider satisfaction band
-- Valve control (opening_offset/closing_offset) is independent of satisfaction status
-- A zone can have valve open but be "satisfied" if within target ± eps
-- This separation allows better status reporting while maintaining proper valve control
+- **Hysteresis:** Once satisfied, zone stays satisfied until crossing outer bounds (opening_offset/closing_offset)
+- **satisfaction_eps controls entry to satisfied state:**
+  - From underheated: must reach target + satisfaction_eps
+  - From overheated: must reach target - satisfaction_eps
+- **Outer bounds control exit from satisfied state:**
+  - To underheated: must fall below target - opening_offset
+  - To overheated: must rise above target + closing_offset
+- **satisfaction_eps = 0.0**: Strictest - must reach exact target
+- **satisfaction_eps = 0.1**: Balanced - must overshoot/undershoot by 0.1°C
+- **satisfaction_eps = 0.2**: Most lenient - must overshoot/undershoot by 0.2°C
+- Larger satisfaction_eps means zone reaches "satisfied" status later but stays satisfied longer
 
 **Practical Application:**
-- Use satisfaction_eps = 0.0 when exact temperature control is required
-- Use satisfaction_eps = 0.1-0.2 for more stable satisfaction status with typical temperature sensor variations
-- Larger satisfaction_eps reduces status "flapping" between underheated/satisfied/overheated
+- Use satisfaction_eps = 0.0 when you want satisfied status as soon as target is reached
+- Use satisfaction_eps = 0.1-0.2 when you want to ensure zone has stabilized near target before marking as satisfied
+- Larger satisfaction_eps reduces premature "satisfied" status when temperature is still changing rapidly
 
 ---
 
