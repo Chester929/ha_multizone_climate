@@ -367,17 +367,36 @@ This algorithm manages the opening and closing of zone valves based on current a
 
 ### Zone Satisfaction States
 
-Each zone is classified based on its current temperature relative to target:
+Each zone is classified based on its current temperature relative to target. The satisfaction state is different from valve control logic - valves still open/close based on opening_offset and closing_offset, but the zone's satisfaction status is determined by proximity to the target temperature.
 
 **Heating Mode:**
-- **Underheated**: `current_temp < (target_temp - opening_offset)`
-- **Satisfied**: `(target_temp - opening_offset) <= current_temp <= (target_temp + closing_offset)`
-- **Overheated**: `current_temp > (target_temp + closing_offset)`
+- **Underheated**: `current_temp < (target_temp - opening_offset)` → Valve opens
+  - **Becomes satisfied when**: `current_temp >= (target_temp - satisfaction_eps)` (zone has reached target while rising)
+- **Satisfied**: `(target_temp - satisfaction_eps) <= current_temp <= (target_temp + satisfaction_eps)` → Maintains temperature
+  - Valve may still be open or closed depending on opening_offset and closing_offset
+- **Overheated**: `current_temp > (target_temp + closing_offset)` → Valve closes
+  - **Becomes satisfied when**: `current_temp <= (target_temp + satisfaction_eps)` (zone has reached target while falling)
 
 **Cooling Mode** (inverted logic):
-- **Undercooled**: `current_temp > (target_temp + opening_offset)`
-- **Satisfied**: `(target_temp - closing_offset) <= current_temp <= (target_temp + opening_offset)`
-- **Overcooled**: `current_temp < (target_temp - closing_offset)`
+- **Undercooled**: `current_temp > (target_temp + opening_offset)` → Valve opens
+  - **Becomes satisfied when**: `current_temp <= (target_temp + satisfaction_eps)` (zone has reached target while falling)
+- **Satisfied**: `(target_temp - satisfaction_eps) <= current_temp <= (target_temp + satisfaction_eps)` → Maintains temperature
+  - Valve may still be open or closed depending on opening_offset and closing_offset
+- **Overcooled**: `current_temp < (target_temp - closing_offset)` → Valve closes
+  - **Becomes satisfied when**: `current_temp >= (target_temp - satisfaction_eps)` (zone has reached target while rising)
+
+**Key Distinction:**
+- **Valve control** (opening/closing): Still uses `opening_offset` and `closing_offset` for hysteresis
+- **Satisfaction status**: Uses `satisfaction_eps` centered around target temperature
+- **satisfaction_eps** parameter (default: 0.0):
+  - 0.0 = Zone is satisfied only when exactly at target temperature
+  - 0.1 = Zone is satisfied when within ±0.1°C of target temperature
+  - Provides a buffer zone around the target for satisfaction determination
+
+**Example (Heating Mode):**
+- Target: 21.0°C, opening_offset: 0.3°C, closing_offset: 0.3°C, satisfaction_eps: 0.1°C
+- Underheated zone (currently 20.5°C): Valve opens at 20.7°C, but zone becomes "satisfied" at 20.9°C (21.0 - 0.1)
+- Overheated zone (currently 21.5°C): Valve closes at 21.3°C, but zone becomes "satisfied" at 21.1°C (21.0 + 0.1)
 
 ### Priority Sorting
 
@@ -492,25 +511,61 @@ def update_valves(zones, config, main_climate_state, multizone_enabled):
         return actions
     
     # Determine satisfaction state for each zone
+    # Note: Satisfaction uses satisfaction_eps (centered around target)
+    # Valve opening/closing still uses opening_offset and closing_offset
     for zone in zones:
         if zone.state == "OFF":
             zone.satisfaction = "off"
             continue
         
         if main_climate_state == "HEATING":
+            # Valve control logic (unchanged)
             if zone.current_temp < (zone.target_temp - config.opening_offset):
-                zone.satisfaction = "underheated"
+                # Zone is underheated, valve should be open
+                # But satisfaction depends on proximity to target
+                if zone.current_temp >= (zone.target_temp - config.satisfaction_eps):
+                    zone.satisfaction = "satisfied"  # Reached target while rising
+                else:
+                    zone.satisfaction = "underheated"
             elif zone.current_temp > (zone.target_temp + config.closing_offset):
-                zone.satisfaction = "overheated"
+                # Zone is overheated, valve should be closed
+                # But satisfaction depends on proximity to target
+                if zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
+                    zone.satisfaction = "satisfied"  # Reached target while falling
+                else:
+                    zone.satisfaction = "overheated"
             else:
-                zone.satisfaction = "satisfied"
+                # Zone is in the hysteresis band - check satisfaction around target
+                if (zone.target_temp - config.satisfaction_eps) <= zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
+                    zone.satisfaction = "satisfied"
+                elif zone.current_temp < zone.target_temp:
+                    zone.satisfaction = "underheated"
+                else:
+                    zone.satisfaction = "overheated"
         else:  # COOLING
+            # Valve control logic (unchanged)
             if zone.current_temp > (zone.target_temp + config.opening_offset):
-                zone.satisfaction = "undercooled"
+                # Zone is undercooled, valve should be open
+                # But satisfaction depends on proximity to target
+                if zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
+                    zone.satisfaction = "satisfied"  # Reached target while falling
+                else:
+                    zone.satisfaction = "undercooled"
             elif zone.current_temp < (zone.target_temp - config.closing_offset):
-                zone.satisfaction = "overcooled"
+                # Zone is overcooled, valve should be closed
+                # But satisfaction depends on proximity to target
+                if zone.current_temp >= (zone.target_temp - config.satisfaction_eps):
+                    zone.satisfaction = "satisfied"  # Reached target while rising
+                else:
+                    zone.satisfaction = "overcooled"
             else:
-                zone.satisfaction = "satisfied"
+                # Zone is in the hysteresis band - check satisfaction around target
+                if (zone.target_temp - config.satisfaction_eps) <= zone.current_temp <= (zone.target_temp + config.satisfaction_eps):
+                    zone.satisfaction = "satisfied"
+                elif zone.current_temp > zone.target_temp:
+                    zone.satisfaction = "undercooled"
+                else:
+                    zone.satisfaction = "overcooled"
     
     # Calculate sort key (user priority + temperature deficit)
     for zone in zones:
@@ -750,7 +805,8 @@ Description: Stores global configuration parameters
   "valve_actuation_delay": 120,
   "command_cooldown": 60,
   "coordinator_interval": 15,
-  "job_status_ttl": 900
+  "job_status_ttl": 900,
+  "satisfaction_eps": 0.0
 }
 ```
 
@@ -962,6 +1018,10 @@ This section maps the UI configuration fields to their JSON storage format and p
 - Valve Actuation Delay: Number seconds (default: 120)
 - Coordinator Interval: Number seconds (default: 15)
 - Job Status TTL: Number seconds (default: 900 / 15 minutes)
+- Satisfaction Epsilon: Number °C (default: 0.0)
+  - Buffer zone around target temperature for satisfaction determination
+  - 0.0 = Zone is satisfied only at exact target temperature
+  - 0.1 = Zone is satisfied within ±0.1°C of target
 
 **Stored in `ha_multizone:config`:**
 ```json
@@ -975,7 +1035,8 @@ This section maps the UI configuration fields to their JSON storage format and p
   "valve_actuation_delay": 120,
   "command_cooldown": 60,
   "coordinator_interval": 15,
-  "job_status_ttl": 900
+  "job_status_ttl": 900,
+  "satisfaction_eps": 0.0
 }
 ```
 
@@ -1028,6 +1089,7 @@ This section maps the UI configuration fields to their JSON storage format and p
   "command_cooldown": 60,
   "coordinator_interval": 15,
   "job_status_ttl": 900,
+  "satisfaction_eps": 0.0,
   "multizone_enabled": false,
   "created_at": "2026-01-13T10:00:00Z",
   "updated_at": "2026-01-13T13:00:00Z"
@@ -1191,7 +1253,8 @@ T=60s:    Open fallback Bedroom valve
   "coordinator_interval": 30,
   "main_change_threshold": 0.5,
   "opening_offset": 0.5,
-  "closing_offset": 0.5
+  "closing_offset": 0.5,
+  "satisfaction_eps": 0.2
 }
 ```
 
@@ -1203,7 +1266,8 @@ T=60s:    Open fallback Bedroom valve
   "coordinator_interval": 15,
   "main_change_threshold": 0.5,
   "opening_offset": 0.3,
-  "closing_offset": 0.3
+  "closing_offset": 0.3,
+  "satisfaction_eps": 0.0
 }
 ```
 
@@ -1215,7 +1279,8 @@ T=60s:    Open fallback Bedroom valve
   "coordinator_interval": 10,
   "main_change_threshold": 0.3,
   "opening_offset": 0.2,
-  "closing_offset": 0.2
+  "closing_offset": 0.2,
+  "satisfaction_eps": 0.0
 }
 ```
 
@@ -1266,33 +1331,45 @@ This section describes concrete test cases to validate the multizone climate sys
 
 ### Test 2: Update Valves - Basic Satisfaction States
 
-**Purpose:** Verify zones correctly classified as underheated/satisfied/overheated
+**Purpose:** Verify zones correctly classified with new satisfaction logic that uses satisfaction_eps
 
 **Setup (Heating Mode):**
 - opening_offset = 0.3°C
 - closing_offset = 0.3°C
+- satisfaction_eps = 0.1°C
 
 **Test Cases:**
 
-| Zone       | Target | Current | Expected State | Expected Valve |
-|------------|--------|---------|----------------|----------------|
-| Bedroom    | 21.0°C | 20.0°C  | Underheated    | OPEN           |
-| Living     | 22.0°C | 21.9°C  | Satisfied      | (maintain)     |
-| Kitchen    | 20.0°C | 20.5°C  | Overheated     | CLOSE          |
-| Bathroom   | 23.0°C | 24.0°C  | Overheated     | CLOSE          |
+| Zone       | Target | Current | Valve Trigger | Satisfaction Status | Reasoning |
+|------------|--------|---------|---------------|---------------------|-----------|
+| Bedroom    | 21.0°C | 20.0°C  | OPEN (< 20.7) | Underheated         | 20.0 < 20.9 (target - eps) |
+| Living     | 22.0°C | 21.9°C  | No change     | Satisfied           | 21.9 >= 21.9 (target - eps) |
+| Kitchen    | 20.0°C | 20.5°C  | CLOSE (> 20.3) | Overheated         | 20.5 > 20.1 (target + eps) |
+| Bathroom   | 23.0°C | 24.0°C  | CLOSE (> 23.3) | Overheated         | 24.0 > 23.1 (target + eps) |
+| Study      | 21.0°C | 20.95°C | No change     | Satisfied           | 20.95 >= 20.9 (target - eps), zone rising to target |
+| Office     | 21.0°C | 21.05°C | No change     | Satisfied           | 21.05 <= 21.1 (target + eps), zone falling to target |
 
-**Satisfaction Thresholds:**
-- Bedroom: underheated if < 20.7°C → 20.0 < 20.7 → underheated ✓
-- Living: satisfied if 21.7-22.3°C → 21.9 in range → satisfied ✓
-- Kitchen: overheated if > 20.3°C → 20.5 > 20.3 → overheated ✓
-- Bathroom: overheated if > 23.3°C → 24.0 > 23.3 → overheated ✓
+**Key Differences with New Logic:**
+- **Valve control** (when to open/close): Uses opening_offset (0.3°C) and closing_offset (0.3°C)
+  - Open when: current < (target - 0.3) = 20.7°C for 21°C target
+  - Close when: current > (target + 0.3) = 21.3°C for 21°C target
+- **Satisfaction determination**: Uses satisfaction_eps (0.1°C) around target
+  - Satisfied when: (target - 0.1) <= current <= (target + 0.1)
+  - For 21°C target: satisfied when 20.9°C to 21.1°C
 
 **Expected Behavior:**
-- Bedroom valve opens
-- Living Room valve state unchanged
-- Kitchen valve closes
-- Bathroom valve closes
+- Bedroom valve opens (underheated, needs heat)
+- Living Room: satisfied status (reached target while rising), valve maintains state
+- Kitchen valve closes (overheated, too hot)
+- Bathroom valve closes (overheated, too hot)
+- Study: satisfied status even though valve might still be open (rising toward target)
+- Office: satisfied status even though valve might be closed (falling toward target)
 - Overheated zones (Kitchen, Bathroom) excluded from main target calculation
+
+**Comparison with Old Logic:**
+- **Old**: Zone was satisfied when in the range [target - opening_offset, target + closing_offset] = [20.7, 21.3]
+- **New**: Zone is satisfied when in the range [target - satisfaction_eps, target + satisfaction_eps] = [20.9, 21.1]
+- This tighter satisfaction band around the actual target provides better feedback on zone status
 
 ---
 
