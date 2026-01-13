@@ -224,4 +224,11 @@ they are just informating about current temperature, target temperature and sati
 - https://github.com/Chester929/remeha_home_by_chester - master branch
 ## Lovelace
 - https://github.com/project-lovelace
-
+## De Dietrich HVAC Unit
+- https://www.dedietrich-vytapeni.cz/tepelna-cerpadla/strateo-vzduch-voda-split-inverter-s-vestavenym-ohrivacem-tv/
+- https://www.dedietrich-vytapeni.cz/index.php?cmd=download&id=9370&type=view
+- https://www.dedietrich-vytapeni.cz/index.php?cmd=download&id=9611&type=view
+- https://www.dedietrich-vytapeni.cz/index.php?cmd=download&id=10147&type=view
+## Main climate Thermostat
+- https://www.dedietrich-vytapeni.cz/prislusenstvi/smart-tc-ad324-inteligentni-regulator-teploty-prostoru/
+- https://www.dedietrich-vytapeni.cz/index.php?cmd=download&id=4628&type=view
