@@ -381,19 +381,36 @@ Each zone is classified based on its current temperature relative to target:
 
 ### Priority Sorting
 
-Zones are prioritized by "temperature deficit" (how far from target):
+Zones are sorted for valve management using a two-tier priority system:
+
+1. **Primary sorting**: By user-defined priority value (higher number = higher priority)
+2. **Secondary sorting**: By temperature deficit when priorities are equal
 
 **Heating mode:**
 ```python
+# Primary sort by priority (higher first)
+# Secondary sort by deficit (higher deficit = more urgent)
 deficit = target_temp - current_temp
-priority = deficit  # Higher deficit = higher priority
+
+if zone.priority > 0:
+    sort_key = (zone.priority, deficit)  # Explicit priority takes precedence
+else:
+    sort_key = (0, deficit)  # Default: sort by temperature deficit only
 ```
 
 **Cooling mode:**
 ```python
 deficit = current_temp - target_temp
-priority = deficit  # Higher deficit = higher priority
+sort_key = (zone.priority, deficit)  # Same logic as heating
 ```
+
+**Example:**
+- Zone A: priority=10, deficit=2.0°C → sort_key=(10, 2.0)
+- Zone B: priority=5, deficit=3.0°C → sort_key=(5, 3.0)
+- Zone C: priority=0, deficit=4.0°C → sort_key=(0, 4.0)
+- Zone D: priority=0, deficit=1.0°C → sort_key=(0, 1.0)
+
+**Sort order:** A → B → C → D (A managed first, D managed last)
 
 ### Safety Rules
 
@@ -476,17 +493,19 @@ def update_valves(zones, config, main_climate_state, multizone_enabled):
             else:
                 zone.satisfaction = "satisfied"
     
-    # Calculate priority (temperature deficit)
+    # Calculate sort key (user priority + temperature deficit)
     for zone in zones:
         if zone.state == "OFF":
-            zone.priority = -1000  # Lowest priority
+            zone.sort_key = (-1000, -1000)  # Lowest priority
         elif main_climate_state == "HEATING":
-            zone.priority = zone.target_temp - zone.current_temp
+            deficit = zone.target_temp - zone.current_temp
+            zone.sort_key = (zone.priority, deficit)
         else:  # COOLING
-            zone.priority = zone.current_temp - zone.target_temp
+            deficit = zone.current_temp - zone.target_temp
+            zone.sort_key = (zone.priority, deficit)
     
-    # Sort zones by priority (descending)
-    sorted_zones = sorted(zones, key=lambda z: z.priority, reverse=True)
+    # Sort zones by priority (user priority first, then deficit)
+    sorted_zones = sorted(zones, key=lambda z: z.sort_key, reverse=True)
     
     # Determine desired valve states
     valves_to_open = []
@@ -746,7 +765,7 @@ Description: Stores state and configuration for a specific zone
   "opening_offset": 0.3,
   "closing_offset": 0.3,
   "is_fallback_valve": false,
-  "priority": 0.5,
+  "priority": 0,
   "last_updated": "2026-01-13T13:30:00Z"
 }
 ```
@@ -946,7 +965,8 @@ This section maps the UI configuration fields to their JSON storage format and p
 - Target Change Threshold: Number °C (default: 0.1)
 - Opening Offset Below Target: Number °C (default: 0.3)
 - Closing Offset Above Target: Number °C (default: 0.3)
-- Priority Override: Boolean (default: false) - Force this valve to stay open when minimum valves requirement applies
+- Is Fallback Valve: Boolean (default: false) - Force this valve to stay open when minimum valves requirement applies
+- Priority: Number (default: 0) - Higher values are managed first; if all zones have priority 0, zones are prioritized by temperature deficit (most urgent need)
 
 **Stored in `ha_multizone:zone:{zone_id}`:**
 ```json
@@ -958,7 +978,8 @@ This section maps the UI configuration fields to their JSON storage format and p
   "target_change_threshold": 0.1,
   "opening_offset": 0.3,
   "closing_offset": 0.3,
-  "priority_override": false,
+  "is_fallback_valve": false,
+  "priority": 0,
   "current_temperature": null,
   "target_temperature": 20.0,
   "state": "OFF",
@@ -1009,8 +1030,8 @@ This section maps the UI configuration fields to their JSON storage format and p
   "target_change_threshold": 0.1,
   "opening_offset": 0.3,
   "closing_offset": 0.3,
-  "priority_override": true,
-  "priority": 0.5,
+  "is_fallback_valve": true,
+  "priority": 10,
   "last_updated": "2026-01-13T13:30:00Z"
 }
 ```
@@ -1069,6 +1090,7 @@ This section describes the timing parameters that control when and how the multi
 - Most thermostats have 0.5°C precision
 - Reduces API calls to cloud-connected thermostats
 - Target temperature is rounded to nearest 0.5°C increment (e.g., 22.3°C → 22.5°C, 22.2°C → 22.0°C)
+- With rounding to 0.5°C increments, the threshold check is technically redundant (changes will always be in 0.5°C steps), but kept for explicitness and future flexibility
 
 **Note:** User input changes should be debounced by ~5 seconds to prevent excessive recalculations during rapid adjustments.
 
@@ -1257,24 +1279,48 @@ This section describes concrete test cases to validate the multizone climate sys
 **Setup:**
 - min_valves_open = 2
 - All zones satisfied or overheated (would close all valves)
-- Priority override valves: Bedroom, Kitchen
+- Fallback valves: Bedroom (is_fallback_valve=true), Kitchen (is_fallback_valve=true)
 
 **Expected Behavior:**
 1. Calculate desired state: all valves would close (all satisfied/overheated)
 2. Safety check: 0 < 2 → violation
-3. Force open 2 priority override valves: Bedroom, Kitchen
+3. Force open 2 fallback valves: Bedroom, Kitchen
 4. Final state: Bedroom OPEN, Kitchen OPEN, others CLOSED
 
 **Test Assertion:**
 ```python
 assert len(open_valves) >= config.min_valves_open
-assert "bedroom_valve" in open_valves  # priority_override = true
-assert "kitchen_valve" in open_valves  # priority_override = true
+assert "bedroom_valve" in open_valves  # is_fallback_valve = true
+assert "kitchen_valve" in open_valves  # is_fallback_valve = true
 ```
 
 ---
 
-### Test 4: Valve Lock - Prevent Chattering
+### Test 4: Priority Sorting - User Priority and Temperature Deficit
+
+**Purpose:** Verify zones are sorted correctly using priority field and temperature deficit
+
+**Setup (Heating Mode):**
+- Zone A (Bedroom): priority=10, target=21°C, current=19°C, deficit=2.0°C
+- Zone B (Kitchen): priority=5, target=22°C, current=19°C, deficit=3.0°C
+- Zone C (Living): priority=0, target=20°C, current=16°C, deficit=4.0°C
+- Zone D (Bathroom): priority=0, target=23°C, current=22°C, deficit=1.0°C
+
+**Expected Sort Order:**
+1. Zone A: sort_key=(10, 2.0) - highest user priority
+2. Zone B: sort_key=(5, 3.0) - second highest user priority
+3. Zone C: sort_key=(0, 4.0) - default priority, largest deficit
+4. Zone D: sort_key=(0, 1.0) - default priority, smallest deficit
+
+**Expected Behavior:**
+- Zones with user-defined priority (>0) are managed first
+- Among zones with same priority, those with higher temperature deficit are managed first
+- Zone A gets first attention despite having smaller deficit than C
+- Zone C is prioritized over D due to larger deficit (both have priority=0)
+
+---
+
+### Test 5: Valve Lock - Prevent Chattering
 
 **Purpose:** Verify valve locks prevent rapid re-actuation
 
@@ -1298,7 +1344,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ---
 
-### Test 5: Cooling Mode - Inverted Logic
+### Test 6: Cooling Mode - Inverted Logic
 
 **Purpose:** Verify satisfaction states invert correctly in cooling mode
 
@@ -1330,7 +1376,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ## Integration Tests
 
-### Test 6: Open-First-Then-Close Sequence
+### Test 7: Open-First-Then-Close Sequence
 
 **Purpose:** Verify minimum flow maintained during valve swapping
 
@@ -1359,7 +1405,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ---
 
-### Test 7: Multiple Zone Changes - Job Queueing
+### Test 8: Multiple Zone Changes - Job Queueing
 
 **Purpose:** Verify job queue handles multiple rapid changes correctly
 
@@ -1389,7 +1435,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ---
 
-### Test 8: Multizone Feature OFF - Manual Control
+### Test 9: Multizone Feature OFF - Manual Control
 
 **Purpose:** Verify system behavior when multizone feature is disabled
 
@@ -1412,7 +1458,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ---
 
-### Test 9: Main Climate OFF - No Automatic Changes
+### Test 10: Main Climate OFF - No Automatic Changes
 
 **Purpose:** Verify system safety when main HVAC turns off
 
@@ -1434,7 +1480,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ---
 
-### Test 10: Job Lock - Prevent Concurrent Execution
+### Test 11: Job Lock - Prevent Concurrent Execution
 
 **Purpose:** Verify job locks prevent concurrent execution of same job type
 
@@ -1459,7 +1505,7 @@ assert "kitchen_valve" in open_valves  # priority_override = true
 
 ---
 
-### Test 11: Configuration Change - Dynamic Updates
+### Test 12: Configuration Change - Dynamic Updates
 
 **Purpose:** Verify system responds to configuration changes
 
