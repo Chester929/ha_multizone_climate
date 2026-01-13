@@ -1635,7 +1635,7 @@ This integration can (or will) compute whether a zone is "satisfied" using a dir
 
 Summary
 - We keep valve open/close control unchanged.
-- We compute zone.satisfied directionally using an in‑memory attribute per zone called `approach_direction` with values:
+- We compute zone.satisfied directionally using an in-memory attribute per zone called `approach_direction` with values:
   - `rising` — the zone is being driven toward higher temperature (approaching from below)
   - `falling` — the zone is being driven toward lower temperature (approaching from above)
   - `None` — no direction known (e.g. exactly at target within EPS)
@@ -1648,8 +1648,8 @@ Why this helps
 
 Behavior rules (plain language)
 1. Hard bounds:
-   - If current_temp <= lower_bound → zone is unsatisfied and `approach_direction = "rising"` (recover by heating).
-   - If current_temp >= upper_bound → zone is unsatisfied and `approach_direction = "falling"` (recover by cooling).
+   - If current_temp <= lower_bound → zone is underheated and `approach_direction = "rising"` (recover by heating).
+   - If current_temp >= upper_bound → zone is overheated and `approach_direction = "falling"` (recover by cooling).
 2. Initialization (in-memory only):
    - On startup, try to infer `approach_direction` from the zone's valve state (if available):
      - If valve indicates it's opening / moving toward open, use `rising`.
@@ -1709,13 +1709,13 @@ Notes and recommendations
 - `approach_direction` should be kept in memory on the zone object (not persisted). Reinitialize it on Home Assistant restart from valve state or temps.
 - Prefer initialization from valve opening/closing state when available — this usually reflects the intended action more reliably than a single temperature sample.
 - Keep valve control logic unchanged: this approach only changes the conditions that set `satisfied`. Valve open/close commands should still behave as before.
-- If a target temperature lies outside the [lower_bound, upper_bound] range, decide on a policy: clamp the target, treat zone as never satisfied, or document the expected behavior. The recommended safe behavior is to consider the zone unsatisfied until the target is within bounds.
+- If a target temperature lies outside the [lower_bound, upper_bound] range, decide on a policy: clamp the target, treat zone as never satisfied, or document the expected behavior. The recommended safe behavior is to mark the zone as underheated or overheated until the target is within bounds.
 - Add unit tests that validate:
   - initialization from valve state,
   - initialization fallback from temperature,
   - rising → satisfied at target, flipping to falling when overshot by eps,
   - falling → satisfied at target, flipping to rising when undershot by eps,
-  - out-of-bounds behavior sets direction and unsatisfied.
+  - out-of-bounds behavior sets direction and marks zone as underheated or overheated.
 
 Changelog / migration
 - This is a behavioral improvement to how `satisfied` is computed. It is non-breaking and optional — the per-zone `eps` defaults to `0.0` (old exact-equality behavior).
