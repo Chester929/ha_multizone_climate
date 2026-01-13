@@ -1629,6 +1629,107 @@ assert len(get_open_valves()) == 2
 
 ---
 
+## Directional "satisfied" behavior per zone (rising / falling)
+
+This integration can (or will) compute whether a zone is "satisfied" using a directional approach rather than a simple between-lower-and-upper check. The goal is to provide a small hysteresis and intent so zones don't flip-flop when temperatures hover near the target.
+
+Summary
+- We keep valve open/close control unchanged.
+- We compute zone.satisfied directionally using an in‑memory attribute per zone called `approach_direction` with values:
+  - `rising` — the zone is being driven toward higher temperature (approaching from below)
+  - `falling` — the zone is being driven toward lower temperature (approaching from above)
+  - `None` — no direction known (e.g. exactly at target within EPS)
+- Each zone may have a per-zone configurable epsilon (`eps`, default 0.0) to avoid flapping from noisy sensors.
+
+Why this helps
+- When a zone is underheated and being heated, it becomes "satisfied" when it reaches the target temperature (or within the eps band) — and remains satisfied until the control actually overshoots the target by the configured eps (if any).
+- Similarly, when a zone is overheated and being cooled, it becomes "satisfied" when it reaches the target (or within eps) coming from above.
+- This directional approach prevents immediate reversal of satisfied state caused by small sensor noise around the target.
+
+Behavior rules (plain language)
+1. Hard bounds:
+   - If current_temp &lt;= lower_bound → zone is unsatisfied and `approach_direction = "rising"` (recover by heating).
+   - If current_temp &gt;= upper_bound → zone is unsatisfied and `approach_direction = "falling"` (recover by cooling).
+2. Initialization (in-memory only):
+   - On startup, try to infer `approach_direction` from the zone's valve state (if available):
+     - If valve indicates it's opening / moving toward open, use `rising`.
+     - If valve indicates it's closing / moving toward closed, use `falling`.
+   - If valve state is not available, initialize from current_temp vs target:
+     - current &lt; target - eps  → `rising`
+     - current &gt; target + eps  → `falling`
+     - current within ±eps of target → `None` and initially considered satisfied
+   - Note: `approach_direction` is an in-memory attribute and is reinitialized on restart (it is not persisted).
+3. Satisfied determination:
+   - When `approach_direction == "rising"`:
+     - Zone is satisfied if current_temp &gt;= target_temp - eps AND current_temp &lt; upper_bound.
+     - Flip `approach_direction` to `falling` only if current_temp &gt; target_temp + eps.
+   - When `approach_direction == "falling"`:
+     - Zone is satisfied if current_temp &lt;= target_temp + eps AND current_temp &gt; lower_bound.
+     - Flip `approach_direction` to `rising` only if current_temp &lt; target_temp - eps.
+4. Epsilon (`eps`):
+   - Configurable per-zone value (float). Default: `0.0`.
+   - `eps = 0.0` means the target must be reached exactly to be considered satisfied from either direction.
+   - A small positive `eps` (e.g., 0.1) provides hysteresis and prevents rapid toggling around the target.
+
+YAML example (per-zone EPS)
+- If your integration uses YAML for per-zone configuration, add an `eps` key to a zone:
+```yaml
+zones:
+  - name: "Living Room"
+    target_temp: 21.0
+    lower_bound: 18.0
+    upper_bound: 24.0
+    valve_entity: "valve.living_room"
+    eps: 0.1   # optional, default 0.0
+```
+
+Pseudocode summary
+```text
+if current_temp <= lower_bound:
+  approach_direction = "rising"
+  satisfied = False
+elif current_temp >= upper_bound:
+  approach_direction = "falling"
+  satisfied = False
+else:
+  if approach_direction is None:
+    try valve state -> set rising/falling
+    else infer from current_temp vs target using eps
+  if approach_direction == "rising":
+    satisfied = (current_temp >= target - eps) and (current_temp < upper_bound)
+    if current_temp > target + eps:
+      approach_direction = "falling"
+  if approach_direction == "falling":
+    satisfied = (current_temp <= target + eps) and (current_temp > lower_bound)
+    if current_temp < target - eps:
+      approach_direction = "rising"
+```
+
+Notes and recommendations
+- `approach_direction` should be kept in memory on the zone object (not persisted). Reinitialize it on Home Assistant restart from valve state or temps.
+- Prefer initialization from valve opening/closing state when available — this usually reflects the intended action more reliably than a single temperature sample.
+- Keep valve control logic unchanged: this approach only changes the conditions that set `satisfied`. Valve open/close commands should still behave as before.
+- If a target temperature lies outside the [lower_bound, upper_bound] range, decide on a policy: clamp the target, treat zone as never satisfied, or document the expected behavior. The recommended safe behavior is to consider the zone unsatisfied until the target is within bounds.
+- Add unit tests that validate:
+  - initialization from valve state,
+  - initialization fallback from temperature,
+  - rising → satisfied at target, flipping to falling when overshot by eps,
+  - falling → satisfied at target, flipping to rising when undershot by eps,
+  - out-of-bounds behavior sets direction and unsatisfied.
+
+Changelog / migration
+- This is a behavioral improvement to how `satisfied` is computed. It is non-breaking and optional — the per-zone `eps` defaults to `0.0` (old exact-equality behavior).
+- No migration steps needed if `eps` is omitted (default 0.0). If you enable eps &gt; 0.0, expect a small hysteresis around target temperature.
+
+Example numeric scenario
+- lower=18, target=21, upper=24, eps=0.0
+  - current = 19 → approach_direction = rising, satisfied = False
+  - current increases to 21.0 → satisfied = True
+  - current continues to 22.5 → approach_direction flips to falling once &gt; target (if using eps&gt;0 this requires &gt; target + eps); satisfied becomes False until it drops to &lt;= target
+- With eps=0.1 the flip requires exceeding target by 0.1 (i.e., &gt; 21.1) to change direction.
+
+---
+
 # Future Improvements
 
 While the current design uses a slider-based approach for calculating the main climate target temperature, future versions could incorporate more sophisticated control strategies:
