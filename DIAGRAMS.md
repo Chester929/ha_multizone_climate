@@ -170,7 +170,7 @@ flowchart TD
     UseSingle --> Round
     CalcInterp --> Round
     
-    Round[Round to nearest 0.5°C<br/>round × 2 / 2] --> Clamp[Clamp to limits<br/>main_min_temp, main_max_temp]
+    Round[Round to nearest 0.5°C<br/>(round(value × 2)) / 2] --> Clamp[Clamp to limits<br/>main_min_temp, main_max_temp]
     
     Clamp --> CheckThreshold{abs × main_target -<br/>current_main_target<br/>>= threshold?}
     
