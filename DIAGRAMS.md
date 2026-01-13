@@ -207,7 +207,7 @@ flowchart LR
     
     subgraph Calculation
         FindRange[Min: 19°C<br/>Max: 23°C]
-        Interpolate[19 + 0.5 × 23-19<br/>= 19 + 2 = 21°C]
+        Interpolate[19 + 0.5 × (23-19)<br/>= 19 + 2 = 21°C]
         RoundVal[Round: 21.0°C]
         ClampVal[Clamp: 21.0°C<br/>within 18-30]
     end
