@@ -40,6 +40,11 @@ This document contains comprehensive diagrams illustrating the algorithms, flows
 10. [Timing Sequences](#timing-sequences)
 11. [Open-First-Then-Close Sequence](#open-first-then-close-sequence)
 12. [System Component Integration](#system-component-integration)
+13. [Priority Sorting Example](#priority-sorting-example)
+14. [Configuration Flow](#configuration-flow)
+15. [Valve Lock Mechanism](#valve-lock-mechanism)
+16. [Multizone Enable/Disable States](#multizone-enable-disable-states)
+17. [Error Handling and Recovery](#error-handling-and-recovery)
 
 ---
 
@@ -172,7 +177,7 @@ flowchart TD
     
     Round[Round to nearest 0.5°C<br/>(round(value × 2)) / 2] --> Clamp[Clamp to limits<br/>main_min_temp, main_max_temp]
     
-    Clamp --> CheckThreshold{abs × main_target -<br/>current_main_target<br/>>= threshold?}
+    Clamp --> CheckThreshold{abs(main_target -<br/>current_main_target)<br/>>= threshold?}
     
     CheckThreshold -->|No| ReturnNull
     CheckThreshold -->|Yes| ReturnTarget[Return main_target]
@@ -199,7 +204,7 @@ flowchart LR
     end
     
     subgraph Config
-        Slider[Slider: 0.5 50%]
+        Slider[Slider: 0.5 (50%)]
         Min[Min: 18°C]
         Max[Max: 30°C]
         Thresh[Threshold: 0.5°C]
