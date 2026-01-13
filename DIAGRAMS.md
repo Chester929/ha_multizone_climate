@@ -164,7 +164,7 @@ flowchart TD
     
     FindMinMax --> CheckEqual{min == max?}
     CheckEqual -->|Yes| UseSingle[main_target_raw = min]
-    CheckEqual -->|No| CalcInterp[main_target_raw = min +<br/>slider × max - min]
+    CheckEqual -->|No| CalcInterp[main_target_raw = min +<br/>slider × (max - min)]
     
     CalcAverage --> Round
     UseSingle --> Round
