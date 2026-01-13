@@ -372,18 +372,18 @@ Each zone is classified based on its current temperature relative to target. The
 **Heating Mode:**
 - **Underheated**: `current_temp < (target_temp - opening_offset)` → Valve opens
   - **Becomes satisfied when**: `current_temp >= (target_temp + satisfaction_eps)` (zone reaches target while rising)
-- **Satisfied**: Zone maintains satisfied status with hysteresis
-  - **Stays satisfied until**: `current_temp < (target_temp - opening_offset)` (falls below lower bound) OR `current_temp > (target_temp + closing_offset)` (rises above upper bound)
-  - Valve may be open or closed depending on current temperature vs opening_offset and closing_offset
+- **Satisfied**: Stays satisfied while between lower and upper bounds
+  - **Stays satisfied while**: `(target_temp - opening_offset) <= current_temp <= (target_temp + closing_offset)`
+  - Valve control: If all zones satisfied, valves open to maintain temperature. Otherwise, individual zone valve control applies.
 - **Overheated**: `current_temp > (target_temp + closing_offset)` → Valve closes
   - **Becomes satisfied when**: `current_temp <= (target_temp - satisfaction_eps)` (zone reaches target while falling)
 
 **Cooling Mode** (inverted logic):
 - **Undercooled**: `current_temp > (target_temp + opening_offset)` → Valve opens
   - **Becomes satisfied when**: `current_temp <= (target_temp - satisfaction_eps)` (zone reaches target while falling)
-- **Satisfied**: Zone maintains satisfied status with hysteresis
-  - **Stays satisfied until**: `current_temp > (target_temp + opening_offset)` (rises above upper bound) OR `current_temp < (target_temp - closing_offset)` (falls below lower bound)
-  - Valve may be open or closed depending on current temperature vs opening_offset and closing_offset
+- **Satisfied**: Stays satisfied while between lower and upper bounds
+  - **Stays satisfied while**: `(target_temp - closing_offset) <= current_temp <= (target_temp + opening_offset)`
+  - Valve control: If all zones satisfied, valves open to maintain temperature. Otherwise, individual zone valve control applies.
 - **Overcooled**: `current_temp < (target_temp - closing_offset)` → Valve closes
   - **Becomes satisfied when**: `current_temp >= (target_temp + satisfaction_eps)` (zone reaches target while rising)
 
