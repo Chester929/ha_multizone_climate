@@ -1648,24 +1648,24 @@ Why this helps
 
 Behavior rules (plain language)
 1. Hard bounds:
-   - If current_temp &lt;= lower_bound → zone is unsatisfied and `approach_direction = "rising"` (recover by heating).
-   - If current_temp &gt;= upper_bound → zone is unsatisfied and `approach_direction = "falling"` (recover by cooling).
+   - If current_temp <= lower_bound → zone is unsatisfied and `approach_direction = "rising"` (recover by heating).
+   - If current_temp >= upper_bound → zone is unsatisfied and `approach_direction = "falling"` (recover by cooling).
 2. Initialization (in-memory only):
    - On startup, try to infer `approach_direction` from the zone's valve state (if available):
      - If valve indicates it's opening / moving toward open, use `rising`.
      - If valve indicates it's closing / moving toward closed, use `falling`.
    - If valve state is not available, initialize from current_temp vs target:
-     - current &lt; target - eps  → `rising`
-     - current &gt; target + eps  → `falling`
+     - current < target - eps  → `rising`
+     - current > target + eps  → `falling`
      - current within ±eps of target → `None` and initially considered satisfied
    - Note: `approach_direction` is an in-memory attribute and is reinitialized on restart (it is not persisted).
 3. Satisfied determination:
    - When `approach_direction == "rising"`:
-     - Zone is satisfied if current_temp &gt;= target_temp - eps AND current_temp &lt; upper_bound.
-     - Flip `approach_direction` to `falling` only if current_temp &gt; target_temp + eps.
+     - Zone is satisfied if current_temp >= target_temp - eps AND current_temp < upper_bound.
+     - Flip `approach_direction` to `falling` only if current_temp > target_temp + eps.
    - When `approach_direction == "falling"`:
-     - Zone is satisfied if current_temp &lt;= target_temp + eps AND current_temp &gt; lower_bound.
-     - Flip `approach_direction` to `rising` only if current_temp &lt; target_temp - eps.
+     - Zone is satisfied if current_temp <= target_temp + eps AND current_temp > lower_bound.
+     - Flip `approach_direction` to `rising` only if current_temp < target_temp - eps.
 4. Epsilon (`eps`):
    - Configurable per-zone value (float). Default: `0.0`.
    - `eps = 0.0` means the target must be reached exactly to be considered satisfied from either direction.
@@ -1719,14 +1719,14 @@ Notes and recommendations
 
 Changelog / migration
 - This is a behavioral improvement to how `satisfied` is computed. It is non-breaking and optional — the per-zone `eps` defaults to `0.0` (old exact-equality behavior).
-- No migration steps needed if `eps` is omitted (default 0.0). If you enable eps &gt; 0.0, expect a small hysteresis around target temperature.
+- No migration steps needed if `eps` is omitted (default 0.0). If you enable eps > 0.0, expect a small hysteresis around target temperature.
 
 Example numeric scenario
 - lower=18, target=21, upper=24, eps=0.0
   - current = 19 → approach_direction = rising, satisfied = False
   - current increases to 21.0 → satisfied = True
-  - current continues to 22.5 → approach_direction flips to falling once &gt; target (if using eps&gt;0 this requires &gt; target + eps); satisfied becomes False until it drops to &lt;= target
-- With eps=0.1 the flip requires exceeding target by 0.1 (i.e., &gt; 21.1) to change direction.
+  - current continues to 22.5 → approach_direction flips to falling once > target (if using eps>0 this requires > target + eps); satisfied becomes False until it drops to <= target
+- With eps=0.1 the flip requires exceeding target by 0.1 (i.e., > 21.1) to change direction.
 
 ---
 
