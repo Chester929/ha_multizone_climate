@@ -446,7 +446,7 @@ ha_multizone:valvelock:{valve_id} = {"locked_until": "2026-01-13T14:30:00Z"}
 
 ### Edge Cases
 
-1. **All zones satisfied**: Keep valves as-is to maintain stable temperatures at configured main target
+1. **All zones satisfied**: Open valves for all satisfied zones (excluding disabled/OFF zones). If a zone was previously overheated and its valve was closed, it should now be opened to maintain stable temperatures at the configured main target.
 2. **All zones overheated**: Close all except minimum required valves, prioritizing fallback valves. Overheated zones are excluded from main target temperature calculation.
 3. **Multizone feature OFF**: Leave valves in current state - each zone manages its own valve manually. Safety check still runs to ensure minimum valves open, but user has manual control.
 4. **Zone turned OFF**: Close its valve (unless it's a required fallback)
@@ -519,12 +519,17 @@ def update_valves(zones, config, main_climate_state, multizone_enabled):
                 valves_to_open.append(zone.valve_id)
             elif zone.satisfaction == "overheated":
                 valves_to_close.append(zone.valve_id)
-            # satisfied: maintain current state
+            elif zone.satisfaction == "satisfied":
+                # Satisfied zones should have valves open to maintain temperature
+                valves_to_open.append(zone.valve_id)
         else:  # COOLING
             if zone.satisfaction == "undercooled":
                 valves_to_open.append(zone.valve_id)
             elif zone.satisfaction == "overcooled":
                 valves_to_close.append(zone.valve_id)
+            elif zone.satisfaction == "satisfied":
+                # Satisfied zones should have valves open to maintain temperature
+                valves_to_open.append(zone.valve_id)
     
     # Apply safety: ensure minimum valves open
     currently_open = get_currently_open_valves(zones)
