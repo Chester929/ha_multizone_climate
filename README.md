@@ -1445,33 +1445,97 @@ assert "kitchen_valve" in open_valves  # is_fallback_valve = true
 
 ---
 
-### Test 6: Cooling Mode - Inverted Logic
+### Test 6: Cooling Mode - Inverted Logic with Satisfaction Eps
 
-**Purpose:** Verify satisfaction states invert correctly in cooling mode
+**Purpose:** Verify satisfaction states invert correctly in cooling mode with new satisfaction logic
 
 **Setup (Cooling Mode):**
 - opening_offset = 0.3°C
 - closing_offset = 0.3°C
+- satisfaction_eps = 0.1°C
 - HVAC state = COOLING
 
 **Test Cases:**
 
-| Zone | Target | Current | Expected State | Expected Valve |
-|------|--------|---------|----------------|----------------|
-| Bedroom | 23.0°C | 25.0°C | Undercooled | OPEN |
-| Living | 24.0°C | 23.8°C | Satisfied | (maintain) |
-| Kitchen | 22.0°C | 21.0°C | Overcooled | CLOSE |
+| Zone | Target | Current | Valve Trigger | Satisfaction Status | Reasoning |
+|------|--------|---------|---------------|---------------------|-----------|
+| Bedroom | 23.0°C | 25.0°C | OPEN (> 23.3) | Undercooled | 25.0 > 23.1 (target + eps) |
+| Living | 24.0°C | 23.9°C | No change | Satisfied | 23.9 <= 24.1 (target + eps), zone falling to target |
+| Kitchen | 22.0°C | 21.0°C | CLOSE (< 21.7) | Overcooled | 21.0 < 21.9 (target - eps) |
+| Study | 23.0°C | 22.95°C | No change | Satisfied | 22.95 >= 22.9 (target - eps), zone rising to target |
 
-**Cooling Mode Thresholds:**
-- Undercooled if current > (target + opening_offset)
-- Overcooled if current < (target - closing_offset)
-- Bedroom: 25.0 > 23.3 → undercooled ✓ → OPEN valve
-- Kitchen: 21.0 < 21.7 → overcooled ✓ → CLOSE valve
+**Cooling Mode Logic:**
+- **Valve control**: 
+  - Open when: current > (target + opening_offset) = 23.3°C for 23°C target (needs cooling)
+  - Close when: current < (target - closing_offset) = 22.7°C for 23°C target (too cool)
+- **Satisfaction determination**: Uses satisfaction_eps (0.1°C) around target
+  - Satisfied when: (target - 0.1) <= current <= (target + 0.1)
+  - For 23°C target: satisfied when 22.9°C to 23.1°C
 
 **Expected Behavior:**
-- Bedroom valve opens (needs cooling)
-- Kitchen valve closes (too cool)
+- Bedroom valve opens (undercooled, needs cooling)
+- Living Room: satisfied status (reached target while falling), valve maintains state
+- Kitchen valve closes (overcooled, too cool)
+- Study: satisfied status (reached target while rising from overcooled state)
 - Logic correctly inverted from heating mode
+- Satisfaction determination still centered around target ± eps
+
+---
+
+### Test 6a: Satisfaction Eps Behavior - Zone Status Transitions
+
+**Purpose:** Verify satisfaction_eps parameter correctly determines when zones transition to satisfied status
+
+**Setup (Heating Mode):**
+- Target temperature: 21.0°C
+- opening_offset: 0.3°C
+- closing_offset: 0.3°C
+- Test with different satisfaction_eps values
+
+**Scenario 1: satisfaction_eps = 0.0 (exact target)**
+
+| Current Temp | Valve Action | Satisfaction Status | Reasoning |
+|--------------|--------------|---------------------|-----------|
+| 20.6°C | OPEN (< 20.7) | Underheated | Not at exact target 21.0°C |
+| 20.9°C | No change | Underheated | Not at exact target 21.0°C |
+| 21.0°C | No change | Satisfied | Exactly at target |
+| 21.1°C | No change | Overheated | Above target |
+| 21.4°C | CLOSE (> 21.3) | Overheated | Above target + closing_offset |
+
+**Scenario 2: satisfaction_eps = 0.1°C (±0.1°C buffer)**
+
+| Current Temp | Valve Action | Satisfaction Status | Reasoning |
+|--------------|--------------|---------------------|-----------|
+| 20.6°C | OPEN (< 20.7) | Underheated | Below (target - eps) = 20.9°C |
+| 20.9°C | No change | Satisfied | At (target - eps), zone rising to target |
+| 21.0°C | No change | Satisfied | At target |
+| 21.1°C | No change | Satisfied | At (target + eps), zone falling to target |
+| 21.2°C | No change | Overheated | Above (target + eps) = 21.1°C |
+| 21.4°C | CLOSE (> 21.3) | Overheated | Above target + closing_offset |
+
+**Scenario 3: satisfaction_eps = 0.2°C (±0.2°C buffer)**
+
+| Current Temp | Valve Action | Satisfaction Status | Reasoning |
+|--------------|--------------|---------------------|-----------|
+| 20.6°C | OPEN (< 20.7) | Underheated | Below (target - eps) = 20.8°C |
+| 20.8°C | No change | Satisfied | At (target - eps), zone rising to target |
+| 21.0°C | No change | Satisfied | At target |
+| 21.2°C | No change | Satisfied | At (target + eps), zone falling to target |
+| 21.3°C | CLOSE (> 21.3) | Overheated | Above (target + eps) = 21.2°C but triggers valve close |
+| 21.4°C | CLOSE (> 21.3) | Overheated | Above target + closing_offset |
+
+**Key Insights:**
+- **satisfaction_eps = 0.0**: Strictest - zone must be exactly at target to be satisfied
+- **satisfaction_eps = 0.1**: Balanced - provides small buffer for temperature fluctuations
+- **satisfaction_eps = 0.2**: More lenient - wider satisfaction band
+- Valve control (opening_offset/closing_offset) is independent of satisfaction status
+- A zone can have valve open but be "satisfied" if within target ± eps
+- This separation allows better status reporting while maintaining proper valve control
+
+**Practical Application:**
+- Use satisfaction_eps = 0.0 when exact temperature control is required
+- Use satisfaction_eps = 0.1-0.2 for more stable satisfaction status with typical temperature sensor variations
+- Larger satisfaction_eps reduces status "flapping" between underheated/satisfied/overheated
 
 ---
 
