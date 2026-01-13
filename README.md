@@ -108,7 +108,7 @@ It has to be clean code, nice, effective, fast, and safe! Also this component sh
 ## **Core logic
 Initialize and holds redis client instance to read global config and entities data.
 
-### Find main climate target temperature (helper method for background job)
+### Find main climate target temperature
 Inputs:
   - Main climate
     - current temperature
@@ -146,16 +146,18 @@ Steps:
 
 ## Integration Setup
 When creating integration, there will be inputs for:
- - Main Climate Entity reference - this will be used as target entity to read/write their target temperature and read their current temperature
- - Automation Configuration:
-   - Main Target When All Zones Satisfied (slider 0-100%) - What to set the main climate target when all zones have reached their targets
+  - Redis connection configuration
+    - host, port, credentials, keys prefix (default: empty)
+  - Main Climate Entity reference - this will be used as target entity to read/write their target temperature and read their current temperature
+  - Automation Configuration:
+    - Main Target When All Zones Satisfied (slider 0-100%) - What to set the main climate target when all zones have reached their targets
       - 0% = Use lowest zone target (energy efficient)
       - 50% = Use average zone target (balanced approach, default)
       - 100% = Use highest zone target (keeps boiler warmer)
-     This is used to HOLD temperatures in the rooms when all zones satisfied.
-   - Minimum Valves Open: Number of valves to keep open at all times for system safety (default: 1)
-   - Main Min/Max Temperature: Temperature range for main climate entity (HVAC unit) (default: 18.0-30.0°C)
-   - Main Change Threshold: Minimum temperature change to update main climate (default: 0.5°C)
+    This is used to HOLD temperatures in the rooms when all zones satisfied.
+  - Minimum Valves Open: Number of valves to keep open at all times for system safety (default: 1)
+  - Main Min/Max Temperature: Temperature range for main climate entity (HVAC unit) (default: 18.0-30.0°C)
+  - Main Change Threshold: Minimum temperature change to update main climate (default: 0.5°C)
 
 This should setup main climate device, which will be monitoring and managing main climate entity.
 Once the integration is created, there is nothing to manage yet except main climate. We just can see actual main climate target temperature. User has option to add
@@ -182,6 +184,14 @@ they are just informating about current temperature, target temperature and sati
   - TBD
 - Safety valve check
   - TBD
+- Background jobs
+  - Process locker (redis can be used)
+    - at the same time there can be runned only one job per type
+      - Udate valves
+      - Calculate main target temperature
+      - Safety valve check
+  - Managing background jobs using queues
+    - 2 FIFO queues - one for Udate valves and one for Calculate main target temperature
 
 # !!! Important functional rules !!!
 - this should be valid Home Assistant integration over HACS
@@ -190,6 +200,9 @@ they are just informating about current temperature, target temperature and sati
 - update entity states resp values only when they changed!
 - required minimum valves opened - safety check of this is important!
 - multizone feature runs only when manual switch is on and at least 1 climate zone (ON) present.
+- when tehere is minimum required valve fully opened, and we want to close one and open another one, in this case
+  we have to open one first, wait for physical valve opening delay setupped by user (to fully open valve) and then close the second one.
+  This could be holded by redis with valve id and timestempe when it can be closed.
 
 # Code rules
 - code should be clean and easy readable
