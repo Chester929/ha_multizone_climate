@@ -175,6 +175,14 @@ This climates should be as subdevices of the main device which holds main climat
 This zone climate entities drives target temperature, but they does not driving valves,
 they are just informating about current temperature, target temperature and satisfaction status in the zone.
 
+# Algorythms
+- Calculate main temperature
+  - TBD
+- Update valves
+  - TBD
+- Safety valve check
+  - TBD
+
 # !!! Important functional rules !!!
 - this should be valid Home Assistant integration over HACS
 - redis is used for holding and sharing data between differen async processes (or parralel processes)
