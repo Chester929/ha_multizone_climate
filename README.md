@@ -88,7 +88,7 @@ It has to be clean code, nice, effective, fast, and safe! Also this component sh
   - COORDINATOR (runs every 15s)
     - Reads current entities data through core logic Redis client and:
       - Updates sensors
-      - Updates 
+      - Updates entity states
     - Dequeue "Update valves" background async job from its queue and invoke it (if any in the queue and no other running)
     - Dequeue "Calculate main target temperature" background async job from its queue and invoke it (if any in the queue and no other running)
  - LOGGER (Logging)
@@ -1803,7 +1803,7 @@ assert len(get_open_valves()) == 2
 # IDEAS
 - Maybe passing how the heating curve is configured on the HVAC unit would help to calculate target temperature more precisely
 - Maybe there are more things that would be good to be managed via Redis storage for some reasons
-- We will probably need to create our own climate entity card due to custom features, but it should look similar to the thermostat card <THERMOSTAT_CARD_IMAGE>
+- We will probably need to create our own climate entity card due to custom features, but it should look similar to the thermostat card ![Thermostat Card](https://www.home-assistant.io/images/dashboards/thermostat_card.png)
 - I am pretty sure there have to be more custom JS components implemented to create specific cards and dashboards for multizone management purposes
 
 # Sources and documentations
