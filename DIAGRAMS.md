@@ -2,6 +2,31 @@
 
 This document contains comprehensive diagrams illustrating the algorithms, flows, and automations of the Home Assistant Multizone Climate integration.
 
+## Quick Reference Guide
+
+**New to the system?** Start here:
+- [System Architecture Overview](#system-architecture-overview) - See how all components fit together
+- [System Component Integration](#system-component-integration) - Understand external systems and HA integration
+
+**Understanding the algorithms?** Check these:
+- [Calculate Main Target Temperature](#calculate-main-target-temperature-algorithm) - How main thermostat target is determined
+- [Update Valves Algorithm](#update-valves-algorithm) - How zones control their valves
+- [Zone Satisfaction State Machine](#zone-satisfaction-state-machine) - State transitions with hysteresis
+
+**Implementing the system?** Essential diagrams:
+- [Redis Data Schema](#redis-data-schema) - Complete data model
+- [Background Jobs and Process Locking](#background-jobs-and-process-locking) - Job execution flow
+- [Coordinator Process Flow](#coordinator-process-flow) - Main 15s cycle
+
+**Debugging issues?** Look at:
+- [Timing Sequences](#timing-sequences) - Real-world execution timelines
+- [Valve Lock Mechanism](#valve-lock-mechanism) - Preventing valve chattering
+- [Error Handling and Recovery](#error-handling-and-recovery) - Failure modes and retries
+
+**Safety critical?** Must read:
+- [Safety Valve Check Algorithm](#safety-valve-check-algorithm) - Minimum valve enforcement
+- [Open-First-Then-Close Sequence](#open-first-then-close-sequence) - Maintaining system flow
+
 ## Table of Contents
 1. [System Architecture Overview](#system-architecture-overview)
 2. [Calculate Main Target Temperature Algorithm](#calculate-main-target-temperature-algorithm)
