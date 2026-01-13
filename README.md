@@ -225,11 +225,13 @@ they are just informating about current temperature, target temperature and sati
 - climate zone entity card (usable for each climate zone entity)
 - main climate entity card (usable for main climate entity)
 - dashboard to manage climate zone entities (every time) and main climate entity (when multizone feature is off, otherwise entity is driven by multizone feature)
+- dashboard to monitoring metrics (states, sensors, actions) - for monitoring and debugging purposes
 
 # IDEAS
 - maybe passing how heating curve is setupped on HVAC unit would help to calculate target temperature more precisely
 - maybe there are more things good to be driven via redis storage for some reasons
 - probably we will need to create own climate entity card due to own features, but it should looks similar to thermostat card <THERMOSTAT_CARD_IMAGE>
+- I am pretty shure there has to be more custom js components implemented to create specic cards and dashboards multizone management purposes
 
 # Sources and documentations
 ## Home Assitant Developers Docs
