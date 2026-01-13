@@ -13,6 +13,7 @@ HVAC unit using this thermostats temperature sensor along side with outside temp
 Heating curve is configured in UNIT: "heating curve deviation (base)" = 15.0°
                                      "increase" = 0.5
 That means when outside is 25°C the water temperature in heating pipes is 0°C, when outside is 15°C in pipes is 20°C.
+HVAC is also cooling when outside temperature is higher then target inside but does not have sensor for it.
 We can change this two options to get better result in the future, but thats the unit configuration thing.
 
 The thermostat can be driven remotely through cloud API (It has network connection over WiFi to connect to the cloud).
@@ -33,28 +34,61 @@ temperature sensors and targeting the right temperature on the main HVAC thermos
 It has to be clean code, nice, effective, fast, and safe! Also this component should be able to be installed over HACS into Home Assistant.
 
 ## Project Architecture draft
- - MAIN DEVICE (Device holding other climate zone subdevices)
-   - Temperature Sensor - Main climate target temperature value
- - CLIMATE ZONE SUBDEVICE ( Climate device per room )
+ - MAIN CLIMATE DEVICE (Main Climate Entity from config entry)
+   - Temperature Sensor - Main climate target temperature
+   - Temperature Sensor - Main climate current temperature
+   - Temperature Sensor - Outdoor temperature
+   - Climat hvac mode (OFF (Anti-Freeze), MANUAL, SCHEDULING)
+   - state (OFF, HEATING, COOLING)
+     - cooling when Main climate target temperature is lower then outdoor temperature
+     - off/on driven by manual switch or when hvac mode is OFF ( when on, automaticaly picked if HEATING or COOLING, when off climate zones are not managed, all valves open )
+ - CLIMATE ZONE SUBDEVICES ( Climate device per room )
    - name
+   - state (off, underheated, satisfied, overheated) resp. (off, overcooled, satisfied, undercooled) when cooling.
    - temperature sensor
-   - vavle switch
+   - valve switch
    - target change threshold
    - opening offset below target
    - closing offset above target
+ - REDIS CONFIG ( redis required )
+   - host
+   - port
+   - credentials
  - CONFIG
    - All zones satisfied temperature target
    - Minimum valves open
    - Main climate min/max temperature
    - Main climate target temperature change trashold
- - CORE (Core logic)
- - ASYNC JOB (Calculate main target temperature)
-   - find correct main climate target temperature and update main climate entity target temperature using hass.service.call method
- - AUTOMATION (Listens to events nad runs correct async job from core logic)
-   - invoked only when one of zones temperature or target temperature has been changed
-   - invoke async job to find correct main climate target temperature
- - COORDINATOR (Checks and holds values to be actual, something like sync controll)
-   - invoked periodically, for example
+   - Physical valve opening/closing delay
+ - **CORE LOGIC
+   - helper methods respecting config described later
+ - BACKGROUND ASYNC JOBS (3 jobs)
+   - Udate valves
+     - invoked by "Update main target temperature" automation
+     - job identifier ( used for debugging and job status )
+     - run core logic inside to manage physical valves
+   - Calculate main target temperature
+     - invoked by "Update main target temperature" automation
+     - job identifier ( used for debugging and job status )
+     - run core logic inside to calculate temperature
+   - Safety valve check
+     - invoked by "Safety valve check" automation
+     - job identifier ( used for debugging and job status )
+     - run core logic inside to check minimum valves open
+ - AUTOMATIONS (2 automations - Listens to events or time entity nad invokes async job)
+   - Update main target temperature
+     - invoked only when one(or more) of zones temperature or target temperature has been changed
+     - add "Calculate main target temperature" async job with current parameters into its process queue
+     - add "Udate valves" async job with current params into its process queue
+   - Safety valve check
+     - invoked every half of "Physical valve opening/closing delay" configured time (if configured delay is 0, then every 1m)
+     - directly invoke "Safety valve check" async job
+ - COORDINATOR (runs every 15s)
+   - reads current entities data through core logic redis client and:
+     - updates sensors
+     - updates 
+   - dequeue "Udate valves" background async job from its queue and invoke it (if any in the queue and no other running)
+   - dequeue "Calculate main target temperature" background async job from its queue and invoke it (if any in the queue and no other running)
  - LOGGER (Logging)
    - INFO
    - WARN
@@ -62,24 +96,72 @@ It has to be clean code, nice, effective, fast, and safe! Also this component sh
    - DEBUG
  - LOCALS (Translations (en, cz, sk, pl))
  - TESTS
+   - every single background job test with different scenarios(parameters)
+   - coordinator test
+   - core logic test
+   - home assistant integration test per each entity (sensor, climate, etc)
+ - LINTNERS (Code quality and security checks)
  - DOCUMENTATION
+ - FRONTEND (cool and user friendly lovelace cards and dashboards to monitor sensors and manage climate entities)
+
+
+## **Core logic
+Initialize and holds redis client instance to read global config and entities data.
+
+### Find main climate target temperature (helper method for background job)
+Inputs:
+  - Main climate
+    - current temperature
+    - current target temperature
+  - Changed climate zones:
+    - current temperature
+    - target temperature
+    - valve switch
+   
+Steps:
+  - fetch config from redis
+  - fetch data from redis
+  - calculate target temperature
+  - hass.service.call to update main climate entity target temperature
+  - update data to redis 
+
+### Update Valves
+Inputs:
+  - Main climate
+    - current temperature
+    - current target temperature
+  - Valve Fallback Zone
+  - All climate zones
+    - current temperature
+    - target temperature
+    - valve switch
+
+Steps:
+  - fetch config from redis
+  - fetch data from redis
+  - check satisfaction
+  - update status
+  - hass.service.call to open/close valve for each zone (respect at least one valve has to be open - fallback can be used if necessary)
+  - update data to redis
 
 ## Integration Setup
 When creating integration, there will be inputs for:
- - Main Climate Entity reference - this will ne used as target entity to manage their target temperature
+ - Main Climate Entity reference - this will be used as target entity to read/write their target temperature and read their current temperature
  - Automation Configuration:
    - Main Target When All Zones Satisfied (slider 0-100%) - What to set the main climate target when all zones have reached their targets
       - 0% = Use lowest zone target (energy efficient)
       - 50% = Use average zone target (balanced approach, default)
       - 100% = Use highest zone target (keeps boiler warmer)
-     This is used to HOLD temperatures in the rooms.
+     This is used to HOLD temperatures in the rooms when all zones satisfied.
    - Minimum Valves Open: Number of valves to keep open at all times for system safety (default: 1)
    - Main Min/Max Temperature: Temperature range for main climate entity (HVAC unit) (default: 18.0-30.0°C)
    - Main Change Threshold: Minimum temperature change to update main climate (default: 0.5°C)
 
-This should setup main device, which will be holding reference to main climate, it can have sensor to show actual main climate target temperature.
-Once the integration is created, there is nothing to manage yet. We just can see actual main climate target temperature. User has option to add
-climate zone. This part will create climate entity for the zone (somthing like Generic Thermostat in HA).
+This should setup main climate device, which will be monitoring and managing main climate entity.
+Once the integration is created, there is nothing to manage yet except main climate. We just can see actual main climate target temperature. User has option to add
+climate zone. This part will create climate entity for the zone (something like Generic Thermostat in HA).
+When there is at least 1 zone turned ON, multizone feature can be turned on by manual switch.
+When multizone future turned on, automatizations resp. calculations are turned on.
 
 ## Add Climate Zone
 Inputs:
@@ -90,13 +172,21 @@ Inputs:
   - Climate zone opening offset below target - temperature offset below target to trigger valve opening (default: 0.3°C)
   - Climate closing offset above target - temperature offset above target to trigger valve closing (default: 0.3°C)
 This climates should be as subdevices of the main device which holds main climate entity target temperature sensor and core automation as well.
-This zone climates does not driving valves, they are just informating about current temperature and target temperature in the zone.
+This zone climate entities drives target temperature, but they does not driving valves,
+they are just informating about current temperature, target temperature and satisfaction status in the zone.
 
-## Core logic
-There should be some effective and quick automation to manage climate zones temperatures by opening and closing valves and setting up the right temperature on main climate entity temperature target.
+# !!! Important functional rules !!!
+- this should be valid Home Assistant integration over HACS
+- redis is used for holding and sharing data between differen async processes (or parralel processes)
+- redis could be good place to hold current background job statuses
+- update entity states resp values only when they changed!
+- required minimum valves opened - safety check of this is important!
+- multizone feature runs only when manual switch is on and at least 1 climate zone (ON) present.
 
-Probable there can be to separated (parallel) processes.
-
+# Code rules
+- code should be clean and easy readable
+- code should be commented including what method is doing describing params as well
+- code should be well tested
 
 # Sources and documentations
 ## Home Assitant Developers Docs
@@ -109,5 +199,8 @@ Probable there can be to separated (parallel) processes.
   - https://github.com/home-assistant/supervisor
   - https://github.com/home-assistant/frontend
   - https://www.thecandidstartup.org/2025/10/20/home-assistant-concurrency-model.html
-
+## HVAC unit climate entity custom component
+- https://github.com/Chester929/remeha_home_by_chester - master branch
+## Lovelace
+- https://github.com/project-lovelace
 
