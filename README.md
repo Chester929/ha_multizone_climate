@@ -12,7 +12,7 @@ This thermostat is placed in the corridor and has its own temperature sensor.
 The HVAC unit uses this thermostat's temperature sensor alongside an outside temperature sensor to calculate how to heat water to heat or maintain the inside temperature using a "heating curve".
 Heating curve is configured in the UNIT: "heating curve deviation (base)" = 15.0°
                                         "increase" = 0.5
-That means when outside temperature is 25°C, the water temperature in heating pipes is 0°C; when outside is 15°C, the water in pipes is 20°C.
+That means when outside temperature is 10°C, the water temperature in heating pipes is 20°C; when outside is 0°C, the water in pipes is 25°C.
 The HVAC also provides cooling when outside temperature is higher than the target inside temperature, but does not have a sensor for it.
 We can change these two options to get better results in the future, but that's a unit configuration matter.
 
