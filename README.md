@@ -38,10 +38,14 @@ It has to be clean code, nice, effective, fast, and safe! Also this component sh
    - Temperature Sensor - Main climate target temperature
    - Temperature Sensor - Main climate current temperature
    - Temperature Sensor - Outdoor temperature
-   - Climat hvac mode (OFF (Anti-Freeze), MANUAL, SCHEDULING)
+   - Climate hvac mode (OFF (Anti-Freeze), MANUAL, SCHEDULING)
    - state (OFF, HEATING, COOLING)
      - cooling when Main climate target temperature is lower then outdoor temperature
-     - off/on driven by manual switch or when hvac mode is OFF ( when on, automaticaly picked if HEATING or COOLING, when off climate zones are not managed, all valves open )
+     - off/on state
+       - maunal switch on/off
+       - when there are not any climate zone present yet, switch is not editable and its set to off
+       - when hvac mode is OFF then on/off switch is not editable and its set to off
+       - when off climate zones are not managed by multizone feature, but every climate zone just drives his own valve by own target and current temperature
  - CLIMATE ZONE SUBDEVICES ( Climate device per room )
    - name
    - state (off, underheated, satisfied, overheated) resp. (off, overcooled, satisfied, undercooled) when cooling.
@@ -183,7 +187,8 @@ they are just informating about current temperature, target temperature and sati
 - Update valves
   - TBD
 - Safety valve check
-  - TBD
+  - Checks if minimum required opened valves is open
+  - if not log warning and open fallback valves.
 - Background jobs
   - Process locker (redis can be used)
     - at the same time there can be runned only one job per type
@@ -203,11 +208,28 @@ they are just informating about current temperature, target temperature and sati
 - when tehere is minimum required valve fully opened, and we want to close one and open another one, in this case
   we have to open one first, wait for physical valve opening delay setupped by user (to fully open valve) and then close the second one.
   This could be holded by redis with valve id and timestempe when it can be closed.
+- if there is minimum required valves configured to N, there has to be N fallback valves configured as well
+- when multizone climate entity is set to OFF, it basicaly closes its valve and its skipped from multizone future computing. (only when it is an fallback valve, it can be opened for safety reasons however zone climate entity state is OFF)
 
 # Code rules
 - code should be clean and easy readable
 - code should be commented including what method is doing describing params as well
 - code should be well tested
+
+# UI Frontend
+- integration setup should be nice, cool, user-friendly and value change responsive with validations
+- there should be some nice and user friendly config editor, to change config values stored in redis
+- option to manage climate zones - add, update, delete (some dynamic form with adding and removing button)
+
+# Dashboards and Cards (lovelace)
+- climate zone entity card (usable for each climate zone entity)
+- main climate entity card (usable for main climate entity)
+- dashboard to manage climate zone entities (every time) and main climate entity (when multizone feature is off, otherwise entity is driven by multizone feature)
+
+# IDEAS
+- maybe passing how heating curve is setupped on HVAC unit would help to calculate target temperature more precisely
+- maybe there are more things good to be driven via redis storage for some reasons
+- probably we will need to create own climate entity card due to own features, but it should looks similar to thermostat card <THERMOSTAT_CARD_IMAGE>
 
 # Sources and documentations
 ## Home Assitant Developers Docs
