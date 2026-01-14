@@ -1,0 +1,105 @@
+---
+name: Generate Diagrams PDF
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+    paths:
+      - 'DIAGRAMS.md'
+  workflow_dispatch:  # Allow manual trigger
+
+concurrency:
+  group: generate-diagrams-pdf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write  # Required to commit and push the PDF
+
+jobs:
+  generate-pdf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install mermaid-cli
+        run: npm install @mermaid-js/mermaid-cli
+
+      - name: Generate PDF from DIAGRAMS.md
+        id: generate
+        run: |
+          echo "Generating PDF from DIAGRAMS.md..."
+          cmd="npx mmdc -i DIAGRAMS.md -o diagrams.pdf"
+          cmd="$cmd -t dark -b transparent"
+          if ! $cmd; then
+            echo "Error: mmdc failed to generate PDF"
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "PDF generated successfully!"
+          echo "success=true" >> $GITHUB_OUTPUT
+
+      - name: Validate PDF artifact
+        id: validate
+        if: success() || failure()
+        run: |
+          if [ ! -f diagrams.pdf ]; then
+            echo "Warning: PDF file was not generated"
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if [ ! -s diagrams.pdf ]; then
+            echo "Warning: PDF file is empty"
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "PDF validation successful"
+          echo "valid=true" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact to GitHub
+        if: steps.validate.outputs.valid == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagrams-pdf
+          path: diagrams.pdf
+          retention-days: 90
+
+      - name: Commit and push PDF
+        if: |
+          github.event_name == 'push' &&
+          steps.validate.outputs.valid == 'true'
+        run: |
+          email="github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "$email"
+          git config --local user.name "github-actions[bot]"
+
+          # Check if PDF exists and has changed
+          if [ -f diagrams.pdf ]; then
+            git add diagrams.pdf
+
+            # Only commit if there are changes
+            if ! git diff --staged --quiet; then
+              git commit -m "chore: auto-generate diagrams PDF [skip ci]"
+              if git push origin "${{ github.ref_name }}"; then
+                echo "PDF committed and pushed to repository"
+              else
+                echo "Warning: Failed to push PDF."
+                echo "Check branch protection rules."
+                exit 0  # Don't fail the workflow
+              fi
+            else
+              echo "No changes to PDF, skipping commit"
+            fi
+          else
+            echo "PDF file not found"
+          fi
