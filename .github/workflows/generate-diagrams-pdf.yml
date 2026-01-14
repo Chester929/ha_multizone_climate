@@ -41,6 +41,7 @@ jobs:
           echo "Generating PDF from DIAGRAMS.md..."
           cmd="npx mmdc -i DIAGRAMS.md -o diagrams.pdf"
           cmd="$cmd -t dark -b transparent"
+          cmd="$cmd -p puppeteer-config.json"
           if ! $cmd; then
             echo "Error: mmdc failed to generate PDF"
             echo "success=false" >> $GITHUB_OUTPUT
