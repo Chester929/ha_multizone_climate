@@ -50,12 +50,31 @@ jobs:
           # mmdc creates separate PDF files (diagrams-1.pdf, diagrams-2.pdf, etc.)
           # We need to merge them into a single diagrams.pdf
           echo "Merging PDF files..."
-          pdf_files=$(ls diagrams-*.pdf 2>/dev/null | sort -V)
-          if [ -n "$pdf_files" ]; then
-            pdfunite $pdf_files diagrams.pdf
+          
+          # Find all individual PDF files and store in array
+          shopt -s nullglob
+          pdf_files=(diagrams-*.pdf)
+          shopt -u nullglob
+          
+          # Check if any individual PDF files exist
+          if [ ${#pdf_files[@]} -gt 0 ]; then
+            # Remove any existing diagrams.pdf from mmdc (which may be incomplete)
+            rm -f diagrams.pdf
+            
+            # Sort files numerically
+            IFS=$'\n' sorted_files=($(sort -V <<<"${pdf_files[*]}"))
+            unset IFS
+            
+            # Merge PDFs
+            pdfunite "${sorted_files[@]}" diagrams-merged.pdf
+            
+            # Move merged PDF to final location
+            mv diagrams-merged.pdf diagrams.pdf
+            
             echo "PDF merged successfully!"
+            
             # Clean up individual PDF files
-            rm -f diagrams-*.pdf
+            rm -f "${pdf_files[@]}"
           else
             echo "No individual PDF files found to merge"
           fi
