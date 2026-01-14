@@ -43,30 +43,12 @@ jobs:
           cmd="$cmd -t dark -b transparent"
           if ! $cmd; then
             echo "Error: mmdc failed to generate PDF"
-            echo "PDF was not generated. Validation will handle this."
             exit 0
           fi
           echo "PDF generated successfully!"
 
-      - name: Check and upload PDF artifact
+      - name: Validate and upload PDF artifact
         if: success() || failure()
-        run: |
-          if [ -f diagrams.pdf ] && [ -s diagrams.pdf ]; then
-            echo "PDF exists and has content"
-          else
-            echo "PDF does not exist or is empty, skipping upload"
-            exit 0
-          fi
-
-      - name: Upload artifact to GitHub
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diagrams-pdf
-          path: diagrams.pdf
-          retention-days: 90
-
-      - name: Validate PDF generation
         run: |
           if [ ! -f diagrams.pdf ]; then
             echo "Warning: PDF file was not generated"
@@ -76,7 +58,15 @@ jobs:
             echo "Warning: PDF file is empty"
             exit 0
           fi
-          echo "PDF validation successful"
+          echo "PDF validation successful - uploading artifact"
+
+      - name: Upload artifact to GitHub
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagrams-pdf
+          path: diagrams.pdf
+          retention-days: 90
 
       - name: Commit and push PDF
         if: github.event_name == 'push'
