@@ -1342,14 +1342,20 @@ All diagrams use Mermaid syntax for easy rendering in GitHub, documentation tool
 ### GitHub
 These diagrams render automatically when viewing this file on GitHub.
 
+### Automated PDF Generation
+When DIAGRAMS.md is updated in the `master` or `dev` branches, a PDF is automatically generated via GitHub Actions:
+- **Download**: Go to the **Actions** tab, open the **Generate Diagrams PDF** workflow, and download the latest artifact
+- **Manual Trigger**: You can also manually trigger the workflow from the Actions tab
+- **Auto-commit**: The generated PDF is automatically committed back to the repository
+
 ### VS Code
 Install the "Markdown Preview Mermaid Support" extension.
 
 ### Command Line
-Use `mermaid-cli` to generate images:
+Use `mermaid-cli` to generate images locally:
 ```bash
 npm install -g @mermaid-js/mermaid-cli
-mmdc -i DIAGRAMS.md -o diagrams.pdf
+mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
 ```
 
 ### Online
