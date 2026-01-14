@@ -228,18 +228,15 @@ def update_temperature_direction(current_temp, previous_temp):
 
 ### Satisfaction State Calculation
 
-The satisfaction calculation logic remains exactly the same as in the Update Valves algorithm section below. The zone entity:
+Each zone entity is responsible for calculating its own satisfaction state. The zone entity:
 
 1. Reads its current temperature from the sensor
 2. Compares with previous temperature to determine direction (rising/falling)
-3. Applies the hysteresis state machine logic (see Zone Satisfaction States section in Update Valves Algorithm)
+3. Applies the hysteresis state machine logic (described below in the satisfaction states section)
 4. Writes the calculated satisfaction state to Redis
 5. Writes the temperature direction to Redis
 
-**Key Points:**
-- The logic is **identical** to the satisfaction calculation previously done in Update Valves job
-- The only difference is **where** it executes (in the entity vs. in the job)
-- Update Valves job now simply reads the pre-calculated satisfaction from Redis
+The satisfaction state determination uses hysteresis to prevent rapid state changes. Zones transition between underheated, satisfied, and overheated states based on configured temperature offsets and satisfaction epsilon thresholds.
 
 # Algorithms
 
@@ -418,25 +415,17 @@ main_target = clamp(21.0, 18.0, 30.0) = 21.0°C
 
 ## Update Valves Algorithm
 
-This algorithm manages the opening and closing of zone valves based on zone satisfaction states (pre-calculated by zone climate entities), ensuring system safety and preventing rapid valve cycling (chattering).
+This algorithm manages the opening and closing of zone valves based on zone satisfaction states, ensuring system safety and preventing rapid valve cycling (chattering).
 
 ### Core Behavior
 
-1. **Read zone satisfaction states** from Redis (calculated by zone entities)
+1. **Read zone satisfaction states** from Redis
 2. **Sort zones by priority** (those needing heat most urgently)
 3. **Apply safety rules** (minimum valves open)
 4. **Execute valve changes** using open-first-then-close sequence
 5. **Record valve locks** to prevent immediate re-actuation
 
 ### Zone Satisfaction States
-
-Zone satisfaction states are calculated by the **climate zone entities** themselves (not by this job). Each zone entity:
-- Monitors temperature changes from its sensor
-- Compares current temperature with previous temperature to determine direction (rising/falling)
-- Calculates satisfaction state using the same hysteresis state machine logic
-- Writes satisfaction state and temperature direction to Redis immediately
-
-The Update Valves job **reads** these pre-calculated satisfaction states from Redis.
 
 Each zone is classified based on its current temperature relative to target. The satisfaction state is different from valve control logic - valves still open/close based on opening_offset and closing_offset, but the zone's satisfaction status is determined by proximity to the target temperature.
 
