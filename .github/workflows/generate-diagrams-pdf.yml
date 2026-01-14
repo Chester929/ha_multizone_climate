@@ -1,7 +1,7 @@
 ---
 name: Generate Diagrams PDF
 
-'on':
+on:
   push:
     branches:
       - master
@@ -9,6 +9,9 @@ name: Generate Diagrams PDF
     paths:
       - 'DIAGRAMS.md'
   workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write  # Required to commit and push the PDF
 
 jobs:
   generate-pdf:
@@ -53,8 +56,13 @@ jobs:
             # Only commit if there are changes
             if ! git diff --staged --quiet; then
               git commit -m "chore: auto-generate diagrams PDF [skip ci]"
-              git push
-              echo "PDF committed and pushed to repository"
+              if git push origin HEAD; then
+                echo "PDF committed and pushed to repository"
+              else
+                msg="Warning: Failed to push PDF."
+                echo "$msg Check branch protection rules."
+                exit 0  # Don't fail the workflow
+              fi
             else
               echo "No changes to PDF, skipping commit"
             fi
