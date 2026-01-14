@@ -45,13 +45,16 @@ This implementation adds automated PDF generation from the DIAGRAMS.md file when
 1. Developer updates `DIAGRAMS.md` on master or dev branch
 2. GitHub Actions detects the change and triggers the workflow
 3. Workflow installs Node.js and mermaid-cli
-4. Generates `diagrams.pdf` using the command:
+4. Installs PDF merge tools (`poppler-utils`)
+5. Generates individual PDFs for each diagram using:
    ```bash
    mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
    ```
-5. Uploads PDF as downloadable artifact
-6. If PDF changed, commits it back to the repository
-7. Uses `[skip ci]` tag to prevent triggering another workflow run
+   This creates diagrams-1.pdf, diagrams-2.pdf, etc.
+6. Merges all individual PDFs into a single `diagrams.pdf` using `pdfunite`
+7. Uploads merged PDF as downloadable artifact
+8. If PDF changed, commits it back to the repository
+9. Uses `[skip ci]` tag to prevent triggering another workflow run
 
 ### Manual Trigger
 1. Go to GitHub repository → Actions tab

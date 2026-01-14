@@ -26,10 +26,12 @@ You can manually trigger the workflow:
 1. **Checkout repository** - Gets the latest code
 2. **Setup Node.js** - Installs Node.js v20
 3. **Install mermaid-cli** - Installs `@mermaid-js/mermaid-cli` as a local dependency (used via `npx`)
-4. **Generate PDF** - Runs `npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent`
-5. **Upload artifact** - Uploads `diagrams.pdf` as artifact (90-day retention)
-6. **Validate PDF** - Checks if PDF exists and has content (non-blocking)
-7. **Commit PDF** - Commits the generated PDF back to the repository (with `[skip ci]`)
+4. **Install PDF merge tools** - Installs `poppler-utils` for `pdfunite` command
+5. **Generate PDFs** - Runs `npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent` which creates individual PDFs (diagrams-1.pdf, diagrams-2.pdf, etc.)
+6. **Merge PDFs** - Combines all individual PDFs into a single `diagrams.pdf` using `pdfunite`
+7. **Validate PDF** - Checks if merged PDF exists and has content (non-blocking)
+8. **Upload artifact** - Uploads `diagrams.pdf` as artifact (90-day retention)
+9. **Commit PDF** - Commits the generated PDF back to the repository (with `[skip ci]`)
 
 ### Accessing Generated PDFs
 
