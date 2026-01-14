@@ -25,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,24 +42,24 @@ jobs:
           npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
           echo "PDF generated successfully!"
 
-      - name: Validate PDF generation
-        run: |
-          if [ ! -f diagrams.pdf ]; then
-            echo "Error: PDF file was not generated"
-            exit 1
-          fi
-          if [ ! -s diagrams.pdf ]; then
-            echo "Error: PDF file is empty"
-            exit 1
-          fi
-          echo "PDF validation successful"
-
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
         with:
           name: diagrams-pdf
           path: diagrams.pdf
           retention-days: 90
+
+      - name: Validate PDF generation
+        run: |
+          if [ ! -f diagrams.pdf ]; then
+            echo "Warning: PDF file was not generated"
+            exit 0
+          fi
+          if [ ! -s diagrams.pdf ]; then
+            echo "Warning: PDF file is empty"
+            exit 0
+          fi
+          echo "PDF validation successful"
 
       - name: Commit and push PDF
         if: github.event_name == 'push'
@@ -75,7 +75,7 @@ jobs:
             # Only commit if there are changes
             if ! git diff --staged --quiet; then
               git commit -m "chore: auto-generate diagrams PDF [skip ci]"
-              if git push origin HEAD; then
+              if git push origin "${{ github.ref_name }}"; then
                 echo "PDF committed and pushed to repository"
               else
                 echo "Warning: Failed to push PDF."

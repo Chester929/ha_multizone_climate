@@ -25,10 +25,11 @@ You can manually trigger the workflow:
 
 1. **Checkout repository** - Gets the latest code
 2. **Setup Node.js** - Installs Node.js v20
-3. **Install mermaid-cli** - Installs `@mermaid-js/mermaid-cli` globally
-4. **Generate PDF** - Runs `mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent`
+3. **Install mermaid-cli** - Installs `@mermaid-js/mermaid-cli` as a local dependency (used via `npx`)
+4. **Generate PDF** - Runs `npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent`
 5. **Upload artifact** - Uploads `diagrams.pdf` as artifact (90-day retention)
-6. **Commit PDF** - Commits the generated PDF back to the repository (with `[skip ci]`)
+6. **Validate PDF** - Checks if PDF exists and has content (non-blocking)
+7. **Commit PDF** - Commits the generated PDF back to the repository (with `[skip ci]`)
 
 ### Accessing Generated PDFs
 
