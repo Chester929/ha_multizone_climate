@@ -64,28 +64,20 @@ jobs:
 
       - name: Commit and push PDF
         if: github.event_name == 'push'
+        continue-on-error: true
         run: |
           email="github-actions[bot]@users.noreply.github.com"
           git config --local user.email "$email"
           git config --local user.name "github-actions[bot]"
 
-          # Check if PDF exists and has changed
-          if [ -f diagrams.pdf ]; then
-            git add diagrams.pdf
+          # Add and commit the PDF if it has changed
+          git add diagrams.pdf
 
-            # Only commit if there are changes
-            if ! git diff --staged --quiet; then
-              git commit -m "chore: auto-generate diagrams PDF [skip ci]"
-              if git push origin "${{ github.ref_name }}"; then
-                echo "PDF committed and pushed to repository"
-              else
-                echo "Warning: Failed to push PDF."
-                echo "Check branch protection rules."
-                exit 0  # Don't fail the workflow
-              fi
-            else
-              echo "No changes to PDF, skipping commit"
-            fi
+          # Only commit if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: auto-generate diagrams PDF [skip ci]"
+            git push origin "${{ github.ref_name }}"
+            echo "PDF committed and pushed to repository"
           else
-            echo "PDF file not found"
+            echo "No changes to PDF, skipping commit"
           fi
