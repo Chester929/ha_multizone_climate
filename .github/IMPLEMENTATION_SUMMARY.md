@@ -1,7 +1,7 @@
 # Automated PDF Generation - Implementation Summary
 
 ## Overview
-This implementation adds automated CLI-triggered PDF generation from the DIAGRAMS.md file whenever it's updated in the `master` or `dev` branches.
+This implementation adds automated PDF generation from the DIAGRAMS.md file when it's updated in the `master` or `dev` branches, using a GitHub Actions workflow that runs the `@mermaid-js/mermaid-cli` tool.
 
 ## What Was Created
 

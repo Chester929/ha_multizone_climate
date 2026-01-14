@@ -39,11 +39,32 @@ jobs:
       - name: Generate PDF from DIAGRAMS.md
         run: |
           echo "Generating PDF from DIAGRAMS.md..."
+          # Allow mmdc to fail without stopping the entire workflow
+          set +e
           npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
-          echo "PDF generated successfully!"
+          MMDC_EXIT_CODE=$?
+          set -e
+
+          if [ "$MMDC_EXIT_CODE" -ne 0 ]; then
+            echo "Error: mmdc failed with exit code $MMDC_EXIT_CODE"
+            echo "PDF was not generated. Validation will handle this."
+          else
+            echo "PDF generated successfully!"
+          fi
 
       - name: Upload PDF artifact
-        if: hashFiles('diagrams.pdf') != ''
+        if: success() || failure()
+        run: |
+          if [ -f diagrams.pdf ] && [ -s diagrams.pdf ]; then
+            echo "PDF exists and has content, uploading artifact"
+            echo "UPLOAD_ARTIFACT=true" >> $GITHUB_ENV
+          else
+            echo "PDF does not exist or is empty, skipping artifact upload"
+            echo "UPLOAD_ARTIFACT=false" >> $GITHUB_ENV
+          fi
+
+      - name: Upload artifact to GitHub
+        if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: diagrams-pdf

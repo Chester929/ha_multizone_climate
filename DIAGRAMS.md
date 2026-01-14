@@ -1344,7 +1344,7 @@ These diagrams render automatically when viewing this file on GitHub.
 
 ### Automated PDF Generation
 When DIAGRAMS.md is updated in the `master` or `dev` branches, a PDF is automatically generated via GitHub Actions:
-- **Download**: Go to [Actions → Generate Diagrams PDF](../../actions/workflows/generate-diagrams-pdf.yml) and download the latest artifact
+- **Download**: Go to the **Actions** tab, open the **Generate Diagrams PDF** workflow, and download the latest artifact
 - **Manual Trigger**: You can also manually trigger the workflow from the Actions tab
 - **Auto-commit**: The generated PDF is automatically committed back to the repository
 
