@@ -61,20 +61,22 @@ jobs:
             # Remove any existing diagrams.pdf from mmdc (which may be incomplete)
             rm -f diagrams.pdf
             
-            # Sort files numerically
-            IFS=$'\n' sorted_files=($(sort -V <<<"${pdf_files[*]}"))
-            unset IFS
+            # Sort files numerically using mapfile for safer array handling
+            mapfile -t sorted_files < <(printf '%s\n' "${pdf_files[@]}" | sort -V)
             
-            # Merge PDFs
-            pdfunite "${sorted_files[@]}" diagrams-merged.pdf
+            # Merge PDFs with error handling
+            if ! pdfunite "${sorted_files[@]}" diagrams-merged.pdf; then
+              echo "Error: Failed to merge PDFs"
+              exit 1
+            fi
             
             # Move merged PDF to final location
             mv diagrams-merged.pdf diagrams.pdf
             
             echo "PDF merged successfully!"
             
-            # Clean up individual PDF files
-            rm -f "${pdf_files[@]}"
+            # Clean up individual PDF files using sorted array
+            rm -f "${sorted_files[@]}"
           else
             echo "No individual PDF files found to merge"
           fi
