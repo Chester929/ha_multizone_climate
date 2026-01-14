@@ -39,36 +39,23 @@ jobs:
         id: generate
         run: |
           echo "Generating PDF from DIAGRAMS.md..."
-          cmd="npx mmdc -i DIAGRAMS.md -o diagrams.pdf"
-          cmd="$cmd -t dark -b transparent"
-          cmd="$cmd -p puppeteer-config.json"
-          if ! $cmd; then
-            echo "Error: mmdc failed to generate PDF"
-            echo "success=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent -p puppeteer-config.json
           echo "PDF generated successfully!"
-          echo "success=true" >> $GITHUB_OUTPUT
 
       - name: Validate PDF artifact
         id: validate
-        if: success() || failure()
         run: |
           if [ ! -f diagrams.pdf ]; then
-            echo "Warning: PDF file was not generated"
-            echo "valid=false" >> $GITHUB_OUTPUT
-            exit 0
+            echo "Error: PDF file was not generated"
+            exit 1
           fi
           if [ ! -s diagrams.pdf ]; then
-            echo "Warning: PDF file is empty"
-            echo "valid=false" >> $GITHUB_OUTPUT
-            exit 0
+            echo "Error: PDF file is empty"
+            exit 1
           fi
           echo "PDF validation successful"
-          echo "valid=true" >> $GITHUB_OUTPUT
 
       - name: Upload artifact to GitHub
-        if: steps.validate.outputs.valid == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: diagrams-pdf
@@ -76,9 +63,7 @@ jobs:
           retention-days: 90
 
       - name: Commit and push PDF
-        if: |
-          github.event_name == 'push' &&
-          steps.validate.outputs.valid == 'true'
+        if: github.event_name == 'push'
         run: |
           email="github-actions[bot]@users.noreply.github.com"
           git config --local user.email "$email"
