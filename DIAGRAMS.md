@@ -169,13 +169,13 @@ flowchart TD
     
     FindMinMax --> CheckEqual{min == max?}
     CheckEqual -->|Yes| UseSingle[main_target_raw = min]
-    CheckEqual -->|No| CalcInterp[main_target_raw = min +<br/>slider × (max - min)]
+    CheckEqual -->|No| CalcInterp["main_target_raw = min +<br/>slider × (max - min)"]
     
     CalcAverage --> Round
     UseSingle --> Round
     CalcInterp --> Round
     
-    Round[Round to nearest 0.5°C<br/>(round(value × 2)) / 2] --> Clamp[Clamp to limits<br/>main_min_temp, main_max_temp]
+    Round["Round to nearest 0.5°C<br/>(round(value × 2)) / 2"] --> Clamp["Clamp to limits<br/>main_min_temp, main_max_temp"]
     
     Clamp --> CheckThreshold{abs(main_target -<br/>current_main_target)<br/>>= threshold?}
     
@@ -197,28 +197,28 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph Input
-        Z1[Bedroom: 20°C]
-        Z2[Living: 22°C]
-        Z3[Kitchen: 19°C]
-        Z4[Bath: 23°C]
+        Z1["Bedroom: 20°C"]
+        Z2["Living: 22°C"]
+        Z3["Kitchen: 19°C"]
+        Z4["Bath: 23°C"]
     end
     
     subgraph Config
-        Slider[Slider: 0.5 (50%)]
-        Min[Min: 18°C]
-        Max[Max: 30°C]
-        Thresh[Threshold: 0.5°C]
+        Slider["Slider: 0.5 (50%)"]
+        Min["Min: 18°C"]
+        Max["Max: 30°C"]
+        Thresh["Threshold: 0.5°C"]
     end
     
     subgraph Calculation
-        FindRange[Min: 19°C<br/>Max: 23°C]
-        Interpolate[19 + 0.5 × (23-19)<br/>= 19 + 2 = 21°C]
-        RoundVal[Round: 21.0°C]
-        ClampVal[Clamp: 21.0°C<br/>within 18-30]
+        FindRange["Min: 19°C<br/>Max: 23°C"]
+        Interpolate["19 + 0.5 × (23-19)<br/>= 19 + 2 = 21°C"]
+        RoundVal["Round: 21.0°C"]
+        ClampVal["Clamp: 21.0°C<br/>within 18-30"]
     end
     
     subgraph Output
-        Result[Main Target: 21.0°C]
+        Result["Main Target: 21.0°C"]
     end
     
     Z1 & Z2 & Z3 & Z4 --> FindRange
