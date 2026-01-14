@@ -1,0 +1,63 @@
+---
+name: Generate Diagrams PDF
+
+'on':
+  push:
+    branches:
+      - master
+      - dev
+    paths:
+      - 'DIAGRAMS.md'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate-pdf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install mermaid-cli
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - name: Generate PDF from DIAGRAMS.md
+        run: |
+          echo "Generating PDF from DIAGRAMS.md..."
+          mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
+          echo "PDF generated successfully!"
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagrams-pdf
+          path: diagrams.pdf
+          retention-days: 90
+
+      - name: Commit and push PDF (optional)
+        if: github.event_name == 'push'
+        run: |
+          email="github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "$email"
+          git config --local user.name "github-actions[bot]"
+
+          # Check if PDF exists and has changed
+          if [ -f diagrams.pdf ]; then
+            git add diagrams.pdf
+
+            # Only commit if there are changes
+            if ! git diff --staged --quiet; then
+              git commit -m "chore: auto-generate diagrams PDF [skip ci]"
+              git push
+              echo "PDF committed and pushed to repository"
+            else
+              echo "No changes to PDF, skipping commit"
+            fi
+          else
+            echo "PDF file not found"
+          fi
