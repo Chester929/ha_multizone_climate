@@ -196,7 +196,7 @@ They calculate and provide information about current temperature, target tempera
   - Rising: current_temp > previous_temp
   - Falling: current_temp < previous_temp
 - Write all state data (temperature, target, satisfaction, direction) to Redis immediately upon changes
-- The satisfaction calculation logic (hysteresis state machine) is exactly the same as previously described, but executed by the entity instead of the Update Valves job
+- The satisfaction calculation uses a hysteresis state machine to prevent rapid state changes
 
 ## Climate Zone Entity - Satisfaction Calculation
 
