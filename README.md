@@ -5,7 +5,7 @@ Home Assistant Automation integration to better manage heat zones.
 
 For comprehensive system diagrams and algorithm documentation, see [DIAGRAMS.md](DIAGRAMS.md).
 
-A PDF version of the diagrams is automatically generated when DIAGRAMS.md is updated in the `master` or `dev` branches. You can download the latest version from the [GitHub Actions artifacts](../../actions/workflows/generate-diagrams-pdf.yml).
+A PDF version of the diagrams is automatically generated when DIAGRAMS.md is updated in the `master` or `dev` branches. You can download the latest version from the [GitHub Actions artifacts](../../actions/workflows/generate-diagrams-pdf.yml), or access it directly from the repository root as `diagrams.pdf` after generation.
 
 # What's the Issue
 I have an HVAC unit driven by one thermostat using a heating curve to calculate the correct temperature in pipes.

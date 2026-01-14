@@ -10,6 +10,10 @@ on:
       - 'DIAGRAMS.md'
   workflow_dispatch:  # Allow manual trigger
 
+concurrency:
+  group: generate-diagrams-pdf-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write  # Required to commit and push the PDF
 
@@ -20,20 +24,35 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install mermaid-cli
-        run: npm install -g @mermaid-js/mermaid-cli
+        run: npm install @mermaid-js/mermaid-cli
 
       - name: Generate PDF from DIAGRAMS.md
         run: |
           echo "Generating PDF from DIAGRAMS.md..."
-          mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
+          npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
           echo "PDF generated successfully!"
+
+      - name: Validate PDF generation
+        run: |
+          if [ ! -f diagrams.pdf ]; then
+            echo "Error: PDF file was not generated"
+            exit 1
+          fi
+          if [ ! -s diagrams.pdf ]; then
+            echo "Error: PDF file is empty"
+            exit 1
+          fi
+          echo "PDF validation successful"
 
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
@@ -59,8 +78,8 @@ jobs:
               if git push origin HEAD; then
                 echo "PDF committed and pushed to repository"
               else
-                msg="Warning: Failed to push PDF."
-                echo "$msg Check branch protection rules."
+                echo "Warning: Failed to push PDF."
+                echo "Check branch protection rules."
                 exit 0  # Don't fail the workflow
               fi
             else

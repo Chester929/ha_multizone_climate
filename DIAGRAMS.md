@@ -1355,7 +1355,7 @@ Install the "Markdown Preview Mermaid Support" extension.
 Use `mermaid-cli` to generate images locally:
 ```bash
 npm install -g @mermaid-js/mermaid-cli
-mmdc -i DIAGRAMS.md -o diagrams.pdf
+mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
 ```
 
 ### Online
