@@ -101,6 +101,7 @@ graph TB
     
     %% Data flow connections
     Sensors -->|Read Temps| ZoneDevices
+    ZoneDevices -->|Calculate Satisfaction| ZoneState
     ZoneDevices -->|Target Change| UpdateTempAuto
     UpdateTempAuto -->|Enqueue Job| CalcQueue
     UpdateTempAuto -->|Enqueue Job| ValveQueue
@@ -245,7 +246,7 @@ flowchart TD
     
     CheckMultizone -->|No| IndividualMode[Individual Zone Mode<br/>Each zone manages own valve]
     IndividualMode --> IndivLoop{For each<br/>active zone}
-    IndivLoop --> CheckSat[Check satisfaction state]
+    IndivLoop --> CheckSat[Read satisfaction state<br/>from zone entity]
     CheckSat --> IndivAction{State?}
     IndivAction -->|Underheated| OpenValve[Add to valves_to_open]
     IndivAction -->|Overheated| CloseValve[Add to valves_to_close]
@@ -255,9 +256,9 @@ flowchart TD
     MaintainValve --> IndivLoop
     IndivLoop -->|Done| SafetyCheck
     
-    CheckMultizone -->|Yes| DetermineSat[Determine Satisfaction State<br/>for each zone]
+    CheckMultizone -->|Yes| ReadStates[Read Zone States from Redis<br/>satisfaction pre-calculated by entities]
     
-    DetermineSat --> CalcSort[Calculate Sort Key<br/>priority, deficit]
+    ReadStates --> CalcSort[Calculate Sort Key<br/>priority, deficit]
     
     CalcSort --> SortZones[Sort Zones by Priority<br/>user priority first, then deficit]
     
@@ -1344,39 +1345,18 @@ These diagrams render automatically when viewing this file on GitHub.
 
 ### Automated PDF Generation
 When DIAGRAMS.md is updated in the `master` or `dev` branches, a PDF is automatically generated via GitHub Actions:
-
-**How it works:**
-1. GitHub Actions detects changes to DIAGRAMS.md
-2. Installs Node.js and `@mermaid-js/mermaid-cli`
-3. Installs PDF merge tools (`poppler-utils` for `pdfunite`)
-4. Generates individual PDFs for each diagram (diagrams-1.pdf, diagrams-2.pdf, etc.)
-5. Merges all individual PDFs into a single `diagrams.pdf` using `pdfunite`
-6. Uploads the merged PDF as a GitHub Actions artifact (90-day retention)
-7. Automatically commits the PDF back to the repository with `[skip ci]` tag
-
-**Accessing the PDF:**
-- **Download from Actions**: Go to the **Actions** tab → **Generate Diagrams PDF** workflow → download the `diagrams-pdf` artifact
-- **From Repository**: Access `diagrams.pdf` directly from the repository root after it's committed
-- **Manual Trigger**: Click "Run workflow" in the Actions tab to generate on demand
+- **Download**: Go to the **Actions** tab, open the **Generate Diagrams PDF** workflow, and download the latest artifact
+- **Manual Trigger**: You can also manually trigger the workflow from the Actions tab
+- **Auto-commit**: The generated PDF is automatically committed back to the repository
 
 ### VS Code
 Install the "Markdown Preview Mermaid Support" extension.
 
 ### Command Line
-Use `mermaid-cli` to generate PDFs locally:
+Use `mermaid-cli` to generate images locally:
 ```bash
-# Install mermaid-cli
 npm install -g @mermaid-js/mermaid-cli
-
-# Generate PDFs (creates diagrams-1.pdf, diagrams-2.pdf, etc.)
 mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
-
-# If multiple PDFs are generated, merge them with pdfunite
-# Install poppler-utils if needed: sudo apt-get install poppler-utils
-pdfunite $(ls diagrams-*.pdf | sort -V) diagrams.pdf
-
-# Clean up individual PDFs
-rm diagrams-*.pdf
 ```
 
 ### Online
