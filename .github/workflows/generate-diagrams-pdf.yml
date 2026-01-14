@@ -42,7 +42,7 @@ jobs:
           path: diagrams.pdf
           retention-days: 90
 
-      - name: Commit and push PDF (optional)
+      - name: Commit and push PDF
         if: github.event_name == 'push'
         run: |
           email="github-actions[bot]@users.noreply.github.com"
