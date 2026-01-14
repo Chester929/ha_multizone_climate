@@ -35,12 +35,53 @@ jobs:
       - name: Install mermaid-cli
         run: npm install @mermaid-js/mermaid-cli
 
+      - name: Install PDF merge tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
       - name: Generate PDF from DIAGRAMS.md
         id: generate
         run: |
           echo "Generating PDF from DIAGRAMS.md..."
           npx mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent -p puppeteer-config.json
-          echo "PDF generated successfully!"
+          echo "PDF files generated"
+          
+          # mmdc creates separate PDF files (diagrams-1.pdf, diagrams-2.pdf, etc.)
+          # We need to merge them into a single diagrams.pdf
+          echo "Merging PDF files..."
+          
+          # Find all individual PDF files and store in array
+          shopt -s nullglob
+          pdf_files=(diagrams-*.pdf)
+          shopt -u nullglob
+          
+          # Check if any individual PDF files exist
+          if [ ${#pdf_files[@]} -gt 0 ]; then
+            # Remove any existing diagrams.pdf from mmdc (which may be incomplete)
+            rm -f diagrams.pdf
+            
+            # Sort files numerically using mapfile for safer array handling
+            mapfile -t sorted_files < <(printf '%s\n' "${pdf_files[@]}" | sort -V)
+            
+            # Merge PDFs with error handling
+            if ! pdfunite "${sorted_files[@]}" diagrams-merged.pdf; then
+              echo "Error: Failed to merge PDFs"
+              exit 1
+            fi
+            
+            # Move merged PDF to final location
+            mv diagrams-merged.pdf diagrams.pdf
+            
+            echo "PDF merged successfully!"
+            
+            # Clean up individual PDF files using sorted array
+            rm -f "${sorted_files[@]}"
+          else
+            echo "No individual PDF files found to merge"
+          fi
+          
+          echo "PDF generation complete!"
 
       - name: Validate PDF artifact
         id: validate
