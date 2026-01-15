@@ -6,16 +6,39 @@ import path from 'path';
 const app = express();
 const PORT = process.env.WEB_PORT || 8099;
 
+// Validate and parse Redis port
+function parseRedisPort(portStr: string | undefined): number {
+  const defaultPort = 6379;
+  if (!portStr) {
+    return defaultPort;
+  }
+  
+  const port = parseInt(portStr, 10);
+  
+  if (isNaN(port)) {
+    console.error(`Invalid REDIS_PORT value: "${portStr}". Must be a valid number. Using default port ${defaultPort}.`);
+    return defaultPort;
+  }
+  
+  if (port < 1 || port > 65535) {
+    console.error(`Invalid REDIS_PORT value: ${port}. Must be between 1 and 65535. Using default port ${defaultPort}.`);
+    return defaultPort;
+  }
+  
+  return port;
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Redis client
+const redisPort = parseRedisPort(process.env.REDIS_PORT);
 const redisClient = createClient({
   socket: {
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
+    port: redisPort,
   },
   password: process.env.REDIS_PASSWORD || undefined,
 });

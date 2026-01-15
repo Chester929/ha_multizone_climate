@@ -2,6 +2,7 @@ package algorithm
 
 import (
 	"math"
+	"slices"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 )
@@ -37,8 +38,8 @@ func CalculateMainTargetTemperature(zones []models.ZoneState, config models.Glob
 		for i, z := range activeZones {
 			targets[i] = z.TargetTemperature
 		}
-		minTarget := minFloat64(targets)
-		maxTarget := maxFloat64(targets)
+		minTarget := slices.Min(targets)
+		maxTarget := slices.Max(targets)
 		
 		// Use configured slider position (default to 0.5 if not set)
 		sliderPos := config.SliderPosition
@@ -112,31 +113,4 @@ func CheckMinimumValves(zones []models.ZoneState, minValvesOpen int) []string {
 		return fallbackValves // Open all fallback valves if not enough
 	}
 	return fallbackValves[:shortage]
-}
-
-// Helper functions
-func minFloat64(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	min := values[0]
-	for _, v := range values[1:] {
-		if v < min {
-			min = v
-		}
-	}
-	return min
-}
-
-func maxFloat64(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	max := values[0]
-	for _, v := range values[1:] {
-		if v > max {
-			max = v
-		}
-	}
-	return max
 }
