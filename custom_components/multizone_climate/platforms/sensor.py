@@ -51,8 +51,8 @@ async def async_setup_entry(
     # System sensors
     entities.extend([
         MultizoneTextSensor(coordinator, "open_valve_count"),
-        MultizoneTextSensor(coordinator, "calculate_queue_size", redis_client),
-        MultizoneTextSensor(coordinator, "valve_queue_size", redis_client),
+        MultizoneTextSensor(coordinator, "calculate_queue_size"),
+        MultizoneTextSensor(coordinator, "valve_queue_size"),
     ])
     
     # Fetch zones from Redis
@@ -148,18 +148,16 @@ class MultizoneTemperatureSensor(SensorEntity):
 class MultizoneTextSensor(SensorEntity):
     """Text/count sensor for multizone climate."""
 
-    def __init__(self, coordinator: Any, sensor_type: str, redis_client: Any = None) -> None:
+    def __init__(self, coordinator: Any, sensor_type: str) -> None:
         """
         Initialize text sensor.
         
         Args:
             coordinator: Data update coordinator
             sensor_type: Type of sensor
-            redis_client: Redis client (required for queue size sensors)
         """
         self.coordinator = coordinator
         self.sensor_type = sensor_type
-        self.redis_client = redis_client
         self._attr_unique_id = f"{DOMAIN}_{sensor_type}"
         self._attr_should_poll = False
         

@@ -92,21 +92,25 @@ class MultizoneEnableSwitch(SwitchEntity):
             _LOGGER.warning("Cannot enable multizone: no zones are turned ON")
             return
         
-        # Update config in Redis
-        config = self.coordinator.get_config() or {}
-        config["multizone_enabled"] = True
-        await self.redis_client.set_config(config)
-        
-        # Trigger coordinator update and recalculation
-        await self.coordinator.async_request_refresh()
-        await self.redis_client.enqueue_job(
-            JOB_TYPE_CALCULATE_MAIN_TEMP,
-            {
-                "job_id": f"enable_multizone_{int(self.coordinator.hass.loop.time())}",
-                "trigger": "multizone_enabled",
-                "enqueued_at": self.coordinator.hass.loop.time(),
-            }
-        )
+        try:
+            # Update config in Redis
+            config = self.coordinator.get_config() or {}
+            config["multizone_enabled"] = True
+            await self.redis_client.set_config(config)
+            
+            # Trigger coordinator update and recalculation
+            await self.coordinator.async_request_refresh()
+            await self.redis_client.enqueue_job(
+                JOB_TYPE_CALCULATE_MAIN_TEMP,
+                {
+                    "job_id": f"enable_multizone_{int(self.coordinator.hass.loop.time())}",
+                    "trigger": "multizone_enabled",
+                    "enqueued_at": self.coordinator.hass.loop.time(),
+                }
+            )
+        except Exception as err:
+            _LOGGER.error("Failed to enable multizone: %s", err)
+            raise
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """
@@ -114,13 +118,17 @@ class MultizoneEnableSwitch(SwitchEntity):
         
         Each zone will manage its own valve independently.
         """
-        # Update config in Redis
-        config = self.coordinator.get_config() or {}
-        config["multizone_enabled"] = False
-        await self.redis_client.set_config(config)
-        
-        # Trigger coordinator update
-        await self.coordinator.async_request_refresh()
+        try:
+            # Update config in Redis
+            config = self.coordinator.get_config() or {}
+            config["multizone_enabled"] = False
+            await self.redis_client.set_config(config)
+            
+            # Trigger coordinator update
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Failed to disable multizone: %s", err)
+            raise
 
     @callback
     def _handle_coordinator_update(self) -> None:
