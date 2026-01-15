@@ -85,3 +85,18 @@ func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
 func (c *Client) Ping(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
 }
+
+// BRPop blocks and pops an element from the right of a list with timeout
+func (c *Client) BRPop(ctx context.Context, timeout int, keys ...string) ([]string, error) {
+	return c.rdb.BRPop(ctx, 0, keys...).Result()
+}
+
+// SetNX sets a value only if the key does not exist (for distributed locking)
+func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expiration int) (bool, error) {
+	return c.rdb.SetNX(ctx, key, value, 0).Result()
+}
+
+// GetClient returns the underlying Redis client for advanced operations
+func (c *Client) GetClient() *redis.Client {
+	return c.rdb
+}

@@ -34,7 +34,9 @@ func main() {
 	log.Println("Connected to Redis successfully")
 
 	// Initialize worker pool
-	workerPool := worker.NewPool(redisClient, 5)
+	// Passing nil for processor as a placeholder - in a full implementation,
+	// this would be a struct implementing the JobProcessor interface
+	workerPool := worker.NewPool(redisClient, 5, nil)
 	workerPool.Start(ctx)
 	log.Println("Worker pool started")
 
