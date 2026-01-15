@@ -1,4 +1,5 @@
 """Unit tests for valve control logic."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from custom_components.multizone_climate.core.valve_control import ValveController
@@ -32,7 +33,7 @@ class TestValveController:
     async def test_underheated_zone_opens_valve(self, valve_controller):
         """
         Test that underheated zone opens its valve.
-        
+
         Scenario:
             - 1 zone underheated
             - Expected: valve opens
@@ -50,13 +51,13 @@ class TestValveController:
                 "valve_state": "closed",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="HEATING",
             multizone_enabled=True,
         )
-        
+
         assert len(actions) == 1
         assert actions[0]["valve_id"] == "switch.bedroom_valve"
         assert actions[0]["action"] == "open"
@@ -65,7 +66,7 @@ class TestValveController:
     async def test_overheated_zone_closes_valve(self, valve_controller):
         """
         Test that overheated zone closes its valve.
-        
+
         Scenario:
             - 1 zone overheated, 1 zone satisfied
             - Expected: overheated valve closes
@@ -94,13 +95,13 @@ class TestValveController:
                 "valve_state": "open",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="HEATING",
             multizone_enabled=True,
         )
-        
+
         # Should close bedroom, keep kitchen open
         close_actions = [a for a in actions if a["action"] == "close"]
         assert len(close_actions) == 1
@@ -110,7 +111,7 @@ class TestValveController:
     async def test_minimum_valves_enforcement(self, valve_controller):
         """
         Test that minimum valves are enforced.
-        
+
         Scenario:
             - All zones satisfied/overheated
             - min_valves_open = 1
@@ -129,18 +130,18 @@ class TestValveController:
                 "valve_state": "open",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="HEATING",
             multizone_enabled=True,
         )
-        
+
         # Should not close the only valve due to minimum requirement
         open_actions = [a for a in actions if a["action"] == "open"]
         # The fallback valve should remain open (no close action)
         close_actions = [a for a in actions if a["action"] == "close"]
-        
+
         # Either no close action or an open action for the fallback
         assert len(close_actions) == 0 or len(open_actions) >= 1
 
@@ -148,7 +149,7 @@ class TestValveController:
     async def test_priority_sorting(self, valve_controller):
         """
         Test that zones are sorted by priority.
-        
+
         Scenario:
             - Multiple zones with different priorities
             - Expected: higher priority processed first
@@ -177,13 +178,13 @@ class TestValveController:
                 "valve_state": "closed",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="HEATING",
             multizone_enabled=True,
         )
-        
+
         # Both should open, but priority order is maintained
         assert len(actions) >= 2
         open_actions = [a for a in actions if a["action"] == "open"]
@@ -193,7 +194,7 @@ class TestValveController:
     async def test_satisfied_zones_keep_valves_open(self, valve_controller):
         """
         Test that satisfied zones keep valves open.
-        
+
         Scenario:
             - Zone is satisfied
             - Expected: valve stays open
@@ -211,17 +212,17 @@ class TestValveController:
                 "valve_state": "open",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="HEATING",
             multizone_enabled=True,
         )
-        
+
         # Satisfied zones should have valves open
         open_actions = [a for a in actions if a["action"] == "open"]
         close_actions = [a for a in actions if a["action"] == "close"]
-        
+
         # Should keep open or open again
         assert len(open_actions) >= 1 or len(close_actions) == 0
 
@@ -229,7 +230,7 @@ class TestValveController:
     async def test_cooling_mode_undercooled_opens_valve(self, valve_controller):
         """
         Test that undercooled zone in cooling mode opens valve.
-        
+
         Scenario:
             - Cooling mode with undercooled zone
             - Expected: valve opens
@@ -247,13 +248,13 @@ class TestValveController:
                 "valve_state": "closed",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="COOLING",
             multizone_enabled=True,
         )
-        
+
         assert len(actions) >= 1
         open_actions = [a for a in actions if a["action"] == "open"]
         assert len(open_actions) >= 1
@@ -263,7 +264,7 @@ class TestValveController:
     async def test_multizone_disabled_individual_control(self, valve_controller):
         """
         Test individual valve control when multizone is disabled.
-        
+
         Scenario:
             - Multizone disabled
             - Expected: each zone manages its own valve
@@ -281,13 +282,13 @@ class TestValveController:
                 "valve_state": "closed",
             },
         ]
-        
+
         actions = await valve_controller.update_valves(
             zones=zones,
             main_climate_state="HEATING",
             multizone_enabled=False,
         )
-        
+
         # In individual mode, underheated zone should open
         assert len(actions) >= 1
         assert actions[0]["valve_id"] == "switch.bedroom_valve"

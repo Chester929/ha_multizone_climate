@@ -1,4 +1,5 @@
 """Test fixtures for Multizone Climate integration."""
+
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
@@ -7,7 +8,7 @@ from unittest.mock import MagicMock, AsyncMock
 def mock_redis_client():
     """
     Mock Redis client for testing.
-    
+
     Returns:
         MagicMock: Mock Redis client with async methods
     """
@@ -25,7 +26,7 @@ def mock_redis_client():
 def mock_hass():
     """
     Mock Home Assistant instance.
-    
+
     Returns:
         MagicMock: Mock hass instance
     """
@@ -41,7 +42,7 @@ def mock_hass():
 def sample_config():
     """
     Sample configuration for testing.
-    
+
     Returns:
         dict: Sample configuration
     """
@@ -62,7 +63,7 @@ def sample_config():
 def sample_zones():
     """
     Sample zones for testing.
-    
+
     Returns:
         list: Sample zone configurations
     """

@@ -214,7 +214,7 @@ class ZoneSatisfactionStateMachine:
         # satisfied_exit_cooling = target + satisfaction_eps (for overcooled -> satisfied while rising)
         satisfied_entry_cooling = self.target_temperature - self.satisfaction_eps
         satisfied_exit_cooling = self.target_temperature + self.satisfaction_eps
-        
+
         # Check if currently undercooled (above upper bound - needs cooling)
         if current_temperature > self.upper_bound:
             # If we're undercooled, stay undercooled until we reach target - eps while falling

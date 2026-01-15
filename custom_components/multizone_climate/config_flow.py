@@ -1,4 +1,5 @@
 """Config flow for Multizone Climate integration."""
+
 from __future__ import annotations
 
 import logging
@@ -75,10 +76,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """
         Handle the initial step - Redis configuration.
-        
+
         Args:
             user_input: User provided configuration data
-        
+
         Returns:
             FlowResult: Either show form or proceed to next step
         """
@@ -109,16 +110,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show form with Redis fields
         data_schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_REDIS_HOST, default=DEFAULT_REDIS_HOST
-                ): str,
-                vol.Required(
-                    CONF_REDIS_PORT, default=DEFAULT_REDIS_PORT
-                ): int,
+                vol.Required(CONF_REDIS_HOST, default=DEFAULT_REDIS_HOST): str,
+                vol.Required(CONF_REDIS_PORT, default=DEFAULT_REDIS_PORT): int,
                 vol.Optional(CONF_REDIS_PASSWORD): str,
-                vol.Required(
-                    CONF_REDIS_DB, default=DEFAULT_REDIS_DB
-                ): int,
+                vol.Required(CONF_REDIS_DB, default=DEFAULT_REDIS_DB): int,
                 vol.Required(
                     CONF_REDIS_KEY_PREFIX, default=DEFAULT_REDIS_KEY_PREFIX
                 ): str,
@@ -136,10 +131,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """
         Handle main climate entity selection.
-        
+
         Args:
             user_input: User selected main climate entity
-        
+
         Returns:
             FlowResult: Either show form or proceed to automation config
         """
@@ -184,10 +179,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """
         Handle automation configuration.
-        
+
         Args:
             user_input: User provided automation settings
-        
+
         Returns:
             FlowResult: Create config entry
         """
@@ -215,7 +210,9 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
         # Determine defaults from stored data or constants
-        use_average_mode = self._data.get(CONF_USE_AVERAGE_MODE, DEFAULT_USE_AVERAGE_MODE)
+        use_average_mode = self._data.get(
+            CONF_USE_AVERAGE_MODE, DEFAULT_USE_AVERAGE_MODE
+        )
 
         # Show form with automation parameters
         data_schema = vol.Schema(
@@ -333,10 +330,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> MultizoneClimateOptionsFlow:
         """
         Get the options flow for this handler.
-        
+
         Args:
             config_entry: Config entry for which to create options flow
-        
+
         Returns:
             MultizoneClimateOptionsFlow: Options flow handler
         """
@@ -349,7 +346,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """
         Initialize options flow.
-        
+
         Args:
             config_entry: Config entry to manage options for
         """
@@ -362,10 +359,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """
         Manage the options.
-        
+
         Args:
             user_input: User provided options
-        
+
         Returns:
             FlowResult: Show options menu
         """
@@ -379,10 +376,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """
         Edit configuration options.
-        
+
         Args:
             user_input: Updated configuration
-        
+
         Returns:
             FlowResult: Show form or update entry
         """
@@ -420,7 +417,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
         # Get current values
         current_data = self.config_entry.data
-        use_average_mode = current_data.get(CONF_USE_AVERAGE_MODE, DEFAULT_USE_AVERAGE_MODE)
+        use_average_mode = current_data.get(
+            CONF_USE_AVERAGE_MODE, DEFAULT_USE_AVERAGE_MODE
+        )
 
         # Show config edit form
         data_schema = vol.Schema(
@@ -445,7 +444,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Required(
                     CONF_MIN_VALVES_OPEN,
-                    default=current_data.get(CONF_MIN_VALVES_OPEN, DEFAULT_MIN_VALVES_OPEN),
+                    default=current_data.get(
+                        CONF_MIN_VALVES_OPEN, DEFAULT_MIN_VALVES_OPEN
+                    ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=1,
@@ -521,7 +522,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Required(
                     CONF_SATISFACTION_EPS,
-                    default=current_data.get(CONF_SATISFACTION_EPS, DEFAULT_SATISFACTION_EPS),
+                    default=current_data.get(
+                        CONF_SATISFACTION_EPS, DEFAULT_SATISFACTION_EPS
+                    ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
@@ -545,10 +548,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """
         Manage climate zones.
-        
+
         Args:
             user_input: Zone management action
-        
+
         Returns:
             FlowResult: Show zone management interface
         """
@@ -562,10 +565,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """
         Add a new climate zone.
-        
+
         Args:
             user_input: New zone configuration
-        
+
         Returns:
             FlowResult: Show form or create zone
         """
@@ -595,7 +598,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     await redis_client.connect()
 
                     # Generate zone ID from name
-                    zone_id = f"zone_{user_input[CONF_ZONE_NAME].lower().replace(' ', '_')}"
+                    zone_id = (
+                        f"zone_{user_input[CONF_ZONE_NAME].lower().replace(' ', '_')}"
+                    )
 
                     # Check if zone already exists
                     existing_zone_ids = await redis_client.get_zone_ids()
@@ -608,7 +613,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                             "name": user_input[CONF_ZONE_NAME],
                             "temperature_sensor_entity_id": temp_sensor,
                             "valve_switch_entity_id": valve_switch,
-                            "target_change_threshold": user_input[CONF_ZONE_TARGET_THRESHOLD],
+                            "target_change_threshold": user_input[
+                                CONF_ZONE_TARGET_THRESHOLD
+                            ],
                             "opening_offset": user_input[CONF_ZONE_OPENING_OFFSET],
                             "closing_offset": user_input[CONF_ZONE_CLOSING_OFFSET],
                             "is_fallback_valve": user_input[CONF_ZONE_IS_FALLBACK],
@@ -708,10 +715,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """
         Edit an existing climate zone.
-        
+
         Args:
             user_input: Updated zone configuration
-        
+
         Returns:
             FlowResult: Show form or update zone
         """
@@ -740,7 +747,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 self._zones = zones
 
                 # Show zone selector
-                zone_options = {zone_id: zones[zone_id].get("name", zone_id) for zone_id in zones}
+                zone_options = {
+                    zone_id: zones[zone_id].get("name", zone_id) for zone_id in zones
+                }
                 data_schema = vol.Schema(
                     {
                         vol.Required("zone_id"): selector.SelectSelector(
@@ -791,7 +800,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         CONF_ZONE_TARGET_THRESHOLD,
-                        default=zone_data.get("target_change_threshold", DEFAULT_ZONE_TARGET_THRESHOLD),
+                        default=zone_data.get(
+                            "target_change_threshold", DEFAULT_ZONE_TARGET_THRESHOLD
+                        ),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=0.1,
@@ -803,7 +814,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         CONF_ZONE_OPENING_OFFSET,
-                        default=zone_data.get("opening_offset", DEFAULT_ZONE_OPENING_OFFSET),
+                        default=zone_data.get(
+                            "opening_offset", DEFAULT_ZONE_OPENING_OFFSET
+                        ),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=0.1,
@@ -815,7 +828,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         CONF_ZONE_CLOSING_OFFSET,
-                        default=zone_data.get("closing_offset", DEFAULT_ZONE_CLOSING_OFFSET),
+                        default=zone_data.get(
+                            "closing_offset", DEFAULT_ZONE_CLOSING_OFFSET
+                        ),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=0.1,
@@ -827,7 +842,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         CONF_ZONE_IS_FALLBACK,
-                        default=zone_data.get("is_fallback_valve", DEFAULT_ZONE_IS_FALLBACK),
+                        default=zone_data.get(
+                            "is_fallback_valve", DEFAULT_ZONE_IS_FALLBACK
+                        ),
                     ): bool,
                     vol.Required(
                         CONF_ZONE_PRIORITY,
@@ -869,16 +886,20 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     await redis_client.connect()
 
                     zone_data = self._zones[self._selected_zone_id]
-                    zone_data.update({
-                        "name": user_input[CONF_ZONE_NAME],
-                        "temperature_sensor_entity_id": temp_sensor,
-                        "valve_switch_entity_id": valve_switch,
-                        "target_change_threshold": user_input[CONF_ZONE_TARGET_THRESHOLD],
-                        "opening_offset": user_input[CONF_ZONE_OPENING_OFFSET],
-                        "closing_offset": user_input[CONF_ZONE_CLOSING_OFFSET],
-                        "is_fallback_valve": user_input[CONF_ZONE_IS_FALLBACK],
-                        "priority": user_input[CONF_ZONE_PRIORITY],
-                    })
+                    zone_data.update(
+                        {
+                            "name": user_input[CONF_ZONE_NAME],
+                            "temperature_sensor_entity_id": temp_sensor,
+                            "valve_switch_entity_id": valve_switch,
+                            "target_change_threshold": user_input[
+                                CONF_ZONE_TARGET_THRESHOLD
+                            ],
+                            "opening_offset": user_input[CONF_ZONE_OPENING_OFFSET],
+                            "closing_offset": user_input[CONF_ZONE_CLOSING_OFFSET],
+                            "is_fallback_valve": user_input[CONF_ZONE_IS_FALLBACK],
+                            "priority": user_input[CONF_ZONE_PRIORITY],
+                        }
+                    )
 
                     await redis_client.set_zone_state(self._selected_zone_id, zone_data)
                     await redis_client.disconnect()
@@ -900,10 +921,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """
         Delete a climate zone.
-        
+
         Args:
             user_input: Zone to delete
-        
+
         Returns:
             FlowResult: Confirm and delete zone
         """
@@ -932,7 +953,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 self._zones = zones
 
                 # Show zone selector
-                zone_options = {zone_id: zones[zone_id].get("name", zone_id) for zone_id in zones}
+                zone_options = {
+                    zone_id: zones[zone_id].get("name", zone_id) for zone_id in zones
+                }
                 data_schema = vol.Schema(
                     {
                         vol.Required("zone_id"): selector.SelectSelector(
@@ -972,7 +995,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id="delete_zone",
                 data_schema=data_schema,
-                description_placeholders={"zone_name": zone_data.get("name", self._selected_zone_id)},
+                description_placeholders={
+                    "zone_name": zone_data.get("name", self._selected_zone_id)
+                },
                 errors=errors,
             )
 
@@ -1006,7 +1031,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     def _get_redis_client(self) -> RedisClient:
         """
         Get Redis client from config entry.
-        
+
         Returns:
             RedisClient: Initialized Redis client
         """

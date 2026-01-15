@@ -1,4 +1,5 @@
 """Device class for main climate device."""
+
 from __future__ import annotations
 
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -13,7 +14,7 @@ class MainClimateDeviceInfo:
     def get_device_info() -> DeviceInfo:
         """
         Get device info for main climate device.
-        
+
         Returns:
             DeviceInfo: Device information
         """

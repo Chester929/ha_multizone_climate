@@ -1,4 +1,5 @@
 """Unit tests for core algorithms."""
+
 import pytest
 from custom_components.multizone_climate.core.algorithms import (
     calculate_main_target_temperature,
@@ -13,7 +14,7 @@ class TestCalculateMainTargetTemperature:
     def test_slider_mode_basic(self):
         """
         Test slider-based calculation.
-        
+
         Scenario:
             - 2 zones with targets 20°C and 22°C
             - Slider at 50%
@@ -46,7 +47,7 @@ class TestCalculateMainTargetTemperature:
     def test_average_mode_basic(self):
         """
         Test average mode calculation.
-        
+
         Scenario:
             - 3 zones with targets 20°C, 22°C, 24°C
             - Average mode enabled
@@ -85,7 +86,7 @@ class TestCalculateMainTargetTemperature:
     def test_exclude_overheated_zones(self):
         """
         Test that overheated zones are excluded.
-        
+
         Scenario:
             - 2 zones, one overheated
             - Should only consider non-overheated zone
@@ -118,7 +119,7 @@ class TestCalculateMainTargetTemperature:
     def test_threshold_check(self):
         """
         Test threshold check prevents small updates.
-        
+
         Scenario:
             - New target differs by 0.2°C
             - Threshold is 0.5°C

@@ -1,4 +1,5 @@
 """Entity base class for Multizone Climate."""
+
 from __future__ import annotations
 
 from homeassistant.helpers.entity import Entity
@@ -12,7 +13,7 @@ class MultizoneClimateEntity(Entity):
     def __init__(self, coordinator: any, unique_id_suffix: str) -> None:
         """
         Initialize base entity.
-        
+
         Args:
             coordinator: Data update coordinator
             unique_id_suffix: Suffix for unique ID
@@ -24,7 +25,7 @@ class MultizoneClimateEntity(Entity):
     def device_info(self) -> dict:
         """
         Return device information.
-        
+
         Returns:
             dict: Device information for grouping entities
         """
@@ -40,7 +41,7 @@ class MultizoneClimateEntity(Entity):
     def should_poll(self) -> bool:
         """
         Return False as updates are coordinated.
-        
+
         Returns:
             bool: False (coordinator-based updates)
         """

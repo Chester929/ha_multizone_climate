@@ -1,4 +1,5 @@
 """Climate platform for Multizone Climate integration."""
+
 from __future__ import annotations
 
 import hashlib
@@ -47,12 +48,12 @@ async def async_setup_entry(
 ) -> None:
     """
     Set up climate entities from a config entry.
-    
+
     Args:
         hass: Home Assistant instance
         config_entry: Config entry for this integration
         async_add_entities: Callback to add entities
-    
+
     Tasks:
         - Create main climate device entity
         - Create zone climate entities for each configured zone
@@ -61,13 +62,15 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
-    
+
     # Get config from coordinator
     config = coordinator.get_config()
     if not config:
-        _LOGGER.warning("No config found in coordinator, cannot create climate entities")
+        _LOGGER.warning(
+            "No config found in coordinator, cannot create climate entities"
+        )
         return
-    
+
     # Create main climate device entity
     main_climate = MainClimateDevice(
         coordinator=coordinator,
@@ -75,12 +78,12 @@ async def async_setup_entry(
         config=config,
         config_entry=config_entry,
     )
-    
+
     entities = [main_climate]
-    
+
     # Fetch zones from Redis
     zone_ids = await redis_client.get_zone_ids()
-    
+
     # Create ZoneClimateEntity for each zone
     for zone_id in zone_ids:
         zone_config = await redis_client.get_zone_state(zone_id)
@@ -94,10 +97,10 @@ async def async_setup_entry(
                 hass=hass,
             )
             entities.append(zone_entity)
-    
+
     # Add all entities
     async_add_entities(entities)
-    
+
     _LOGGER.info(
         "Added %d climate entities (%d zones + 1 main device)",
         len(entities),
@@ -108,14 +111,14 @@ async def async_setup_entry(
 class MainClimateDevice(ClimateEntity):
     """
     Main climate device entity.
-    
+
     Represents the integration itself and the main HVAC thermostat.
     Displays:
     - Current and target temperatures
     - Outdoor temperature
     - HVAC mode and action
     - Multizone enable status
-    
+
     NOTE: This entity is read-only - actual control is via the main thermostat entity.
     """
 
@@ -128,7 +131,7 @@ class MainClimateDevice(ClimateEntity):
     ) -> None:
         """
         Initialize main climate device.
-        
+
         Args:
             coordinator: Data update coordinator
             redis_client: Redis client
@@ -140,7 +143,7 @@ class MainClimateDevice(ClimateEntity):
         self.config = config
         self._config_entry = config_entry
         self._attr_should_poll = False
-        
+
     @property
     def name(self) -> str:
         """Return the name of the entity."""
@@ -170,7 +173,7 @@ class MainClimateDevice(ClimateEntity):
     def current_temperature(self) -> float | None:
         """
         Return the current temperature.
-        
+
         Returns:
             float: Current temperature from main climate entity
         """
@@ -183,7 +186,7 @@ class MainClimateDevice(ClimateEntity):
     def target_temperature(self) -> float | None:
         """
         Return the target temperature.
-        
+
         Returns:
             float: Target temperature of main climate entity (calculated)
         """
@@ -196,16 +199,16 @@ class MainClimateDevice(ClimateEntity):
     def hvac_mode(self) -> HVACMode | None:
         """
         Return the current HVAC mode.
-        
+
         Returns:
             HVACMode: Current HVAC mode (heat/cool/off)
         """
         data = self.coordinator.get_main_climate_data()
         if not data:
             return None
-            
+
         hvac_mode_str = data.get("hvac_mode", "").lower()
-        
+
         # Map from main climate entity mode
         if hvac_mode_str in ("heat", "manual", "heating"):
             return HVACMode.HEAT
@@ -213,14 +216,14 @@ class MainClimateDevice(ClimateEntity):
             return HVACMode.COOL
         elif hvac_mode_str in ("off", "anti-freeze"):
             return HVACMode.OFF
-        
+
         return HVACMode.OFF
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
         """
         Return the list of available HVAC modes.
-        
+
         Returns:
             list: Available modes (read-only, reflects main climate)
         """
@@ -230,16 +233,16 @@ class MainClimateDevice(ClimateEntity):
     def hvac_action(self) -> HVACAction | None:
         """
         Return the current HVAC action.
-        
+
         Returns:
             HVACAction: Current action (heating/cooling/idle/off)
         """
         data = self.coordinator.get_main_climate_data()
         if not data:
             return None
-            
+
         hvac_action_str = data.get("hvac_action", "").lower()
-        
+
         if hvac_action_str == "heating":
             return HVACAction.HEATING
         elif hvac_action_str == "cooling":
@@ -248,14 +251,14 @@ class MainClimateDevice(ClimateEntity):
             return HVACAction.IDLE
         elif hvac_action_str == "off":
             return HVACAction.OFF
-        
+
         return HVACAction.IDLE
 
     @property
     def supported_features(self) -> int:
         """
         Return the supported features.
-        
+
         Returns:
             int: Feature flags (read-only, no target temperature control)
         """
@@ -266,14 +269,14 @@ class MainClimateDevice(ClimateEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """
         Return extra state attributes.
-        
+
         Returns:
             dict: Additional attributes including outdoor temp and multizone status
         """
         data = self.coordinator.get_main_climate_data()
         if not data:
             return {}
-        
+
         return {
             ATTR_OUTDOOR_TEMPERATURE: data.get("outdoor_temperature"),
             ATTR_MULTIZONE_ENABLED: data.get("multizone_enabled", False),
@@ -294,14 +297,14 @@ class MainClimateDevice(ClimateEntity):
 class ZoneClimateEntity(ClimateEntity):
     """
     Climate entity for a single zone.
-    
+
     Represents one room/zone with:
     - Temperature sensor
     - Valve switch
     - Target temperature control
     - Satisfaction state calculation
     - Temperature direction tracking
-    
+
     Responsibilities:
     - Read temperature from sensor
     - Store and manage target temperature
@@ -321,7 +324,7 @@ class ZoneClimateEntity(ClimateEntity):
     ) -> None:
         """
         Initialize zone climate entity.
-        
+
         Args:
             coordinator: Data update coordinator
             redis_client: Redis client
@@ -337,12 +340,12 @@ class ZoneClimateEntity(ClimateEntity):
         self._config_entry = config_entry
         self.hass = hass
         self._attr_should_poll = False
-        
+
         # Extract zone configuration
         self._name = zone_config.get("name", f"Zone {zone_id}")
         self._temp_sensor_entity_id = zone_config.get("temperature_sensor_entity_id")
         self._valve_switch_entity_id = zone_config.get("valve_switch_entity_id")
-        
+
         # Zone parameters
         self._target_temperature = zone_config.get("target_temperature", 20.0)
         self._target_change_threshold = zone_config.get("target_change_threshold", 0.1)
@@ -350,18 +353,18 @@ class ZoneClimateEntity(ClimateEntity):
         self._closing_offset = zone_config.get("closing_offset", 0.3)
         self._priority = zone_config.get("priority", 0)
         self._is_fallback = zone_config.get("is_fallback_valve", False)
-        
+
         # State tracking
         self._current_temperature: float | None = zone_config.get("current_temperature")
         self._previous_temperature: float | None = self._current_temperature
         self._satisfaction_state = zone_config.get("satisfaction", STATE_UNKNOWN)
         self._temperature_direction = "stable"
         self._valve_state = zone_config.get("valve_state", "closed")
-        
+
         # Initialize state machine
         global_config = coordinator.get_config() or {}
         satisfaction_eps = global_config.get("satisfaction_eps", 0.0)
-        
+
         self._state_machine = ZoneSatisfactionStateMachine(
             target_temperature=self._target_temperature,
             opening_offset=self._opening_offset,
@@ -398,7 +401,7 @@ class ZoneClimateEntity(ClimateEntity):
     def current_temperature(self) -> float | None:
         """
         Return the current temperature.
-        
+
         Returns:
             float: Current temperature from zone sensor
         """
@@ -408,7 +411,7 @@ class ZoneClimateEntity(ClimateEntity):
     def target_temperature(self) -> float | None:
         """
         Return the target temperature.
-        
+
         Returns:
             float: Zone target temperature
         """
@@ -418,7 +421,7 @@ class ZoneClimateEntity(ClimateEntity):
     def target_temperature_step(self) -> float:
         """
         Return the target temperature step.
-        
+
         Returns:
             float: Step size for target temperature changes
         """
@@ -438,7 +441,7 @@ class ZoneClimateEntity(ClimateEntity):
     def hvac_mode(self) -> HVACMode:
         """
         Return the current HVAC mode.
-        
+
         Returns:
             HVACMode: Always HEAT (zones don't control mode)
         """
@@ -449,7 +452,7 @@ class ZoneClimateEntity(ClimateEntity):
     def hvac_modes(self) -> list[HVACMode]:
         """
         Return the list of available HVAC modes.
-        
+
         Returns:
             list: Available modes
         """
@@ -459,7 +462,7 @@ class ZoneClimateEntity(ClimateEntity):
     def supported_features(self) -> int:
         """
         Return the list of supported features.
-        
+
         Returns:
             int: Supported features flags
         """
@@ -468,10 +471,10 @@ class ZoneClimateEntity(ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """
         Set new target temperature.
-        
+
         Args:
             **kwargs: Service call parameters with ATTR_TEMPERATURE
-        
+
         Tasks:
             - Update target in zone state
             - Write to Redis
@@ -481,19 +484,19 @@ class ZoneClimateEntity(ClimateEntity):
         if temperature is None:
             _LOGGER.warning("No temperature provided to set_temperature")
             return
-        
+
         # Round to target change threshold
         temperature = self._round_to_threshold(temperature)
-        
+
         _LOGGER.debug(
             "Setting target temperature for zone %s to %.1f°C",
             self.zone_id,
             temperature,
         )
-        
+
         # Update internal state
         self._target_temperature = temperature
-        
+
         # Update state machine with new target
         self._state_machine = ZoneSatisfactionStateMachine(
             target_temperature=self._target_temperature,
@@ -501,14 +504,14 @@ class ZoneClimateEntity(ClimateEntity):
             closing_offset=self._closing_offset,
             satisfaction_eps=self._state_machine.satisfaction_eps,
         )
-        
+
         # Write to Redis
         await self._update_zone_state_in_redis()
-        
+
         # Trigger recalculation by enqueuing jobs
         # Use milliseconds + zone_id hash for uniqueness to avoid collisions
         job_id_suffix = f"{int(self.hass.loop.time() * 1000)}_{hashlib.md5(self.zone_id.encode()).hexdigest()[:8]}"
-        
+
         await self.redis_client.enqueue_job(
             JOB_TYPE_CALCULATE_MAIN_TEMP,
             {
@@ -516,9 +519,9 @@ class ZoneClimateEntity(ClimateEntity):
                 "trigger": f"zone_{self.zone_id}_target_changed",
                 "changed_zones": [self.zone_id],
                 "enqueued_at": self.hass.loop.time(),
-            }
+            },
         )
-        
+
         await self.redis_client.enqueue_job(
             JOB_TYPE_UPDATE_VALVES,
             {
@@ -526,9 +529,9 @@ class ZoneClimateEntity(ClimateEntity):
                 "trigger": f"zone_{self.zone_id}_target_changed",
                 "changed_zones": [self.zone_id],
                 "enqueued_at": self.hass.loop.time(),
-            }
+            },
         )
-        
+
         # Update HA state
         self.async_write_ha_state()
 
@@ -536,7 +539,7 @@ class ZoneClimateEntity(ClimateEntity):
     def _handle_coordinator_update(self) -> None:
         """
         Handle coordinator update.
-        
+
         Tasks:
             - Read temperature from sensor
             - Calculate satisfaction state
@@ -548,7 +551,7 @@ class ZoneClimateEntity(ClimateEntity):
     async def _async_update_from_sensor(self) -> None:
         """
         Update entity state from temperature sensor.
-        
+
         Tasks:
             - Read current temp from sensor entity
             - Get previous temp from state
@@ -561,22 +564,22 @@ class ZoneClimateEntity(ClimateEntity):
             if sensor_state and sensor_state.state not in ("unknown", "unavailable"):
                 try:
                     new_temp = float(sensor_state.state)
-                    
+
                     # Only update if temperature actually changed
                     if new_temp != self._current_temperature:
                         # Store previous temperature
                         self._previous_temperature = self._current_temperature
                         self._current_temperature = new_temp
-                        
+
                         # Update satisfaction state using state machine
                         await self._update_satisfaction_state()
-                        
+
                         # Write updated state to Redis
                         await self._update_zone_state_in_redis()
-                        
+
                         # Update HA state
                         self.async_write_ha_state()
-                        
+
                 except ValueError:
                     _LOGGER.warning(
                         "Invalid temperature value for zone %s: %s",
@@ -587,7 +590,7 @@ class ZoneClimateEntity(ClimateEntity):
     async def _update_satisfaction_state(self) -> None:
         """
         Update satisfaction state using state machine.
-        
+
         Tasks:
             - Get HVAC mode from main climate
             - Call state machine to calculate new state
@@ -595,22 +598,24 @@ class ZoneClimateEntity(ClimateEntity):
         """
         if self._current_temperature is None or self._previous_temperature is None:
             return
-        
+
         # Get HVAC mode from main climate
         main_climate_data = self.coordinator.get_main_climate_data()
         # Default to heating if main climate data unavailable
         # This is safe as zones will not be actively managed when HVAC is off
         hvac_action = HVAC_ACTION_HEATING
-        
+
         if main_climate_data:
-            hvac_action_str = main_climate_data.get("hvac_action", HVAC_ACTION_HEATING).lower()
+            hvac_action_str = main_climate_data.get(
+                "hvac_action", HVAC_ACTION_HEATING
+            ).lower()
             if hvac_action_str in ("cooling", "cool"):
                 hvac_action = HVAC_ACTION_COOLING
             elif hvac_action_str in ("off", "idle"):
                 hvac_action = HVAC_ACTION_OFF
             else:
                 hvac_action = HVAC_ACTION_HEATING
-        
+
         # Call state machine
         new_state, temp_direction = self._state_machine.update_state(
             current_temperature=self._current_temperature,
@@ -618,12 +623,12 @@ class ZoneClimateEntity(ClimateEntity):
             current_state=self._satisfaction_state,
             hvac_mode=hvac_action,
         )
-        
+
         # Update internal state
         old_satisfaction = self._satisfaction_state
         self._satisfaction_state = new_state
         self._temperature_direction = temp_direction
-        
+
         # Log state changes
         if old_satisfaction != new_state:
             _LOGGER.debug(
@@ -638,7 +643,7 @@ class ZoneClimateEntity(ClimateEntity):
     async def _update_zone_state_in_redis(self) -> None:
         """
         Write zone state to Redis.
-        
+
         Tasks:
             - Build zone state dict
             - Write to Redis
@@ -663,25 +668,28 @@ class ZoneClimateEntity(ClimateEntity):
             "priority": self._priority,
             "last_updated": dt_util.utcnow().isoformat(),
         }
-        
+
         await self.redis_client.set_zone_state(self.zone_id, zone_state)
-    
+
     def _round_to_threshold(self, temperature: float) -> float:
         """
         Round temperature to target change threshold and clamp to min/max.
-        
+
         Args:
             temperature: Temperature to round
-            
+
         Returns:
             float: Rounded and clamped temperature
-            
+
         Note:
             Floating-point arithmetic may introduce minor precision errors,
             but these are acceptable for temperature control (< 0.001°C).
         """
         # Round to target change threshold
-        temperature = round(temperature / self._target_change_threshold) * self._target_change_threshold
+        temperature = (
+            round(temperature / self._target_change_threshold)
+            * self._target_change_threshold
+        )
         # Clamp to min/max
         return max(self.min_temp, min(self.max_temp, temperature))
 
@@ -689,7 +697,7 @@ class ZoneClimateEntity(ClimateEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """
         Return extra state attributes.
-        
+
         Returns:
             dict: Additional attributes:
                 - satisfaction: Satisfaction state
@@ -714,6 +722,6 @@ class ZoneClimateEntity(ClimateEntity):
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
-        
+
         # Initial update from sensor
         await self._async_update_from_sensor()
