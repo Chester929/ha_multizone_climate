@@ -1,0 +1,69 @@
+"""Entity base class for Multizone Climate."""
+from __future__ import annotations
+
+from homeassistant.helpers.entity import Entity
+
+from .const import DOMAIN
+
+
+class MultizoneClimateEntity(Entity):
+    """Base entity for Multizone Climate integration."""
+
+    def __init__(self, coordinator: any, unique_id_suffix: str) -> None:
+        """
+        Initialize base entity.
+        
+        Args:
+            coordinator: Data update coordinator
+            unique_id_suffix: Suffix for unique ID
+        """
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{DOMAIN}_{unique_id_suffix}"
+
+    @property
+    def device_info(self) -> dict:
+        """
+        Return device information.
+        
+        Returns:
+            dict: Device information for grouping entities
+        """
+        # TODO: Return device info for entity grouping
+        return {
+            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "name": "Multizone Climate",
+            "manufacturer": "Chester929",
+            "model": "Multizone Climate Controller",
+        }
+
+    @property
+    def should_poll(self) -> bool:
+        """
+        Return False as updates are coordinated.
+        
+        Returns:
+            bool: False (coordinator-based updates)
+        """
+        return False
+
+    async def async_added_to_hass(self) -> None:
+        """
+        Run when entity is added to hass.
+        
+        Tasks:
+            - Register with coordinator
+            - Subscribe to updates
+        """
+        # TODO: Register coordinator listener
+        pass
+
+    async def async_will_remove_from_hass(self) -> None:
+        """
+        Run when entity will be removed from hass.
+        
+        Tasks:
+            - Unregister from coordinator
+            - Clean up resources
+        """
+        # TODO: Unregister coordinator listener
+        pass

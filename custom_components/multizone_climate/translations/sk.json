@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurácia Redis",
+        "description": "Nakonfigurujte pripojenie Redis pre Multizone Climate",
+        "data": {
+          "redis_host": "Redis Host",
+          "redis_port": "Redis Port",
+          "redis_password": "Redis Heslo (voliteľné)",
+          "redis_db": "Redis Databáza",
+          "redis_key_prefix": "Redis Prefix Kľúčov"
+        }
+      },
+      "main_climate": {
+        "title": "Hlavná Klimatizačná Entita",
+        "description": "Vyberte hlavnú termostatickú entitu HVAC",
+        "data": {
+          "main_climate_entity_id": "Hlavná Klimatizačná Entita"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodarilo sa pripojiť k Redis",
+      "invalid_auth": "Neplatné overenie Redis",
+      "unknown": "Došlo k neočakávanej chybe"
+    }
+  }
+}
