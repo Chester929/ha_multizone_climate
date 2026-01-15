@@ -1,0 +1,4 @@
+"""Strings for UI elements."""
+
+# TODO: This file will contain UI string definitions for config flow
+# Currently using translations/en.json for all strings
