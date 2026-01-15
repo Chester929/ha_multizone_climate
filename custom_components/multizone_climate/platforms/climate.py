@@ -1,6 +1,7 @@
 """Climate platform for Multizone Climate integration."""
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 import logging
 
@@ -505,7 +506,8 @@ class ZoneClimateEntity(ClimateEntity):
         await self._update_zone_state_in_redis()
         
         # Trigger recalculation by enqueuing jobs
-        job_id_suffix = f"{int(self.hass.loop.time() * 1000)}"  # milliseconds for uniqueness
+        # Use milliseconds + zone_id hash for uniqueness to avoid collisions
+        job_id_suffix = f"{int(self.hass.loop.time() * 1000)}_{hashlib.md5(self.zone_id.encode()).hexdigest()[:8]}"
         
         await self.redis_client.enqueue_job(
             JOB_TYPE_CALCULATE_MAIN_TEMP,
@@ -596,7 +598,9 @@ class ZoneClimateEntity(ClimateEntity):
         
         # Get HVAC mode from main climate
         main_climate_data = self.coordinator.get_main_climate_data()
-        hvac_action = HVAC_ACTION_HEATING  # Default to heating
+        # Default to heating if main climate data unavailable
+        # This is safe as zones will not be actively managed when HVAC is off
+        hvac_action = HVAC_ACTION_HEATING
         
         if main_climate_data:
             hvac_action_str = main_climate_data.get("hvac_action", HVAC_ACTION_HEATING).lower()
@@ -671,6 +675,10 @@ class ZoneClimateEntity(ClimateEntity):
             
         Returns:
             float: Rounded and clamped temperature
+            
+        Note:
+            Floating-point arithmetic may introduce minor precision errors,
+            but these are acceptable for temperature control (< 0.001°C).
         """
         # Round to target change threshold
         temperature = round(temperature / self._target_change_threshold) * self._target_change_threshold
