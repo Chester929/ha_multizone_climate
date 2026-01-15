@@ -1,1366 +1,1469 @@
-# Home Assistant Multizone Climate - System Diagrams
+# Home Assistant Multizone Climate - System Diagrams v2.0
 
-This document contains comprehensive diagrams illustrating the algorithms, flows, and automations of the Home Assistant Multizone Climate integration.
+This document contains comprehensive diagrams illustrating the architecture, flows, and algorithms of the containerized Multizone Climate add-on.
+
+## Architecture Overview
+
+The system uses a modern microservices architecture with separate containers for logic, frontend, and optional MQTT middleware.
 
 ## Quick Reference Guide
 
 **New to the system?** Start here:
-- [System Architecture Overview](#system-architecture-overview) - See how all components fit together
-- [System Component Integration](#system-component-integration) - Understand external systems and HA integration
+- [Containerized Architecture](#containerized-architecture) - Multi-container add-on structure
+- [Component Communication](#component-communication) - How containers interact
+- [Integration Options](#integration-options) - MQTT vs HA Service API vs Python
 
-**Understanding the algorithms?** Check these:
-- [Calculate Main Target Temperature](#calculate-main-target-temperature-algorithm) - How main thermostat target is determined
-- [Update Valves Algorithm](#update-valves-algorithm) - How zones control their valves
-- [Zone Satisfaction State Machine](#zone-satisfaction-state-machine) - State transitions with hysteresis
+**Understanding the containers?** Check these:
+- [Logic Container (GoLang)](#logic-container-golang) - Core algorithms and business logic
+- [Frontend Container (TypeScript)](#frontend-container-typescript) - Web UI and management
+- [MQTT Middleware](#mqtt-middleware-container) - Redis to MQTT bridge
+- [HA Service API Client](#ha-service-api-client) - Direct HA integration
 
-**Implementing the system?** Essential diagrams:
+**Data flow?** Essential diagrams:
 - [Redis Data Schema](#redis-data-schema) - Complete data model
-- [Background Jobs and Process Locking](#background-jobs-and-process-locking) - Job execution flow
-- [Coordinator Process Flow](#coordinator-process-flow) - Main 15s cycle
+- [State Synchronization](#state-synchronization) - Redis ↔ MQTT ↔ Home Assistant
+- [HA API Communication Flow](#ha-api-communication-flow) - Service API integration
+- [Job Processing Flow](#job-processing-flow) - Background job execution
 
-**Debugging issues?** Look at:
-- [Timing Sequences](#timing-sequences) - Real-world execution timelines
-- [Valve Lock Mechanism](#valve-lock-mechanism) - Preventing valve chattering
-- [Error Handling and Recovery](#error-handling-and-recovery) - Failure modes and retries
+**Integration patterns?** Look at:
+- [MQTT Topic Structure](#mqtt-topic-structure) - Topic hierarchy and payloads
+- [Entity Discovery](#entity-discovery) - Home Assistant auto-discovery (MQTT)
+- [HA Service API Calls](#ha-service-api-calls) - REST API and WebSocket
+- [Entity ID Mapping](#entity-id-mapping) - Existing entity usage
 
-**Safety critical?** Must read:
-- [Safety Valve Check Algorithm](#safety-valve-check-algorithm) - Minimum valve enforcement
-- [Open-First-Then-Close Sequence](#open-first-then-close-sequence) - Maintaining system flow
+**Algorithms?** Core logic:
+- [Main Target Temperature Algorithm](#main-target-temperature-algorithm) - Temperature calculation
+- [Valve Management Algorithm](#valve-management-algorithm) - Valve control logic
+- [Safety Valve Check](#safety-valve-check-algorithm) - Minimum valve enforcement
+- [Zone Satisfaction State Machine](#zone-satisfaction-state-machine) - State transitions
 
 ## Table of Contents
-1. [System Architecture Overview](#system-architecture-overview)
-2. [Calculate Main Target Temperature Algorithm](#calculate-main-target-temperature-algorithm)
-3. [Update Valves Algorithm](#update-valves-algorithm)
-4. [Safety Valve Check Algorithm](#safety-valve-check-algorithm)
-5. [Zone Satisfaction State Machine](#zone-satisfaction-state-machine)
-6. [Background Jobs and Process Locking](#background-jobs-and-process-locking)
-7. [Redis Data Schema](#redis-data-schema)
-8. [Automation Flow](#automation-flow)
-9. [Coordinator Process Flow](#coordinator-process-flow)
-10. [Timing Sequences](#timing-sequences)
-11. [Open-First-Then-Close Sequence](#open-first-then-close-sequence)
-12. [System Component Integration](#system-component-integration)
-13. [Priority Sorting Example](#priority-sorting-example)
-14. [Configuration Flow](#configuration-flow)
-15. [Valve Lock Mechanism](#valve-lock-mechanism)
-16. [Multizone Enable/Disable States](#multizone-enable-disable-states)
-17. [Error Handling and Recovery](#error-handling-and-recovery)
+
+### Architecture
+1. [Containerized Architecture](#containerized-architecture)
+2. [Component Communication](#component-communication)
+3. [Container Deployment](#container-deployment)
+
+### Logic Container (GoLang)
+4. [Logic Container Architecture](#logic-container-architecture)
+5. [Main Target Temperature Algorithm](#main-target-temperature-algorithm)
+6. [Valve Management Algorithm](#valve-management-algorithm)
+7. [Safety Valve Check Algorithm](#safety-valve-check-algorithm)
+8. [Zone Satisfaction State Machine](#zone-satisfaction-state-machine)
+9. [Job Processing Flow](#job-processing-flow)
+10. [Background Job System](#background-job-system)
+
+### Frontend Container (TypeScript)
+11. [Frontend Container Architecture](#frontend-container-architecture)
+12. [Zone Management UI](#zone-management-ui)
+13. [Statistics Dashboard](#statistics-dashboard)
+14. [Configuration Interface](#configuration-interface)
+
+### MQTT Integration
+15. [MQTT Integration Pattern](#mqtt-integration-pattern)
+16. [MQTT Topic Structure](#mqtt-topic-structure)
+17. [Entity Discovery](#entity-discovery)
+18. [Command/State Topics](#commandstate-topics)
+19. [State Synchronization](#state-synchronization)
+
+### Home Assistant Service API Integration
+20. [HA Service API Integration](#ha-service-api-integration)
+21. [HA API Communication Flow](#ha-api-communication-flow)
+22. [HA Service API Calls](#ha-service-api-calls)
+23. [Entity ID Mapping](#entity-id-mapping)
+24. [WebSocket Real-time Updates](#websocket-real-time-updates)
+
+### Data Management
+25. [Redis Data Schema](#redis-data-schema)
+26. [Data Flow Diagrams](#data-flow-diagrams)
+27. [Persistence Strategy](#persistence-strategy)
+
+### Safety & Timing
+28. [Open-First-Then-Close Sequence](#open-first-then-close-sequence)
+29. [Valve Lock Mechanism](#valve-lock-mechanism)
+30. [Timing Sequences](#timing-sequences)
+31. [Error Handling](#error-handling)
+
+### Integration Comparison
+32. [Integration Options](#integration-options)
+33. [Choosing the Right Integration](#choosing-the-right-integration)
 
 ---
 
-## System Architecture Overview
+## Containerized Architecture
 
 ```mermaid
 graph TB
+    subgraph "Home Assistant Add-on"
+        subgraph "Logic Container (GoLang)"
+            LogicAPI[HTTP API Server]
+            CoreLogic[Core Logic Engine]
+            JobProcessor[Background Job Processor]
+            SafetyMonitor[Safety Monitor]
+            LogicAPI --> CoreLogic
+            CoreLogic --> JobProcessor
+            CoreLogic --> SafetyMonitor
+        end
+        
+        subgraph "Frontend Container (TypeScript)"
+            WebServer[Web Server]
+            ZoneMgmt[Zone Management]
+            StatsUI[Statistics Dashboard]
+            ConfigUI[Configuration UI]
+            WebServer --> ZoneMgmt
+            WebServer --> StatsUI
+            WebServer --> ConfigUI
+        end
+        
+        subgraph "Redis Container (Optional)"
+            RedisServer[Redis Server]
+            RedisPubSub[Pub/Sub]
+            RedisPersist[Persistence]
+            RedisServer --> RedisPubSub
+            RedisServer --> RedisPersist
+        end
+        
+        subgraph "MQTT Middleware (Optional)"
+            MQTTBridge[MQTT Bridge]
+            RedisSubscriber[Redis Subscriber]
+            MQTTPublisher[MQTT Publisher]
+            MQTTBridge --> RedisSubscriber
+            MQTTBridge --> MQTTPublisher
+        end
+    end
+    
+    subgraph "External Services"
+        ExternalRedis[External Redis<br/>User Provided]
+        MQTTBroker[MQTT Broker<br/>Mosquitto]
+    end
+    
     subgraph "Home Assistant"
-        MainClimate[Main Climate Entity<br/>Thermostat Control]
-        Sensors[Temperature Sensors<br/>Per Room]
-        Valves[Valve Switches<br/>Per Room]
+        ClimateEntities[Climate Entities]
+        SensorEntities[Sensor Entities]
+        BinarySensors[Binary Sensors]
+        SwitchEntities[Switch Entities]
     end
     
-    subgraph "Multizone Integration"
-        MainDevice[Main Climate Device<br/>Config Entry]
-        ZoneDevices[Climate Zone Subdevices<br/>Per Room]
-        
-        subgraph "Core Logic"
-            CoreLogic[Core Logic<br/>Redis Client]
-        end
-        
-        subgraph "Background Jobs"
-            CalcTemp[Calculate Main<br/>Target Temperature]
-            UpdateValves[Update Valves]
-            SafetyCheck[Safety Valve Check]
-        end
-        
-        subgraph "Automations"
-            UpdateTempAuto[Update Main Target<br/>Temperature Automation]
-            SafetyAuto[Safety Valve Check<br/>Automation]
-        end
-        
-        Coordinator[Coordinator<br/>Runs every 15s]
-        
-        subgraph "Queues"
-            CalcQueue[Calculate Temp Queue]
-            ValveQueue[Update Valves Queue]
-        end
+    subgraph "Physical Devices"
+        MainThermostat[Main Thermostat<br/>Cloud API]
+        TempSensors[Temperature Sensors]
+        ValveSwitches[Valve Switches]
+        HVACUnit[HVAC Unit]
     end
     
-    subgraph "Redis Storage"
-        Config[Global Config]
-        ZoneState[Zone States]
-        JobQueues[Job Queues]
-        ValveLocks[Valve Locks]
-        JobLocks[Job Locks]
-        JobStatus[Job Status]
-    end
+    LogicAPI <--> RedisServer
+    WebServer <--> RedisServer
+    MQTTBridge <--> RedisServer
     
-    subgraph "HVAC System"
-        HVACUnit[HVAC Unit<br/>De Dietrich]
-        HeatPipes[Heating Pipes]
-    end
+    RedisServer -.Alternative.-> ExternalRedis
     
-    %% Data flow connections
-    Sensors -->|Read Temps| ZoneDevices
-    ZoneDevices -->|Calculate Satisfaction| ZoneState
-    ZoneDevices -->|Target Change| UpdateTempAuto
-    UpdateTempAuto -->|Enqueue Job| CalcQueue
-    UpdateTempAuto -->|Enqueue Job| ValveQueue
+    MQTTPublisher --> MQTTBroker
+    MQTTBroker --> MQTTPublisher
     
-    SafetyAuto -->|Trigger| SafetyCheck
+    MQTTBroker <--> ClimateEntities
+    MQTTBroker <--> SensorEntities
+    MQTTBroker <--> BinarySensors
+    MQTTBroker <--> SwitchEntities
     
-    Coordinator -->|Dequeue| CalcQueue
-    Coordinator -->|Dequeue| ValveQueue
-    Coordinator -->|Execute| CalcTemp
-    Coordinator -->|Execute| UpdateValves
-    Coordinator -->|Execute| SafetyCheck
+    ClimateEntities <--> MainThermostat
+    SensorEntities <--> TempSensors
+    BinarySensors <--> ValveSwitches
+    SwitchEntities <--> ValveSwitches
     
-    CalcTemp -->|Read/Write| CoreLogic
-    UpdateValves -->|Read/Write| CoreLogic
-    SafetyCheck -->|Read/Write| CoreLogic
-    
-    CoreLogic -->|Store/Retrieve| Config
-    CoreLogic -->|Store/Retrieve| ZoneState
-    CoreLogic -->|Store/Retrieve| JobQueues
-    CoreLogic -->|Store/Retrieve| ValveLocks
-    CoreLogic -->|Store/Retrieve| JobLocks
-    CoreLogic -->|Store/Retrieve| JobStatus
-    
-    CalcTemp -->|Update Target| MainClimate
-    UpdateValves -->|Open/Close| Valves
-    
-    MainClimate -->|Control| HVACUnit
-    HVACUnit -->|Heat Water| HeatPipes
-    Valves -->|Control Flow| HeatPipes
-    HeatPipes -->|Heat Rooms| Sensors
-    
-    style MainDevice fill:#e1f5ff
-    style ZoneDevices fill:#e1f5ff
-    style CoreLogic fill:#fff4e1
-    style Coordinator fill:#ffe1f5
-    style Config fill:#e1ffe1
-    style ZoneState fill:#e1ffe1
+    MainThermostat <--> HVACUnit
 ```
+
+### Container Responsibilities
+
+**Logic Container (GoLang):**
+- Main target temperature calculation
+- Valve management and orchestration
+- Safety checks (minimum valves open)
+- Background job processing
+- Job queue management
+- State machine execution
+- HTTP API for frontend
+
+**Frontend Container (TypeScript):**
+- Web UI for zone management
+- Real-time statistics and metrics
+- Configuration interface
+- MQTT settings management
+- Historical data visualization
+- User authentication (optional)
+
+**Redis Container:**
+- Configuration storage
+- Zone state persistence
+- Job queue management
+- Valve lock tracking
+- Historical metrics
+- Pub/Sub for real-time updates
+
+**MQTT Middleware:**
+- Redis state to MQTT topics
+- MQTT commands to Redis updates
+- Home Assistant auto-discovery
+- Topic management
+- State synchronization
 
 ---
 
-## Calculate Main Target Temperature Algorithm
-
-### Slider-Based Linear Interpolation (Choice A)
-
-```mermaid
-flowchart TD
-    Start([Start: Calculate Main Target]) --> CheckZones{Active Zones<br/>Available?}
-    
-    CheckZones -->|No| ReturnNull[Return None]
-    CheckZones -->|Yes| FilterOff[Filter: Get Active Zones<br/>state != OFF]
-    
-    FilterOff --> CheckActive{Active Zones<br/>Found?}
-    CheckActive -->|No| ReturnNull
-    CheckActive -->|Yes| FilterOverheat[Filter: Exclude Overheated Zones<br/>satisfaction != overheated]
-    
-    FilterOverheat --> CheckNonOverheat{Non-Overheated<br/>Zones Found?}
-    CheckNonOverheat -->|Yes| UseNonOverheat[Use Non-Overheated Zone Targets]
-    CheckNonOverheat -->|No| UseAll[Use All Active Zone Targets<br/>Fallback]
-    
-    UseNonOverheat --> CheckMode{Calculation<br/>Mode?}
-    UseAll --> CheckMode
-    
-    CheckMode -->|Average Mode| CalcAverage[main_target_raw =<br/>sum of targets / count]
-    CheckMode -->|Slider Mode| FindMinMax[Find min and max targets]
-    
-    FindMinMax --> CheckEqual{min == max?}
-    CheckEqual -->|Yes| UseSingle[main_target_raw = min]
-    CheckEqual -->|No| CalcInterp["main_target_raw = min +<br/>slider × (max - min)"]
-    
-    CalcAverage --> Round
-    UseSingle --> Round
-    CalcInterp --> Round
-    
-    Round["Round to nearest 0.5°C<br/>(round(value × 2)) / 2"] --> Clamp["Clamp to limits<br/>main_min_temp, main_max_temp"]
-    
-    Clamp --> CheckThreshold{"Change exceeds<br/>threshold?"}
-    
-    CheckThreshold -->|No| ReturnNull
-    CheckThreshold -->|Yes| ReturnTarget[Return main_target]
-    
-    ReturnTarget --> UpdateClimate[Update Main Climate<br/>Entity Target]
-    ReturnNull --> End([End])
-    UpdateClimate --> End
-    
-    style Start fill:#e1f5ff
-    style End fill:#e1f5ff
-    style CheckMode fill:#fff4e1
-    style UpdateClimate fill:#ffe1e1
-```
-
-### Example Calculation Flow
-
-```mermaid
-flowchart LR
-    subgraph Input
-        Z1["Bedroom: 20°C"]
-        Z2["Living: 22°C"]
-        Z3["Kitchen: 19°C"]
-        Z4["Bath: 23°C"]
-    end
-    
-    subgraph Config
-        Slider["Slider: 0.5 (50%)"]
-        Min["Min: 18°C"]
-        Max["Max: 30°C"]
-        Thresh["Threshold: 0.5°C"]
-    end
-    
-    subgraph Calculation
-        FindRange["Min: 19°C<br/>Max: 23°C"]
-        Interpolate["19 + 0.5 × (23-19)<br/>= 19 + 2 = 21°C"]
-        RoundVal["Round: 21.0°C"]
-        ClampVal["Clamp: 21.0°C<br/>within 18-30"]
-    end
-    
-    subgraph Output
-        Result["Main Target: 21.0°C"]
-    end
-    
-    Z1 & Z2 & Z3 & Z4 --> FindRange
-    Slider --> Interpolate
-    FindRange --> Interpolate
-    Interpolate --> RoundVal
-    RoundVal --> ClampVal
-    Min & Max --> ClampVal
-    ClampVal --> Result
-    
-    style Input fill:#e1f5ff
-    style Config fill:#fff4e1
-    style Calculation fill:#ffe1f5
-    style Output fill:#e1ffe1
-```
-
----
-
-## Update Valves Algorithm
-
-```mermaid
-flowchart TD
-    Start([Start: Update Valves]) --> CheckMultizone{Multizone<br/>Enabled?}
-    
-    CheckMultizone -->|No| IndividualMode[Individual Zone Mode<br/>Each zone manages own valve]
-    IndividualMode --> IndivLoop{For each<br/>active zone}
-    IndivLoop --> CheckSat[Read satisfaction state<br/>from zone entity]
-    CheckSat --> IndivAction{State?}
-    IndivAction -->|Underheated| OpenValve[Add to valves_to_open]
-    IndivAction -->|Overheated| CloseValve[Add to valves_to_close]
-    IndivAction -->|Satisfied| MaintainValve[Maintain current state]
-    OpenValve --> IndivLoop
-    CloseValve --> IndivLoop
-    MaintainValve --> IndivLoop
-    IndivLoop -->|Done| SafetyCheck
-    
-    CheckMultizone -->|Yes| ReadStates[Read Zone States from Redis<br/>satisfaction pre-calculated by entities]
-    
-    ReadStates --> CalcSort[Calculate Sort Key<br/>priority, deficit]
-    
-    CalcSort --> SortZones[Sort Zones by Priority<br/>user priority first, then deficit]
-    
-    SortZones --> DesiredStates[Determine Desired Valve States]
-    
-    DesiredStates --> Loop{For each<br/>zone}
-    
-    Loop -->|OFF| AddClose[Add valve to<br/>valves_to_close]
-    Loop -->|Underheated/Undercooled| AddOpen[Add valve to<br/>valves_to_open]
-    Loop -->|Overheated/Overcooled| AddClose2[Add valve to<br/>valves_to_close]
-    Loop -->|Satisfied| AddOpenSat[Add valve to<br/>valves_to_open<br/>maintain temp]
-    
-    AddClose --> Loop
-    AddOpen --> Loop
-    AddClose2 --> Loop
-    AddOpenSat --> Loop
-    
-    Loop -->|Done| SafetyCheck[Safety Check:<br/>Ensure min_valves_open]
-    
-    SafetyCheck --> CheckMin{Will have<br/>min valves<br/>open?}
-    
-    CheckMin -->|Yes| CheckLocks
-    CheckMin -->|No| ForceFallback[Force open fallback valves<br/>shortage = min - will_be_open]
-    
-    ForceFallback --> CheckLocks[Check Valve Locks<br/>cooldown]
-    
-    CheckLocks --> FilterLocked[Remove locked valves from<br/>valves_to_open/close]
-    
-    FilterLocked --> CheckSwap{At minimum AND<br/>need to swap?}
-    
-    CheckSwap -->|Yes| OpenFirst[OPEN new valves FIRST<br/>set locks]
-    OpenFirst --> Schedule[Schedule CLOSE old valves<br/>after valve_actuation_delay]
-    Schedule --> Execute
-    
-    CheckSwap -->|No| SimultaneousClose[Close valves<br/>set locks]
-    SimultaneousClose --> SimultaneousOpen[Open valves<br/>set locks]
-    SimultaneousOpen --> Execute
-    
-    Execute[Execute Valve Actions] --> UpdateRedis[Update Zone States<br/>in Redis]
-    
-    UpdateRedis --> End([End])
-    
-    style Start fill:#e1f5ff
-    style End fill:#e1f5ff
-    style CheckMultizone fill:#fff4e1
-    style SafetyCheck fill:#ffe1e1
-    style CheckSwap fill:#ffe1f5
-```
-
----
-
-## Safety Valve Check Algorithm
-
-```mermaid
-flowchart TD
-    Start([Start: Safety Check]) --> GetOpen[Get Currently Open Valves<br/>from zones]
-    
-    GetOpen --> Count[Count open valves]
-    
-    Count --> CheckMin{Count >=<br/>min_valves_open?}
-    
-    CheckMin -->|Yes| LogOK[Log: System OK]
-    LogOK --> End([End])
-    
-    CheckMin -->|No| LogWarn[Log WARNING:<br/>Insufficient valves open]
-    
-    LogWarn --> CalcShortage[shortage =<br/>min_valves_open - count]
-    
-    CalcShortage --> GetFallback[Get Fallback Valves<br/>is_fallback_valve = true<br/>exclude currently open]
-    
-    GetFallback --> SelectValves[Select first 'shortage'<br/>fallback valves]
-    
-    SelectValves --> ForceLoop{For each<br/>fallback valve}
-    
-    ForceLoop --> LogForce[Log WARNING:<br/>Force opening fallback valve]
-    
-    LogForce --> OpenFallback[Open fallback valve]
-    
-    OpenFallback --> SetLock[Set valve lock<br/>cooldown period]
-    
-    SetLock --> ForceLoop
-    
-    ForceLoop -->|Done| UpdateRedis[Update valve states<br/>in Redis]
-    
-    UpdateRedis --> End
-    
-    style Start fill:#e1f5ff
-    style End fill:#e1f5ff
-    style CheckMin fill:#ffe1e1
-    style LogWarn fill:#ffcccc
-    style LogForce fill:#ffcccc
-```
-
----
-
-## Zone Satisfaction State Machine
-
-### Heating Mode State Transitions
-
-```mermaid
-stateDiagram-v2
-    [*] --> Unknown
-    Unknown --> Underheated: temp < target - opening_offset
-    Unknown --> Satisfied: within bounds
-    Unknown --> Overheated: temp > target + closing_offset
-    
-    Underheated --> Satisfied: temp >= target + satisfaction_eps<br/>(while rising)
-    Satisfied --> Underheated: temp < target - opening_offset
-    
-    Satisfied --> Overheated: temp > target + closing_offset
-    Overheated --> Satisfied: temp <= target - satisfaction_eps<br/>(while falling)
-    
-    note right of Underheated
-        Valve: OPEN
-        Below: target - opening_offset
-        Exit: reaches target + satisfaction_eps
-    end note
-    
-    note right of Satisfied
-        Valve: OPEN (maintain temp)
-        Within: opening_offset to closing_offset
-        Hysteresis: stays satisfied within bounds
-    end note
-    
-    note right of Overheated
-        Valve: CLOSED
-        Above: target + closing_offset
-        Exit: reaches target - satisfaction_eps
-    end note
-```
-
-### Cooling Mode State Transitions
-
-```mermaid
-stateDiagram-v2
-    [*] --> Unknown
-    Unknown --> Undercooled: temp > target + opening_offset
-    Unknown --> Satisfied: within bounds
-    Unknown --> Overcooled: temp < target - closing_offset
-    
-    Undercooled --> Satisfied: temp <= target - satisfaction_eps<br/>(while falling)
-    Satisfied --> Undercooled: temp > target + opening_offset
-    
-    Satisfied --> Overcooled: temp < target - closing_offset
-    Overcooled --> Satisfied: temp >= target + satisfaction_eps<br/>(while rising)
-    
-    note right of Undercooled
-        Valve: OPEN
-        Above: target + opening_offset
-        Exit: reaches target - satisfaction_eps
-    end note
-    
-    note right of Satisfied
-        Valve: OPEN (maintain temp)
-        Within: closing_offset to opening_offset
-        Hysteresis: stays satisfied within bounds
-    end note
-    
-    note right of Overcooled
-        Valve: CLOSED
-        Below: target - closing_offset
-        Exit: reaches target + satisfaction_eps
-    end note
-```
-
-### Satisfaction Boundaries Diagram
-
-```mermaid
-graph LR
-    subgraph "Heating Mode: Target = 21.0°C"
-        subgraph "opening_offset = 0.3, closing_offset = 0.3, satisfaction_eps = 0.1"
-            LB[Lower Bound<br/>20.7°C]
-            TSM[Satisfied Exit<br/>20.9°C<br/>target - eps]
-            T[Target<br/>21.0°C]
-            TSP[Satisfied Entry<br/>21.1°C<br/>target + eps]
-            UB[Upper Bound<br/>21.3°C]
-        end
-    end
-    
-    LB -.->|Underheated Zone| TSM
-    TSM -.->|Satisfied Zone| UB
-    UB -.->|Overheated Zone| R[>21.3°C]
-    
-    style LB fill:#ffcccc
-    style TSM fill:#ffffcc
-    style T fill:#ccffcc
-    style TSP fill:#ffffcc
-    style UB fill:#ffcccc
-```
-
----
-
-## Background Jobs and Process Locking
+## Component Communication
 
 ```mermaid
 sequenceDiagram
-    participant Auto as Automation
-    participant Queue as Job Queue
-    participant Coord as Coordinator
-    participant Lock as Job Lock (Redis)
-    participant Job as Background Job
-    participant Redis as Redis Store
+    participant User
+    participant Frontend
+    participant Redis
+    participant Logic
+    participant MQTT
     participant HA as Home Assistant
     
-    Auto->>Queue: Enqueue calculate_main_temp job
-    Auto->>Queue: Enqueue update_valves job
+    Note over User,HA: Zone Configuration
+    User->>Frontend: Configure new zone
+    Frontend->>Redis: Write zone config
+    Redis-->>Logic: Pub/Sub notification
+    Logic->>Logic: Validate configuration
+    Logic->>Redis: Update zone state
     
-    Note over Coord: Runs every 15 seconds
+    Note over User,HA: Temperature Update Flow
+    HA->>MQTT: Temperature sensor update
+    MQTT->>Redis: Update temperature in Redis
+    Redis-->>Logic: Pub/Sub notification
+    Logic->>Logic: Calculate satisfaction state
+    Logic->>Logic: Queue valve update job
+    Logic->>Redis: Write new valve state
+    Redis-->>MQTT: Pub/Sub notification
+    MQTT->>HA: Publish valve command
     
-    Coord->>Queue: Dequeue calculate_main_temp
-    Queue-->>Coord: Job details
-    
-    Coord->>Lock: Try acquire lock(calculate_main_temp)
-    
-    alt Lock available
-        Lock-->>Coord: Lock acquired
-        Coord->>Job: Execute calculate_main_temp
-        Job->>Redis: Fetch config & zone states
-        Redis-->>Job: Data
-        Job->>Job: Calculate main target
-        Job->>HA: Update main climate target
-        Job->>Redis: Update job status
-        Job-->>Coord: Job completed
-        Coord->>Lock: Release lock(calculate_main_temp)
-    else Lock held
-        Lock-->>Coord: Lock denied
-        Coord->>Queue: Re-enqueue job
-        Note over Coord: Will retry next cycle
-    end
-    
-    Coord->>Queue: Dequeue update_valves
-    Queue-->>Coord: Job details
-    
-    Coord->>Lock: Try acquire lock(update_valves)
-    Lock-->>Coord: Lock acquired
-    Coord->>Job: Execute update_valves
-    Job->>Redis: Fetch config & zone states
-    Redis-->>Job: Data
-    Job->>Job: Determine valve actions
-    Job->>HA: Open/Close valves
-    Job->>Redis: Set valve locks
-    Job->>Redis: Update zone states
-    Job-->>Coord: Job completed
-    Coord->>Lock: Release lock(update_valves)
+    Note over User,HA: Statistics Display
+    Frontend->>Redis: Request statistics
+    Redis-->>Frontend: Return metrics
+    Frontend->>User: Display dashboard
 ```
 
-### Job Queue Management
+### Communication Patterns
+
+**Frontend ↔ Redis:**
+- Direct Redis client connection
+- Reads: Zone configs, states, statistics
+- Writes: Configuration changes, MQTT settings
+- Real-time: Subscribe to Pub/Sub for live updates
+
+**Logic ↔ Redis:**
+- Core data source for all operations
+- Reads: Zone states, configurations, sensor values
+- Writes: Calculated states, valve commands, job status
+- Job queuing: FIFO queues for background jobs
+- Locking: Distributed locks for job coordination
+
+**MQTT Middleware ↔ Redis:**
+- Redis Subscriber: Listen for state changes
+- Redis Reader: Fetch current states on demand
+- Redis Writer: Update states from MQTT commands
+- Bidirectional: Full synchronization
+
+**MQTT ↔ Home Assistant:**
+- Discovery: `homeassistant/` prefix for auto-discovery
+- State: `multizone/sensor/{zone_id}/state`
+- Command: `multizone/climate/{zone_id}/set`
+- JSON payloads: Standardized format
+
+---
+
+## MQTT Integration Pattern
+
+### Topic Structure
+
+```
+multizone/
+├── status
+│   └── online                          # Bridge status
+│
+├── config
+│   └── zones                           # Zone configuration
+│
+├── climate/
+│   ├── main/
+│   │   ├── state                       # Current state (JSON)
+│   │   ├── set                         # Command topic
+│   │   └── attributes                  # Additional attributes
+│   │
+│   └── {zone_id}/
+│       ├── state                       # Zone state
+│       ├── set                         # Zone command
+│       ├── target_temperature/set      # Set target temp
+│       └── attributes
+│
+├── sensor/
+│   ├── {zone_id}/
+│   │   ├── temperature                 # Current temperature
+│   │   ├── satisfaction                # Satisfaction state
+│   │   └── direction                   # Temperature direction
+│   │
+│   └── system/
+│       ├── active_valves               # Number of open valves
+│       ├── job_queue_size              # Pending jobs
+│       └── last_calculation            # Last calc timestamp
+│
+├── binary_sensor/
+│   └── {zone_id}/
+│       └── valve                       # Valve state (ON/OFF)
+│
+└── switch/
+    ├── multizone_enabled               # Master enable/disable
+    └── {zone_id}/
+        └── enabled                     # Zone enable/disable
+
+homeassistant/
+├── climate/multizone_main/config       # Discovery: Main climate
+├── climate/multizone_{zone_id}/config  # Discovery: Zone climate
+├── sensor/multizone_{zone_id}_temp/config
+├── binary_sensor/multizone_{zone_id}_valve/config
+└── switch/multizone_enabled/config
+```
+
+### Example Payloads
+
+**Climate Entity Discovery:**
+```json
+{
+  "name": "Bedroom Climate",
+  "unique_id": "multizone_bedroom_climate",
+  "device": {
+    "identifiers": ["multizone_bedroom"],
+    "name": "Bedroom Zone",
+    "model": "Multizone Climate v2.0",
+    "manufacturer": "Multizone Climate"
+  },
+  "temperature_state_topic": "multizone/sensor/bedroom/temperature",
+  "temperature_command_topic": "multizone/climate/bedroom/target_temperature/set",
+  "current_temperature_topic": "multizone/sensor/bedroom/temperature",
+  "mode_state_topic": "multizone/climate/bedroom/state",
+  "mode_command_topic": "multizone/climate/bedroom/set",
+  "modes": ["off", "heat", "cool"],
+  "temperature_unit": "C",
+  "min_temp": 15,
+  "max_temp": 30,
+  "temp_step": 0.5
+}
+```
+
+**Zone State Payload:**
+```json
+{
+  "mode": "heat",
+  "current_temperature": 21.5,
+  "target_temperature": 22.0,
+  "satisfaction": "underheated",
+  "direction": "rising",
+  "valve_state": "open",
+  "enabled": true
+}
+```
+
+**Valve Binary Sensor:**
+```json
+{
+  "state": "ON",
+  "last_changed": "2026-01-15T17:30:00Z",
+  "locked_until": "2026-01-15T17:32:00Z"
+}
+```
+
+---
+
+## HA Service API Integration
+
+### Overview
+
+The Home Assistant Service API integration provides direct communication between the Logic Container and Home Assistant using REST API and WebSocket, allowing the add-on to use **existing Home Assistant entities** without creating new ones.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "Logic Container"
+        HAClient[HA API Client]
+        StateCache[Entity State Cache]
+        WSListener[WebSocket Listener]
+    end
+    
+    subgraph "Home Assistant"
+        RESTAPI[REST API :8123]
+        WSEndpoint[WebSocket API]
+        EntityRegistry[Entity Registry]
+        
+        subgraph "Existing Entities"
+            TempSensors[Temperature Sensors]
+            ValveSwitches[Valve Switches]
+            MainClimate[Main Climate Entity]
+        end
+    end
+    
+    HAClient -->|HTTP GET| RESTAPI
+    HAClient -->|HTTP POST service calls| RESTAPI
+    RESTAPI --> EntityRegistry
+    
+    WSListener -->|Subscribe| WSEndpoint
+    WSEndpoint -->|State changes| WSListener
+    
+    EntityRegistry --> TempSensors
+    EntityRegistry --> ValveSwitches
+    EntityRegistry --> MainClimate
+    
+    WSListener --> StateCache
+    HAClient --> StateCache
+```
+
+### HA API Communication Flow
+
+```mermaid
+sequenceDiagram
+    participant Logic as Logic Container
+    participant HAClient as HA API Client
+    participant WS as WebSocket
+    participant REST as HA REST API
+    participant Entity as HA Entity
+    
+    Note over Logic,Entity: Initialization
+    Logic->>HAClient: Initialize with URL + Token
+    HAClient->>REST: GET /api/
+    REST-->>HAClient: API info
+    HAClient->>WS: Connect WebSocket
+    WS-->>HAClient: Connected
+    HAClient->>WS: Subscribe to state_changed
+    
+    Note over Logic,Entity: Read Temperature
+    Logic->>HAClient: Get state of sensor.bedroom_temperature
+    HAClient->>REST: GET /api/states/sensor.bedroom_temperature
+    REST-->>HAClient: {"state": "21.5", "attributes": {...}}
+    HAClient-->>Logic: Temperature: 21.5°C
+    
+    Note over Logic,Entity: Real-time Update
+    Entity->>WS: State changed event
+    WS->>HAClient: state_changed: sensor.bedroom_temperature
+    HAClient->>StateCache: Update cached state
+    HAClient-->>Logic: Notify temperature change
+    Logic->>Logic: Recalculate and update valves
+    
+    Note over Logic,Entity: Control Valve
+    Logic->>HAClient: Turn on switch.bedroom_valve
+    HAClient->>REST: POST /api/services/switch/turn_on
+    REST->>Entity: Execute service
+    REST-->>HAClient: {"success": true}
+    HAClient-->>Logic: Valve opened successfully
+```
+
+### HA Service API Calls
+
+**Reading Entity States:**
+```go
+// Get current temperature
+func (c *HAClient) GetTemperature(entityID string) (float64, error) {
+    url := fmt.Sprintf("%s/api/states/%s", c.baseURL, entityID)
+    
+    req, _ := http.NewRequest("GET", url, nil)
+    req.Header.Set("Authorization", "Bearer "+c.token)
+    
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return 0, err
+    }
+    defer resp.Body.Close()
+    
+    var state struct {
+        State      string                 `json:"state"`
+        Attributes map[string]interface{} `json:"attributes"`
+    }
+    
+    json.NewDecoder(resp.Body).Decode(&state)
+    return strconv.ParseFloat(state.State, 64)
+}
+```
+
+**Calling Services:**
+```go
+// Turn on/off valve switch
+func (c *HAClient) SetValveState(entityID string, state bool) error {
+    service := "turn_on"
+    if !state {
+        service = "turn_off"
+    }
+    
+    url := fmt.Sprintf("%s/api/services/switch/%s", c.baseURL, service)
+    
+    data := map[string]interface{}{
+        "entity_id": entityID,
+    }
+    
+    body, _ := json.Marshal(data)
+    req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
+    req.Header.Set("Authorization", "Bearer "+c.token)
+    req.Header.Set("Content-Type", "application/json")
+    
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    
+    return nil
+}
+```
+
+### Entity ID Mapping
+
+**Configuration in Redis:**
+```yaml
+# Zone configuration with entity mapping
+multizone:zone:bedroom:
+  id: "bedroom"
+  name: "Bedroom"
+  enabled: true
+  
+  # Entity ID mapping - using existing HA entities
+  temperature_sensor_entity_id: "sensor.bedroom_temperature"
+  valve_switch_entity_id: "switch.bedroom_valve"
+  
+  # Zone settings
+  target_temperature: 22.0
+  opening_offset: 0.3
+  closing_offset: 0.3
+  is_fallback_valve: true
+  priority: 10
+
+# Main climate entity mapping
+multizone:main_climate:
+  entity_id: "climate.main_thermostat"  # Existing climate entity
+  use_ha_service_api: true
+```
+
+**Frontend UI for Mapping:**
+```typescript
+interface ZoneEntityMapping {
+  zoneName: string;
+  temperatureSensorEntityId: string;  // User selects from HA entities
+  valveSwitchEntityId: string;         // User selects from HA entities
+  
+  // Alternative: Create new via MQTT
+  createNewEntities: boolean;
+}
+
+// Entity selector in UI
+<EntitySelector
+  hass={hassConnection}
+  domain="sensor"
+  filter={(entity) => entity.attributes.device_class === "temperature"}
+  value={zone.temperatureSensorEntityId}
+  onChange={(entityId) => updateZone({temperatureSensorEntityId: entityId})}
+/>
+```
+
+### WebSocket Real-time Updates
+
+**Subscribe to State Changes:**
+```go
+type WSMessage struct {
+    Type   string                 `json:"type"`
+    Event  map[string]interface{} `json:"event"`
+}
+
+func (c *HAClient) SubscribeToStateChanges() {
+    // Subscribe to all state_changed events
+    subscribe := map[string]interface{}{
+        "id":   1,
+        "type": "subscribe_events",
+        "event_type": "state_changed",
+    }
+    
+    c.ws.WriteJSON(subscribe)
+    
+    go func() {
+        for {
+            var msg WSMessage
+            err := c.ws.ReadJSON(&msg)
+            if err != nil {
+                log.Printf("WebSocket error: %v", err)
+                c.reconnect()
+                continue
+            }
+            
+            if msg.Type == "event" {
+                c.handleStateChange(msg.Event)
+            }
+        }
+    }()
+}
+
+func (c *HAClient) handleStateChange(event map[string]interface{}) {
+    data := event["data"].(map[string]interface{})
+    entityID := data["entity_id"].(string)
+    newState := data["new_state"].(map[string]interface{})
+    
+    // Update cache and notify logic container
+    c.stateCache.Set(entityID, newState)
+    c.notifyStateChange(entityID, newState)
+}
+```
+
+### Benefits vs MQTT
+
+| Feature | HA Service API | MQTT |
+|---------|---------------|------|
+| Uses existing entities | ✅ Yes | ❌ Creates new |
+| Setup complexity | Medium | Higher |
+| External dependencies | Access token only | MQTT broker |
+| Real-time updates | WebSocket | MQTT subscribe |
+| Service calls | Direct REST | Via MQTT command |
+| Entity discovery | Manual mapping | Auto-discovery |
+| Integration type | API-based | Message-based |
+
+---
+
+## Logic Container Architecture
+
+```mermaid
+graph TB
+    subgraph "Logic Container (GoLang)"
+        subgraph "HTTP API Layer"
+            HTTPServer[HTTP Server :8080]
+            HealthEndpoint[/health]
+            MetricsEndpoint[/metrics]
+            StatusEndpoint[/status]
+        end
+        
+        subgraph "Core Logic Engine"
+            TempCalculator[Main Temp Calculator]
+            ValveManager[Valve Manager]
+            SafetyChecker[Safety Checker]
+            StateEngine[Zone State Machine]
+        end
+        
+        subgraph "Job System"
+            JobQueue[Job Queue Manager]
+            JobWorkers[Worker Pool]
+            JobLocks[Distributed Locks]
+        end
+        
+        subgraph "Redis Client"
+            RedisConn[Connection Pool]
+            RedisPubSub[Pub/Sub Listener]
+            RedisCache[Local Cache]
+        end
+        
+        subgraph "Background Workers"
+            CalcWorker[Calc Temperature Worker]
+            ValveWorker[Update Valves Worker]
+            SafetyWorker[Safety Check Worker]
+        end
+    end
+    
+    HTTPServer --> TempCalculator
+    HTTPServer --> ValveManager
+    HTTPServer --> SafetyChecker
+    
+    TempCalculator --> JobQueue
+    ValveManager --> JobQueue
+    SafetyChecker --> JobQueue
+    
+    JobQueue --> JobWorkers
+    JobWorkers --> CalcWorker
+    JobWorkers --> ValveWorker
+    JobWorkers --> SafetyWorker
+    
+    CalcWorker --> RedisConn
+    ValveWorker --> RedisConn
+    SafetyWorker --> RedisConn
+    
+    RedisPubSub --> StateEngine
+    StateEngine --> RedisConn
+```
+
+### GoLang Implementation Details
+
+**Why GoLang?**
+- **Performance:** Compiled language, very fast execution
+- **Concurrency:** Goroutines for parallel job processing
+- **Memory:** Low memory footprint (~20-50MB)
+- **Deployment:** Single binary, easy container deployment
+- **Type Safety:** Strong typing prevents runtime errors
+- **Standard Library:** Excellent HTTP, JSON, Redis support
+
+**Key Packages:**
+- `net/http` - HTTP server for API
+- `github.com/go-redis/redis/v9` - Redis client
+- `encoding/json` - JSON processing
+- `sync` - Concurrent programming
+- `context` - Request cancellation and timeouts
+- `log/slog` - Structured logging
+
+**Concurrency Model:**
+```go
+// Worker pool for background jobs
+func startWorkerPool(ctx context.Context, numWorkers int) {
+    for i := 0; i < numWorkers; i++ {
+        go func(workerID int) {
+            for {
+                select {
+                case <-ctx.Done():
+                    return
+                case job := <-jobChannel:
+                    processJob(job)
+                }
+            }
+        }(i)
+    }
+}
+
+// Distributed locking
+func acquireJobLock(jobType string) (bool, error) {
+    return redisClient.SetNX(
+        ctx,
+        fmt.Sprintf("lock:%s", jobType),
+        time.Now().Unix(),
+        60*time.Second,
+    ).Result()
+}
+```
+
+---
+
+## Main Target Temperature Algorithm
+
+This algorithm determines the target temperature for the main HVAC thermostat based on all zone demands.
 
 ```mermaid
 flowchart TD
-    subgraph "Job Enqueueing"
-        E1[Zone Target Changed] --> Q1[Enqueue: calculate_main_temp]
-        E1 --> Q2[Enqueue: update_valves]
-        E2[Timer: Every valve_delay/2] --> Q3[Direct Execute: safety_check]
-    end
+    Start([Start: Temperature Change Detected]) --> GetZones[Get All Active Zones from Redis]
+    GetZones --> CheckZones{Any zones<br/>active?}
+    CheckZones -->|No| End([End: No Update])
+    CheckZones -->|Yes| FilterOverheated[Exclude Overheated Zones]
     
-    subgraph "Coordinator Cycle - 15s"
-        Start([Coordinator Wakes]) --> UpdateSensors[Update Sensor States<br/>from Redis]
-        UpdateSensors --> CheckCalcQueue{Calculate Queue<br/>Has Job?}
-        CheckCalcQueue -->|Yes| CheckCalcLock{Lock Available?}
-        CheckCalcLock -->|Yes| ExecCalc[Execute Calculate Job]
-        CheckCalcLock -->|No| SkipCalc[Skip - Will retry]
-        ExecCalc --> CheckValveQueue
-        SkipCalc --> CheckValveQueue
-        CheckCalcQueue -->|No| CheckValveQueue
-        
-        CheckValveQueue{Valve Queue<br/>Has Job?} -->|Yes| CheckValveLock{Lock Available?}
-        CheckValveLock -->|Yes| ExecValve[Execute Valve Job]
-        CheckValveLock -->|No| SkipValve[Skip - Will retry]
-        ExecValve --> Sleep
-        SkipValve --> Sleep
-        CheckValveQueue -->|No| Sleep[Sleep 15s]
-        Sleep --> Start
-    end
+    FilterOverheated --> CheckMode{Calculation<br/>Mode?}
     
-    Q1 --> CheckCalcQueue
-    Q2 --> CheckValveQueue
-    Q3 -.-> SafetyJob[Safety Check Job]
+    CheckMode -->|Slider| CalcSlider[min + slider × max - min]
+    CheckMode -->|Average| CalcAverage[sum targets / count]
     
-    style Start fill:#e1f5ff
-    style ExecCalc fill:#ffe1e1
-    style ExecValve fill:#ffe1e1
-    style SafetyJob fill:#ffcccc
+    CalcSlider --> Round[Round to 0.5°C]
+    CalcAverage --> Round
+    
+    Round --> Clamp[Clamp to min/max temp]
+    Clamp --> CheckThreshold{Change ≥<br/>threshold?}
+    
+    CheckThreshold -->|No| End
+    CheckThreshold -->|Yes| UpdateRedis[Write new target to Redis]
+    UpdateRedis --> PublishMQTT[Publish to MQTT if enabled]
+    PublishMQTT --> QueueValve[Queue valve update job]
+    QueueValve --> End
 ```
+
+### GoLang Implementation Sketch
+
+```go
+type ZoneState struct {
+    ID                string
+    CurrentTemp       float64
+    TargetTemp        float64
+    Satisfaction      string // "underheated", "satisfied", "overheated"
+    Enabled           bool
+}
+
+type MainConfig struct {
+    UseAverageMode     bool
+    SliderPosition     float64 // 0.0 to 1.0
+    MinTemp            float64
+    MaxTemp            float64
+    ChangeThreshold    float64
+}
+
+func calculateMainTargetTemp(zones []ZoneState, config MainConfig, currentTarget float64) (float64, bool) {
+    // Filter active zones
+    var activeZones []ZoneState
+    for _, z := range zones {
+        if z.Enabled && z.Satisfaction != "overheated" {
+            activeZones = append(activeZones, z)
+        }
+    }
+    
+    if len(activeZones) == 0 {
+        return 0, false
+    }
+    
+    var rawTarget float64
+    
+    if config.UseAverageMode {
+        // Average mode
+        sum := 0.0
+        for _, z := range activeZones {
+            sum += z.TargetTemp
+        }
+        rawTarget = sum / float64(len(activeZones))
+    } else {
+        // Slider mode
+        targets := make([]float64, len(activeZones))
+        for i, z := range activeZones {
+            targets[i] = z.TargetTemp
+        }
+        minTarget := min(targets...)
+        maxTarget := max(targets...)
+        rawTarget = minTarget + config.SliderPosition*(maxTarget-minTarget)
+    }
+    
+    // Round to 0.5°C
+    rounded := math.Round(rawTarget*2) / 2
+    
+    // Clamp
+    clamped := math.Max(config.MinTemp, math.Min(config.MaxTemp, rounded))
+    
+    // Check threshold
+    if math.Abs(clamped-currentTarget) < config.ChangeThreshold {
+        return 0, false
+    }
+    
+    return clamped, true
+}
+```
+
+---
+
+## Frontend Container Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Container (TypeScript)"
+        subgraph "Web Server"
+            Express[Express.js Server :8099]
+            StaticFiles[Static File Serving]
+            APIRoutes[API Routes]
+            WebSocket[WebSocket Server]
+        end
+        
+        subgraph "React Application"
+            App[App Component]
+            ZoneList[Zone List View]
+            ZoneEdit[Zone Editor]
+            Stats[Statistics Dashboard]
+            Config[Configuration Panel]
+            MQTT[MQTT Settings]
+        end
+        
+        subgraph "State Management"
+            Redux[Redux Store]
+            RedisAPI[Redis API Client]
+            WSClient[WebSocket Client]
+        end
+        
+        subgraph "UI Components"
+            Charts[Chart.js Graphs]
+            Forms[Form Components]
+            Tables[Data Tables]
+            Modal[Modal Dialogs]
+        end
+    end
+    
+    Express --> StaticFiles
+    Express --> APIRoutes
+    Express --> WebSocket
+    
+    App --> ZoneList
+    App --> ZoneEdit
+    App --> Stats
+    App --> Config
+    App --> MQTT
+    
+    ZoneList --> Redux
+    ZoneEdit --> Redux
+    Stats --> Redux
+    Config --> Redux
+    
+    Redux --> RedisAPI
+    RedisAPI --> Express
+    
+    WebSocket --> WSClient
+    WSClient --> Redux
+    
+    Charts --> Stats
+    Forms --> Config
+    Tables --> ZoneList
+    Modal --> ZoneEdit
+```
+
+### TypeScript Stack
+
+**Framework:** React with TypeScript
+- Component-based architecture
+- Type-safe props and state
+- Hooks for state management
+- React Router for navigation
+
+**State Management:** Redux Toolkit
+- Centralized state store
+- Type-safe actions and reducers
+- RTK Query for API calls
+- DevTools for debugging
+
+**UI Library:** Material-UI or Tailwind CSS
+- Pre-built components
+- Responsive design system
+- Dark/light themes
+- Accessibility (a11y)
+
+**Charts:** Chart.js or Recharts
+- Real-time temperature graphs
+- Historical data visualization
+- Valve activity timelines
+- Zone satisfaction states
+
+**Build Tools:**
+- Vite for fast development
+- TypeScript compiler
+- ESLint for linting
+- Prettier for formatting
+
+**WebSocket:** Socket.IO
+- Real-time updates from Redis Pub/Sub
+- Bidirectional communication
+- Auto-reconnection
+- Event-based messaging
+
+### UI Features
+
+**Zone Management:**
+- Add/edit/delete zones
+- Drag-and-drop ordering
+- Bulk operations
+- Import/export configuration
+
+**Statistics Dashboard:**
+- Real-time temperature graphs
+- Valve activity timeline
+- Satisfaction state pie charts
+- Historical trends
+
+**Configuration:**
+- Main climate settings
+- Algorithm parameters
+- MQTT broker configuration
+- Safety thresholds
+
+**MQTT Settings:**
+- Enable/disable integration
+- Broker connection settings
+- Topic prefix configuration
+- Entity name patterns
+- Test connection button
 
 ---
 
 ## Redis Data Schema
 
-```mermaid
-erDiagram
-    CONFIG ||--o{ ZONES : manages
-    CONFIG {
-        string main_climate_entity_id
-        float main_target_all_zones_satisfied
-        boolean use_average_mode
-        int min_valves_open
-        float main_min_temp
-        float main_max_temp
-        float main_change_threshold
-        int valve_actuation_delay
-        int coordinator_interval
-        float satisfaction_eps
-    }
-    
-    ZONES ||--|{ ZONE_STATE : contains
-    ZONES {
-        array zone_ids
-    }
-    
-    ZONE_STATE {
-        string id
-        string name
-        string temperature_sensor_entity_id
-        string valve_switch_entity_id
-        float current_temperature
-        float target_temperature
-        string state
-        string satisfaction
-        string valve_state
-        float opening_offset
-        float closing_offset
-        boolean is_fallback_valve
-        int priority
-        timestamp last_updated
-    }
-    
-    MAIN_CLIMATE {
-        string entity_id
-        float current_temperature
-        float target_temperature
-        float outdoor_temperature
-        string hvac_mode
-        string hvac_action
-        boolean multizone_enabled
-        timestamp last_updated
-    }
-    
-    JOB_QUEUES ||--|{ QUEUE_ENTRY : contains
-    JOB_QUEUES {
-        string queue_calculate_main_temp
-        string queue_update_valves
-    }
-    
-    QUEUE_ENTRY {
-        string job_id
-        string job_type
-        timestamp enqueued_at
-        json parameters
-    }
-    
-    VALVE_LOCKS {
-        string valve_id
-        timestamp locked_until
-        string reason
-    }
-    
-    JOB_LOCKS {
-        string job_type
-        timestamp acquired_at
-        string acquired_by
-    }
-    
-    JOB_STATUS {
-        string job_id
-        string job_type
-        string status
-        timestamp started_at
-        timestamp completed_at
-        int duration_ms
-        int actions_taken
-        json result
-    }
-```
+```yaml
+# Global Configuration
+multizone:config:
+  main_climate_entity_id: "climate.main_thermostat"
+  main_target_all_zones_satisfied: 0.5
+  use_average_mode: false
+  min_valves_open: 1
+  main_min_temp: 18.0
+  main_max_temp: 30.0
+  main_change_threshold: 0.5
+  valve_actuation_delay: 120
+  coordinator_interval: 15
+  satisfaction_eps: 0.0
 
-### Redis Key Structure
+# MQTT Configuration
+multizone:mqtt:
+  enabled: true
+  broker: "homeassistant.local"
+  port: 1883
+  username: "mqtt_user"
+  password: "encrypted_password"
+  discovery_prefix: "homeassistant"
+  topic_prefix: "multizone"
 
-```mermaid
-graph TD
-    Root[ha_multizone: prefix] --> Config[config<br/>Hash]
-    Root --> Zones[zones<br/>List]
-    Root --> MainClimate[main_climate<br/>Hash]
-    
-    Root --> ZoneHash[zone:zone_id<br/>Hash - per zone]
-    
-    Root --> QueueCalc[queue:calculate_main_temp<br/>List FIFO]
-    Root --> QueueValve[queue:update_valves<br/>List FIFO]
-    
-    Root --> ValveLock[valvelock:valve_id<br/>String + TTL]
-    Root --> JobLock[joblock:job_type<br/>String + TTL]
-    Root --> JobStat[jobstatus:job_id<br/>Hash + TTL]
-    
-    style Config fill:#e1ffe1
-    style Zones fill:#e1ffe1
-    style MainClimate fill:#e1ffe1
-    style ZoneHash fill:#ffe1f5
-    style QueueCalc fill:#fff4e1
-    style QueueValve fill:#fff4e1
-    style ValveLock fill:#ffcccc
-    style JobLock fill:#ffcccc
-    style JobStat fill:#e1f5ff
+# Zone List
+multizone:zones:
+  - bedroom
+  - living_room
+  - kitchen
+  - bathroom
+
+# Per-Zone State (example: bedroom)
+multizone:zone:bedroom:
+  id: "bedroom"
+  name: "Bedroom"
+  enabled: true
+  temperature_sensor_entity_id: "sensor.bedroom_temperature"
+  valve_switch_entity_id: "switch.bedroom_valve"
+  current_temperature: 21.5
+  target_temperature: 22.0
+  satisfaction: "underheated"
+  valve_state: "open"
+  temperature_rising: true
+  temperature_falling: false
+  target_change_threshold: 0.1
+  opening_offset: 0.3
+  closing_offset: 0.3
+  is_fallback_valve: true
+  priority: 10
+  last_updated: "2026-01-15T17:30:00Z"
+
+# Main Climate State
+multizone:main_climate:
+  entity_id: "climate.main_thermostat"
+  current_temperature: 20.8
+  target_temperature: 21.0
+  outdoor_temperature: 5.0
+  hvac_mode: "MANUAL"
+  hvac_action: "HEATING"
+  multizone_enabled: true
+  last_updated: "2026-01-15T17:30:00Z"
+
+# Job Queues (Lists)
+multizone:queue:calculate_main_temp:
+  - {job_id: "calc_1", timestamp: "2026-01-15T17:30:00Z", params: {...}}
+  - {job_id: "calc_2", timestamp: "2026-01-15T17:30:01Z", params: {...}}
+
+multizone:queue:update_valves:
+  - {job_id: "valves_1", timestamp: "2026-01-15T17:30:00Z", params: {...}}
+
+# Valve Locks (with TTL)
+multizone:valvelock:switch.bedroom_valve:
+  locked_until: "2026-01-15T17:32:00Z"
+  reason: "opened_at_17:30:00"
+
+# Job Locks (with TTL)
+multizone:joblock:calculate_main_temp:
+  acquired_at: "2026-01-15T17:30:00Z"
+  acquired_by: "worker_1"
+
+# Job Status (with TTL)
+multizone:jobstatus:calc_1:
+  job_id: "calc_1"
+  job_type: "calculate_main_temp"
+  status: "completed"
+  started_at: "2026-01-15T17:30:00Z"
+  completed_at: "2026-01-15T17:30:02Z"
+  duration_ms: 2341
+  result: {main_target: 21.0}
+
+# Historical Metrics (Time Series)
+multizone:metrics:temperature:{zone_id}:
+  - [timestamp, value]
+  - [1705339800, 21.5]
+  - [1705339815, 21.6]
+
+multizone:metrics:valve_activity:{zone_id}:
+  - [timestamp, action, state]
+  - [1705339800, "open", "open"]
+  - [1705339920, "close", "closed"]
 ```
 
 ---
 
-## Automation Flow
+## Container Deployment
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+
+services:
+  logic:
+    image: ghcr.io/chester929/multizone-logic:latest
+    container_name: multizone-logic
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - LOG_LEVEL=info
+      - HTTP_PORT=8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: ghcr.io/chester929/multizone-frontend:latest
+    container_name: multizone-frontend
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - WEB_PORT=8099
+      - LOGIC_API_URL=http://logic:8080
+    ports:
+      - "8099:8099"
+    depends_on:
+      - redis
+      - logic
+
+  mqtt-middleware:
+    image: ghcr.io/chester929/multizone-mqtt:latest
+    container_name: multizone-mqtt
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - MQTT_BROKER=${MQTT_BROKER:-homeassistant.local}
+      - MQTT_PORT=${MQTT_PORT:-1883}
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - MQTT_DISCOVERY_PREFIX=homeassistant
+      - MQTT_TOPIC_PREFIX=multizone
+    depends_on:
+      - redis
+      - logic
+    # Only start if MQTT is enabled
+    profiles:
+      - mqtt
+
+  redis:
+    image: redis:7-alpine
+    container_name: multizone-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    # Optional - can use external Redis instead
+    profiles:
+      - bundled
+
+volumes:
+  redis-data:
+```
+
+### Home Assistant Add-on Configuration
+
+```yaml
+# config.yaml for HA Add-on
+name: "Multizone Climate"
+version: "2.0.0"
+slug: multizone_climate
+description: "Advanced multi-zone HVAC management with GoLang backend and TypeScript frontend"
+arch:
+  - amd64
+  - armv7
+  - aarch64
+url: "https://github.com/Chester929/ha_multizone_climate"
+startup: services
+boot: auto
+
+options:
+  redis:
+    mode: bundled  # or 'external'
+    host: localhost
+    port: 6379
+    password: ""
+  mqtt:
+    enabled: true
+    broker: homeassistant.local
+    port: 1883
+    username: ""
+    password: ""
+  logic:
+    log_level: info
+  frontend:
+    port: 8099
+
+schema:
+  redis:
+    mode: list(bundled|external)
+    host: str
+    port: port
+    password: password?
+  mqtt:
+    enabled: bool
+    broker: str
+    port: port
+    username: str?
+    password: password?
+  logic:
+    log_level: list(debug|info|warning|error)
+  frontend:
+    port: port
+
+ports:
+  8099/tcp: 8099  # Frontend WebUI
+  8080/tcp: 8080  # Logic API (optional)
+
+ports_description:
+  8099/tcp: "Frontend Web Interface"
+  8080/tcp: "Logic Container API (for debugging)"
+
+services:
+  - mqtt:want
+
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:thermostat-box
+```
+
+---
+
+## Safety and Algorithms
+
+### Safety Valve Check Algorithm
 
 ```mermaid
 flowchart TD
-    subgraph "Trigger Events"
-        T1[Zone Temperature Changed]
-        T2[Zone Target Changed]
-        T3[Zone State Changed]
-        T4[Main Climate Temperature Changed]
-        T5[Timer: Every valve_delay/2]
-    end
+    Start([Safety Check Triggered]) --> GetValves[Get All Valve States from Redis]
+    GetValves --> CountOpen{Count<br/>Open Valves}
+    CountOpen --> CheckMin{Open ≥<br/>Minimum?}
     
-    subgraph "Update Main Target Automation"
-        T1 --> Check1{Debounce<br/>~5 seconds}
-        T2 --> Check1
-        T3 --> Check1
-        T4 --> Check1
-        Check1 --> Enqueue1[Enqueue Job:<br/>calculate_main_temp]
-        Check1 --> Enqueue2[Enqueue Job:<br/>update_valves]
-    end
+    CheckMin -->|Yes| End([End: System Safe])
+    CheckMin -->|No| LogWarning[Log Warning: Minimum Violation]
+    LogWarning --> GetFallback[Get Fallback Valve List]
+    GetFallback --> CalcShortage[Calculate Shortage]
+    CalcShortage --> ForceOpen[Force Open Fallback Valves]
+    ForceOpen --> UpdateRedis[Update Redis with New States]
+    UpdateRedis --> PublishMQTT[Publish to MQTT]
+    PublishMQTT --> LogRecovery[Log Recovery Action]
+    LogRecovery --> End
+```
+
+### Valve Lock Mechanism
+
+Prevents valve chattering by enforcing cooldown periods.
+
+```go
+// Check if valve is locked
+func isValveLocked(valveID string) (bool, error) {
+    lockKey := fmt.Sprintf("multizone:valvelock:%s", valveID)
     
-    subgraph "Safety Check Automation"
-        T5 --> DirectExec[Direct Execute:<br/>safety_valve_check]
-    end
+    result, err := redisClient.Get(ctx, lockKey).Result()
+    if err == redis.Nil {
+        return false, nil // No lock exists
+    }
+    if err != nil {
+        return false, err
+    }
     
-    subgraph "Job Queues in Redis"
-        Enqueue1 --> CalcQueue[(Calculate Queue)]
-        Enqueue2 --> ValveQueue[(Valve Queue)]
-    end
+    lockedUntil, err := time.Parse(time.RFC3339, result)
+    if err != nil {
+        return false, err
+    }
     
-    subgraph "Coordinator Execution"
-        CalcQueue --> Coord[Coordinator<br/>15s interval]
-        ValveQueue --> Coord
-        DirectExec --> SafetyJob[Safety Job]
-        
-        Coord --> DequeueCalc[Dequeue & Execute<br/>Calculate Main Temp]
-        Coord --> DequeueValve[Dequeue & Execute<br/>Update Valves]
-    end
+    return time.Now().Before(lockedUntil), nil
+}
+
+// Set valve lock
+func setValveLock(valveID string, duration time.Duration) error {
+    lockKey := fmt.Sprintf("multizone:valvelock:%s", valveID)
+    lockedUntil := time.Now().Add(duration).Format(time.RFC3339)
     
-    subgraph "Actions"
-        DequeueCalc --> UpdateMain[Update Main Climate<br/>Target Temperature]
-        DequeueValve --> UpdateValves[Open/Close<br/>Zone Valves]
-        SafetyJob --> ForceOpen[Force Open<br/>Fallback Valves]
-    end
+    return redisClient.Set(ctx, lockKey, lockedUntil, duration).Err()
+}
+
+// Actuate valve with lock
+func actuateValve(valveID string, action string) error {
+    // Check if locked
+    locked, err := isValveLocked(valveID)
+    if err != nil {
+        return err
+    }
+    if locked {
+        return fmt.Errorf("valve %s is locked", valveID)
+    }
     
-    style T1 fill:#e1f5ff
-    style T2 fill:#e1f5ff
-    style T3 fill:#e1f5ff
-    style T4 fill:#e1f5ff
-    style T5 fill:#ffcccc
-    style CalcQueue fill:#fff4e1
-    style ValveQueue fill:#fff4e1
-    style UpdateMain fill:#ffe1e1
-    style UpdateValves fill:#ffe1e1
-    style ForceOpen fill:#ffcccc
+    // Perform action via MQTT or API
+    err = publishValveCommand(valveID, action)
+    if err != nil {
+        return err
+    }
+    
+    // Set lock
+    return setValveLock(valveID, valveActuationDelay)
+}
 ```
 
 ---
 
-## Coordinator Process Flow
+## Development Roadmap
+
+### Phase 1: Foundation (Weeks 1-4)
+- [ ] GoLang logic container setup
+- [ ] Redis integration and schema
+- [ ] Core algorithms implementation
+- [ ] HTTP API endpoints
+- [ ] Job queue system
+- [ ] Unit tests for algorithms
+
+### Phase 2: Frontend (Weeks 5-8)
+- [ ] TypeScript React application
+- [ ] Zone management UI
+- [ ] Configuration interface
+- [ ] Real-time dashboard
+- [ ] WebSocket integration
+- [ ] E2E tests
+
+### Phase 3: MQTT Integration (Weeks 9-12)
+- [ ] MQTT middleware container
+- [ ] Redis to MQTT bridge
+- [ ] Home Assistant discovery
+- [ ] Entity state synchronization
+- [ ] Integration tests
+
+### Phase 4: Add-on Packaging (Weeks 13-14)
+- [ ] Docker Compose setup
+- [ ] Home Assistant add-on config
+- [ ] Multi-architecture builds
+- [ ] Documentation
+- [ ] Installation guide
+
+### Phase 5: Testing & Polish (Weeks 15-16)
+- [ ] Comprehensive testing
+- [ ] Performance optimization
+- [ ] Security audit
+- [ ] User documentation
+- [ ] Release v2.0.0
+
+## Technology Comparison
+
+### Why GoLang over Python?
+
+| Aspect | GoLang | Python |
+|--------|--------|--------|
+| **Performance** | 10-100x faster | Slower, interpreted |
+| **Memory** | 20-50 MB | 100-200 MB |
+| **Concurrency** | Native goroutines | GIL limitations |
+| **Deployment** | Single binary | Dependencies needed |
+| **Type Safety** | Strong, compile-time | Dynamic, runtime |
+| **Learning Curve** | Moderate | Easy |
+
+**Decision:** GoLang for performance-critical logic, Python for HA integration only.
+
+### Why TypeScript over Python for Frontend?
+
+| Aspect | TypeScript | Python |
+|--------|------------|--------|
+| **Web UI** | Native (React/Vue) | Requires framework |
+| **Type Safety** | Excellent | Good (with types) |
+| **Ecosystem** | Massive (npm) | Smaller for web |
+| **Performance** | Fast (compiled) | Slower |
+| **Real-time** | WebSocket native | Requires library |
+
+**Decision:** TypeScript for modern, type-safe, real-time web UI.
+
+## Integration Options
+
+### Choosing the Right Integration
 
 ```mermaid
 flowchart TD
-    Start([Coordinator Timer<br/>Every 15s]) --> FetchRedis[Fetch Latest Data<br/>from Redis]
+    Start{What's your<br/>setup?}
     
-    FetchRedis --> UpdateSensors[Update Sensor Entities<br/>Only if changed]
+    Start -->|Have existing<br/>sensors/switches| HasEntities{Want to use<br/>existing entities?}
+    Start -->|Starting fresh| Fresh{Prefer MQTT or<br/>native HA?}
     
-    UpdateSensors --> UpdateStates[Update Entity States<br/>Only if changed]
+    HasEntities -->|Yes| ServiceAPI[HA Service API<br/>✅ Recommended]
+    HasEntities -->|No, create new| MQTT1[MQTT Integration]
     
-    UpdateStates --> CheckCalcQ{Calculate Queue<br/>Has Jobs?}
+    Fresh -->|MQTT familiar| MQTT2[MQTT Integration]
+    Fresh -->|Native HA| Python[Python Integration]
     
-    CheckCalcQ -->|No| CheckValveQ
-    CheckCalcQ -->|Yes| TryCalcLock[Try Acquire Lock:<br/>calculate_main_temp]
+    ServiceAPI --> Benefits1[✅ Uses existing entities<br/>✅ No MQTT broker<br/>✅ WebSocket real-time<br/>⚠️ Requires token]
     
-    TryCalcLock --> CalcLocked{Lock<br/>Acquired?}
-    CalcLocked -->|No| CheckValveQ
-    CalcLocked -->|Yes| DequeueCalc[Dequeue Job from<br/>Calculate Queue]
+    MQTT1 --> Benefits2[✅ Auto-discovery<br/>✅ Standard pattern<br/>✅ Event-driven<br/>⚠️ Needs MQTT broker]
+    MQTT2 --> Benefits2
     
-    DequeueCalc --> ExecCalc[Execute:<br/>Calculate Main Target]
-    
-    ExecCalc --> ReleaseCalcLock[Release Lock:<br/>calculate_main_temp]
-    
-    ReleaseCalcLock --> CheckValveQ{Valve Queue<br/>Has Jobs?}
-    
-    CheckValveQ -->|No| Wait
-    CheckValveQ -->|Yes| TryValveLock[Try Acquire Lock:<br/>update_valves]
-    
-    TryValveLock --> ValveLocked{Lock<br/>Acquired?}
-    ValveLocked -->|No| Wait
-    ValveLocked -->|Yes| DequeueValve[Dequeue Job from<br/>Valve Queue]
-    
-    DequeueValve --> ExecValve[Execute:<br/>Update Valves]
-    
-    ExecValve --> ReleaseValveLock[Release Lock:<br/>update_valves]
-    
-    ReleaseValveLock --> Wait[Wait for Next Cycle<br/>15 seconds]
-    
-    Wait --> Start
-    
-    style Start fill:#e1f5ff
-    style FetchRedis fill:#e1ffe1
-    style ExecCalc fill:#ffe1e1
-    style ExecValve fill:#ffe1e1
+    Python --> Benefits3[✅ Native integration<br/>✅ No external deps<br/>✅ Tight HA coupling<br/>⚠️ More complex]
 ```
 
----
+### Integration Comparison Matrix
 
-## Timing Sequences
+| Criteria | HA Service API | MQTT | Python Integration |
+|----------|---------------|------|-------------------|
+| **Use existing HA entities** | ✅ Yes | ❌ No (creates new) | ❌ No (creates new) |
+| **Setup complexity** | ⭐⭐ Medium | ⭐⭐⭐ Higher | ⭐ Low (auto-install) |
+| **External dependencies** | Access token | MQTT broker | None |
+| **Real-time updates** | WebSocket | MQTT Pub/Sub | Native HA events |
+| **Latency** | Low (~50ms) | Very low (~10ms) | Lowest (native) |
+| **Entity discovery** | Manual mapping | Auto-discovery | Auto-discovery |
+| **Service calls** | Direct REST | MQTT command topics | Native HA services |
+| **Debugging** | HTTP logs | MQTT spy tools | HA logs |
+| **Use case** | Existing setup | MQTT infrastructure | Native integration |
 
-### Scenario 1: Zone Temperature Drop
+### Decision Guide
 
-```mermaid
-sequenceDiagram
-    participant Sensor as Temperature Sensor
-    participant Zone as Zone Entity
-    participant Auto as Automation
-    participant Queue as Job Queue
-    participant Coord as Coordinator (15s)
-    participant CalcJob as Calculate Job
-    participant ValveJob as Valve Job
-    participant Main as Main Climate
-    participant Valve as Valve Switch
-    
-    Note over Sensor: T=0s
-    Sensor->>Zone: Bedroom temp: 20.4°C
-    Zone->>Zone: Check: 20.4 < 20.7 → Underheated
-    Zone->>Auto: Temperature changed event
-    
-    Note over Auto: Debounce ~5s
-    Auto->>Queue: Enqueue: calculate_main_temp
-    Auto->>Queue: Enqueue: update_valves
-    
-    Note over Coord: T=15s: Coordinator wakes
-    Coord->>Queue: Dequeue calculate_main_temp
-    Coord->>CalcJob: Execute
-    CalcJob->>CalcJob: Calculate new main target
-    CalcJob->>Main: Set target: 21.0°C
-    Main-->>CalcJob: Updated
-    
-    Coord->>Queue: Dequeue update_valves
-    Coord->>ValveJob: Execute
-    ValveJob->>ValveJob: Bedroom underheated → open valve
-    ValveJob->>Valve: Open Bedroom valve
-    Valve-->>ValveJob: Opening...
-    ValveJob->>ValveJob: Set valve lock until T=135s
-    
-    Note over Valve: T=15s to T=135s: Physical valve opening
-    Note over Valve: T=135s: Valve fully open, lock expires
+**Choose HA Service API if:**
+- ✅ You already have temperature sensors and switches configured in HA
+- ✅ You don't want to install/manage an MQTT broker
+- ✅ You prefer direct API integration
+- ✅ You want to keep existing entity IDs
+
+**Choose MQTT if:**
+- ✅ You already run MQTT for other integrations (zigbee2mqtt, etc.)
+- ✅ You want auto-discovery of new entities
+- ✅ You prefer event-driven architecture
+- ✅ You're comfortable with MQTT tools and debugging
+
+**Choose Python Integration if:**
+- ✅ You want the most native HA experience
+- ✅ You prefer zero external dependencies
+- ✅ You're okay with Python-based integration
+- ✅ You want automatic setup
+
+### Example Configurations
+
+**HA Service API Configuration:**
+```yaml
+homeassistant_api:
+  enabled: true
+  url: "http://homeassistant.local:8123"
+  access_token: "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  websocket_enabled: true
+  
+zones:
+  - name: "Bedroom"
+    temperature_sensor: "sensor.bedroom_temperature"  # Existing entity
+    valve_switch: "switch.bedroom_valve"              # Existing entity
+  - name: "Living Room"
+    temperature_sensor: "sensor.living_room_temp"     # Existing entity
+    valve_switch: "switch.living_room_valve"          # Existing entity
 ```
 
-### Scenario 2: Multiple Rapid Changes
-
-```mermaid
-sequenceDiagram
-    participant Z1 as Bedroom Zone
-    participant Z2 as Kitchen Zone
-    participant Z3 as Living Zone
-    participant Queue as Job Queue
-    participant Coord as Coordinator
-    
-    Note over Z1,Coord: T=0s
-    Z1->>Queue: Bedroom target changed
-    Queue->>Queue: Enqueue: calc_temp_1, update_valves_1
-    
-    Note over Z1,Coord: T=5s
-    Z2->>Queue: Kitchen target changed
-    Queue->>Queue: Enqueue: calc_temp_2, update_valves_2
-    
-    Note over Z1,Coord: T=10s
-    Z3->>Queue: Living target changed
-    Queue->>Queue: Enqueue: calc_temp_3, update_valves_3
-    
-    Note over Z1,Coord: Queue: [calc_1, valve_1, calc_2, valve_2, calc_3, valve_3]
-    
-    Note over Coord: T=15s: Coordinator cycle 1
-    Coord->>Queue: Dequeue calc_temp_1
-    Coord->>Coord: Execute calc_temp_1
-    Coord->>Queue: Dequeue update_valves_1
-    Coord->>Coord: Execute update_valves_1
-    
-    Note over Coord: T=30s: Coordinator cycle 2
-    Coord->>Queue: Dequeue calc_temp_2
-    Coord->>Coord: Execute calc_temp_2
-    Coord->>Queue: Dequeue update_valves_2
-    Coord->>Coord: Execute update_valves_2
-    
-    Note over Coord: T=45s: Coordinator cycle 3
-    Coord->>Queue: Dequeue calc_temp_3
-    Coord->>Coord: Execute calc_temp_3
-    Coord->>Queue: Dequeue update_valves_3
-    Coord->>Coord: Execute update_valves_3
-    
-    Note over Queue: T=60s: All jobs processed
+**MQTT Configuration:**
+```yaml
+mqtt:
+  enabled: true
+  broker: "homeassistant.local"
+  port: 1883
+  username: "mqtt_user"
+  password: "mqtt_password"
+  
+# New entities will be created automatically:
+# - climate.multizone_bedroom
+# - sensor.multizone_bedroom_temperature
+# - binary_sensor.multizone_bedroom_valve
+# - etc.
 ```
-
----
-
-## Open-First-Then-Close Sequence
-
-```mermaid
-sequenceDiagram
-    participant System as Update Valves
-    participant VB as Bedroom Valve (Open)
-    participant VK as Kitchen Valve (Closed)
-    participant Lock as Valve Locks
-    participant Redis as Redis
-    
-    Note over System: Initial: Bedroom OPEN (only 1 valve)<br/>min_valves_open = 1<br/>valve_actuation_delay = 120s
-    
-    Note over System: T=0s: Algorithm detects swap needed
-    System->>System: Bedroom: satisfied → should close
-    System->>System: Kitchen: underheated → should open
-    System->>System: Currently at minimum (1 valve)
-    System->>System: Need swap: OPEN FIRST
-    
-    Note over VK: T=0s: Open Kitchen valve FIRST
-    System->>VK: Command: OPEN
-    VK->>VK: Motor starts opening...
-    System->>Lock: Set lock: Kitchen until T=120s
-    Lock->>Redis: Store: valvelock:kitchen_valve
-    
-    Note over VB,VK: T=0s to T=120s: BOTH valves open (safe)
-    Note over VK: Physical valve opening (120 seconds)
-    
-    Note over VB: T=120s: Lock expires, now safe to close Bedroom
-    System->>VB: Command: CLOSE
-    VB->>VB: Motor starts closing...
-    System->>Lock: Set lock: Bedroom until T=240s
-    Lock->>Redis: Store: valvelock:bedroom_valve
-    
-    Note over VB: T=120s to T=240s: Bedroom closing
-    Note over VK: Kitchen remains OPEN
-    
-    Note over System: T=240s: Final state
-    Note over VK: Kitchen: OPEN (minimum maintained)
-    Note over VB: Bedroom: CLOSED
-    Note over System: ✓ Minimum flow maintained throughout
-```
-
-### Safety Guarantee Diagram
-
-```mermaid
-graph TD
-    subgraph "Time: T=0s"
-        T0State["Valves Open: 1<br/>Bedroom: OPEN<br/>Kitchen: CLOSED"]
-    end
-    
-    subgraph "Time: T=0s Action"
-        T0Action["OPEN Kitchen valve<br/>Set lock: 120s"]
-    end
-    
-    subgraph "Time: T=0-120s"
-        T1State["Valves Open: 2<br/>Bedroom: OPEN<br/>Kitchen: OPENING<br/>✓ SAFE: Above minimum"]
-    end
-    
-    subgraph "Time: T=120s Action"
-        T2Action["CLOSE Bedroom valve<br/>Set lock: 120s"]
-    end
-    
-    subgraph "Time: T=120-240s"
-        T3State["Valves Open: 1+<br/>Bedroom: CLOSING<br/>Kitchen: OPEN<br/>✓ SAFE: At minimum"]
-    end
-    
-    subgraph "Time: T=240s Final"
-        T4State["Valves Open: 1<br/>Bedroom: CLOSED<br/>Kitchen: OPEN<br/>✓ SAFE: At minimum"]
-    end
-    
-    T0State --> T0Action
-    T0Action --> T1State
-    T1State --> T2Action
-    T2Action --> T3State
-    T3State --> T4State
-    
-    style T1State fill:#ccffcc
-    style T3State fill:#ccffcc
-    style T4State fill:#ccffcc
-```
-
----
-
-## System Component Integration
-
-```mermaid
-graph TB
-    subgraph "External Systems"
-        HVAC[HVAC Unit<br/>De Dietrich Strateo]
-        Cloud[Cloud API<br/>Remeha]
-        HeatPipes[Heating Pipes<br/>Water Circulation]
-    end
-    
-    subgraph "Home Assistant Core"
-        MainThermo[Main Thermostat Entity<br/>remeha_home_by_chester]
-        TempSensors[Temperature Sensors<br/>Per Room]
-        ValveSwitches[Valve Switches<br/>Per Room]
-    end
-    
-    subgraph "Multizone Integration Components"
-        subgraph "Config Entry"
-            MainDevice[Main Climate Device]
-            ZoneDevices[Zone Climate Devices]
-            ConfigFlow[Configuration Flow]
-        end
-        
-        subgraph "Core Components"
-            CoreLogic[Core Logic<br/>Redis Client]
-            Coordinator[Data Update Coordinator<br/>15s interval]
-        end
-        
-        subgraph "Background Services"
-            CalcService[Calculate Main Target Service]
-            ValveService[Update Valves Service]
-            SafetyService[Safety Check Service]
-        end
-        
-        subgraph "Automations"
-            TempAuto[Temperature Change Automation]
-            SafetyAuto[Safety Timer Automation]
-        end
-        
-        subgraph "Entities"
-            ClimatePlatform[Climate Platform<br/>Zone Entities]
-            SensorPlatform[Sensor Platform<br/>State Sensors]
-            SwitchPlatform[Switch Platform<br/>Multizone Enable]
-        end
-    end
-    
-    subgraph "Redis Database"
-        GlobalConfig[Global Config]
-        ZoneStates[Zone States]
-        Queues[Job Queues]
-        Locks[Locks & Status]
-    end
-    
-    subgraph "Frontend UI"
-        IntegrationUI[Integration Setup UI]
-        ConfigEditor[Config Editor]
-        ZoneManager[Zone Manager]
-        Cards[Lovelace Cards]
-        Dashboards[Dashboards]
-    end
-    
-    %% External connections
-    HVAC <-->|WiFi/Cloud| Cloud
-    Cloud <-->|API| MainThermo
-    HVAC -->|Heat Water| HeatPipes
-    HeatPipes -->|Heat Rooms| TempSensors
-    
-    %% HA Core connections
-    MainThermo -->|Read/Write| MainDevice
-    TempSensors -->|Read Temps| ZoneDevices
-    ValveSwitches <-->|Control| ValveService
-    
-    %% Integration internal
-    ConfigFlow -->|Setup| MainDevice
-    ConfigFlow -->|Setup| ZoneDevices
-    
-    TempSensors -->|State Change| TempAuto
-    ZoneDevices -->|Target Change| TempAuto
-    TempAuto -->|Enqueue Jobs| Queues
-    
-    SafetyAuto -->|Trigger| SafetyService
-    
-    Coordinator -->|Dequeue| Queues
-    Coordinator -->|Execute| CalcService
-    Coordinator -->|Execute| ValveService
-    Coordinator -->|Update| SensorPlatform
-    
-    CalcService -->|Use| CoreLogic
-    ValveService -->|Use| CoreLogic
-    SafetyService -->|Use| CoreLogic
-    
-    CoreLogic <-->|Store/Retrieve| GlobalConfig
-    CoreLogic <-->|Store/Retrieve| ZoneStates
-    CoreLogic <-->|Store/Retrieve| Locks
-    
-    MainDevice -->|Expose| ClimatePlatform
-    ZoneDevices -->|Expose| ClimatePlatform
-    
-    SwitchPlatform -->|Enable/Disable| Coordinator
-    
-    %% Frontend connections
-    IntegrationUI -->|Configure| ConfigFlow
-    ConfigEditor <-->|Read/Write| GlobalConfig
-    ZoneManager <-->|Manage| ZoneStates
-    Cards -->|Display| ClimatePlatform
-    Cards -->|Display| SensorPlatform
-    Dashboards -->|Compose| Cards
-    
-    style HVAC fill:#ffcccc
-    style MainThermo fill:#e1f5ff
-    style CoreLogic fill:#fff4e1
-    style Coordinator fill:#ffe1f5
-    style GlobalConfig fill:#e1ffe1
-    style Cards fill:#e1e1ff
-```
-
-### Data Flow: User Changes Zone Target
-
-```mermaid
-flowchart LR
-    User[User] -->|Sets Target| Card[Lovelace Climate Card]
-    Card -->|Update| ZoneEntity[Zone Climate Entity]
-    ZoneEntity -->|Write| Redis[(Redis: Zone State)]
-    ZoneEntity -->|Fire Event| Auto[Temperature Change Automation]
-    Auto -->|Enqueue| Queue[(Job Queue)]
-    Queue -->|Wait| Coord[Coordinator: Next Cycle]
-    Coord -->|Dequeue & Execute| CalcJob[Calculate Main Target Job]
-    CalcJob -->|Read| Redis
-    CalcJob -->|Calculate| NewTarget[New Main Target]
-    NewTarget -->|Update| MainClimate[Main Climate Entity]
-    MainClimate -->|API Call| Cloud[Cloud API]
-    Cloud -->|Control| HVAC[HVAC Unit]
-    
-    Coord -->|Dequeue & Execute| ValveJob[Update Valves Job]
-    ValveJob -->|Read| Redis
-    ValveJob -->|Determine Actions| Actions[Valve Actions]
-    Actions -->|Open/Close| ValveSwitches[Valve Switches]
-    ValveSwitches -->|Physical Control| Valves[Physical Valves]
-    
-    style User fill:#e1f5ff
-    style Redis fill:#e1ffe1
-    style HVAC fill:#ffcccc
-    style Valves fill:#ffe1e1
-```
-
----
-
-## Priority Sorting Example
-
-```mermaid
-graph TD
-    subgraph "Zones with Priority"
-        ZA["Zone A: Bedroom<br/>Priority: 10<br/>Target: 21°C, Current: 19°C<br/>Deficit: 2.0°C<br/>Sort Key: (10, 2.0)"]
-        
-        ZB["Zone B: Kitchen<br/>Priority: 5<br/>Target: 22°C, Current: 19°C<br/>Deficit: 3.0°C<br/>Sort Key: (5, 3.0)"]
-        
-        ZC["Zone C: Living<br/>Priority: 0<br/>Target: 20°C, Current: 16°C<br/>Deficit: 4.0°C<br/>Sort Key: (0, 4.0)"]
-        
-        ZD["Zone D: Bathroom<br/>Priority: 0<br/>Target: 23°C, Current: 22°C<br/>Deficit: 1.0°C<br/>Sort Key: (0, 1.0)"]
-    end
-    
-    subgraph "Sorted Order (High to Low Priority)"
-        S1["1st: Zone A<br/>Highest user priority"]
-        S2["2nd: Zone B<br/>Second user priority"]
-        S3["3rd: Zone C<br/>Default priority, largest deficit"]
-        S4["4th: Zone D<br/>Default priority, smallest deficit"]
-    end
-    
-    ZA --> S1
-    ZB --> S2
-    ZC --> S3
-    ZD --> S4
-    
-    S1 --> Action1[Managed First]
-    S2 --> Action2[Managed Second]
-    S3 --> Action3[Managed Third]
-    S4 --> Action4[Managed Last]
-    
-    style S1 fill:#ffcccc
-    style S2 fill:#ffddcc
-    style S3 fill:#ffeecc
-    style S4 fill:#ffffcc
-```
-
----
-
-## Configuration Flow
-
-```mermaid
-flowchart TD
-    Start([User Adds Integration]) --> Welcome[Welcome Screen<br/>Multizone Climate]
-    
-    Welcome --> RedisConfig[Configure Redis Connection]
-    RedisConfig -->|Input| RedisFields["Host: localhost<br/>Port: 6379<br/>Password: optional<br/>DB: 0<br/>Prefix: ha_multizone"]
-    
-    RedisFields --> TestRedis{Test Redis<br/>Connection}
-    TestRedis -->|Failed| RedisError[Show Error]
-    RedisError --> RedisConfig
-    TestRedis -->|Success| MainClimateConfig
-    
-    MainClimateConfig[Select Main Climate Entity] -->|Entity Selector| MainEntity[climate.main_thermostat]
-    
-    MainEntity --> AutoConfig[Configure Automation Settings]
-    AutoConfig -->|Input| AutoFields["Mode: Slider/Average<br/>Slider: 50% default<br/>Min Valves: 1<br/>Min Temp: 18°C<br/>Max Temp: 30°C<br/>Change Threshold: 0.5°C<br/>Valve Delay: 120s<br/>Satisfaction Eps: 0.0°C"]
-    
-    AutoFields --> Validate{Validate<br/>Config}
-    Validate -->|Invalid| ShowValidation[Show Validation Errors]
-    ShowValidation --> AutoConfig
-    
-    Validate -->|Valid| CreateEntry[Create Config Entry]
-    CreateEntry --> SetupDevice[Setup Main Climate Device]
-    SetupDevice --> InitRedis[Initialize Redis Schema]
-    InitRedis --> Complete[Setup Complete]
-    
-    Complete --> ShowOptions[Show Options:<br/>Add Climate Zone]
-    
-    style Start fill:#e1f5ff
-    style Complete fill:#ccffcc
-    style RedisError fill:#ffcccc
-    style ShowValidation fill:#ffcccc
-```
-
-### Add Zone Flow
-
-```mermaid
-flowchart TD
-    Start([User Adds Zone]) --> ZoneForm[Zone Configuration Form]
-    
-    ZoneForm -->|Input| ZoneFields["Name: Bedroom<br/>Temp Sensor: sensor.bedroom_temp<br/>Valve Switch: switch.bedroom_valve<br/>Target Threshold: 0.1°C<br/>Opening Offset: 0.3°C<br/>Closing Offset: 0.3°C<br/>Is Fallback: false<br/>Priority: 0"]
-    
-    ZoneFields --> ValidateZone{Validate<br/>Entities Exist?}
-    ValidateZone -->|No| EntityError[Show Error:<br/>Entity not found]
-    EntityError --> ZoneForm
-    
-    ValidateZone -->|Yes| CheckFallback{Check Fallback<br/>Requirements}
-    CheckFallback -->|Need more fallbacks| WarnFallback[Warn: Configure as fallback?]
-    WarnFallback --> ZoneForm
-    
-    CheckFallback -->|OK| CreateZone[Create Zone Device]
-    CreateZone --> StoreRedis[Store Zone in Redis]
-    StoreRedis --> CreateEntity[Create Climate Entity]
-    CreateEntity --> InitialState[Set Initial State: OFF]
-    InitialState --> ZoneComplete[Zone Added]
-    
-    ZoneComplete --> EnableOption[User can now:<br/>Turn zone ON<br/>Set target temp<br/>Enable multizone]
-    
-    style Start fill:#e1f5ff
-    style ZoneComplete fill:#ccffcc
-    style EntityError fill:#ffcccc
-    style WarnFallback fill:#ffffcc
-```
-
----
-
-## Valve Lock Mechanism
-
-```mermaid
-sequenceDiagram
-    participant Algo as Update Valves Algorithm
-    participant Redis as Redis
-    participant Valve as Physical Valve
-    
-    Note over Algo: T=0s: Need to open Bedroom valve
-    
-    Algo->>Redis: Check: Is bedroom_valve locked?
-    Redis-->>Algo: No lock found
-    
-    Algo->>Valve: Command: OPEN
-    Valve->>Valve: Motor activates...
-    
-    Algo->>Redis: Set lock: bedroom_valve<br/>locked_until = T+120s<br/>TTL = 120s
-    Redis-->>Algo: Lock set
-    
-    Note over Valve: T=0 to T=120s: Physical valve opening
-    
-    Note over Algo: T=30s: Algorithm runs again
-    Algo->>Redis: Check: Is bedroom_valve locked?
-    Redis-->>Algo: Locked until T=120s
-    Algo->>Algo: Skip valve action (locked)
-    
-    Note over Algo: T=90s: Algorithm runs again
-    Algo->>Redis: Check: Is bedroom_valve locked?
-    Redis-->>Algo: Locked until T=120s
-    Algo->>Algo: Skip valve action (locked)
-    
-    Note over Valve: T=120s: Valve fully open
-    Note over Redis: T=120s: Lock TTL expires automatically
-    
-    Note over Algo: T=125s: Algorithm runs again
-    Algo->>Redis: Check: Is bedroom_valve locked?
-    Redis-->>Algo: No lock (expired)
-    Algo->>Algo: Valve can be actuated again
-```
-
----
-
-## Multizone Enable/Disable States
-
-```mermaid
-stateDiagram-v2
-    [*] --> Disabled: Initial Setup
-    
-    Disabled --> CheckZones: User enables multizone
-    CheckZones --> Disabled: No zones configured
-    CheckZones --> CheckActive: Zones exist
-    
-    CheckActive --> Disabled: No zones turned ON
-    CheckActive --> Enabled: At least 1 zone ON
-    
-    Enabled --> Operating: Automations active
-    Operating --> Enabled: Continue operation
-    
-    Enabled --> Disabled: User disables OR<br/>All zones turned OFF
-    
-    note right of Disabled
-        - Multizone switch: OFF
-        - Each zone manages own valve
-        - Safety check still runs
-        - Main climate: manual control
-    end note
-    
-    note right of Enabled
-        - Multizone switch: ON
-        - Coordinated valve management
-        - Main target auto-calculated
-        - Automations active
-    end note
-    
-    note right of Operating
-        - Coordinator runs every 15s
-        - Jobs process from queues
-        - Valves coordinated
-        - Main target updated
-    end note
-```
-
----
-
-## Error Handling and Recovery
-
-```mermaid
-flowchart TD
-    Start([Job Execution]) --> TryAcquire{Try Acquire<br/>Job Lock}
-    
-    TryAcquire -->|Timeout/Failed| Requeue1[Re-enqueue Job]
-    Requeue1 --> End1([Will Retry Next Cycle])
-    
-    TryAcquire -->|Success| Execute[Execute Job Logic]
-    
-    Execute --> TryRedis{Redis<br/>Connection OK?}
-    TryRedis -->|No| LogError1[Log Error: Redis unavailable]
-    LogError1 --> ReleaseLock1[Release Job Lock]
-    ReleaseLock1 --> Requeue2[Re-enqueue Job]
-    Requeue2 --> End2([Will Retry Next Cycle])
-    
-    TryRedis -->|Yes| TryHA{HA API<br/>Call OK?}
-    TryHA -->|No| LogError2[Log Error: HA API failed]
-    LogError2 --> CheckRetry{Retry<br/>Count < 3?}
-    CheckRetry -->|Yes| ReleaseLock2[Release Job Lock]
-    ReleaseLock2 --> Requeue3[Re-enqueue Job]
-    Requeue3 --> End3([Will Retry Next Cycle])
-    CheckRetry -->|No| LogCritical[Log Critical: Job failed]
-    LogCritical --> UpdateStatus1[Update Job Status: FAILED]
-    UpdateStatus1 --> ReleaseLock3[Release Job Lock]
-    ReleaseLock3 --> End4([Job Abandoned])
-    
-    TryHA -->|Success| UpdateStatus2[Update Job Status: COMPLETED]
-    UpdateStatus2 --> ReleaseLock4[Release Job Lock]
-    ReleaseLock4 --> End5([Job Success])
-    
-    style LogError1 fill:#ffcccc
-    style LogError2 fill:#ffcccc
-    style LogCritical fill:#ff9999
-    style End5 fill:#ccffcc
-```
-
----
 
 ## Summary
 
-This document provides comprehensive visual representations of:
+This v2.0 architecture provides:
 
-1. **System Architecture** - Overall component structure and data flow
-2. **Core Algorithms** - Calculate main target, update valves, safety checks
-3. **State Machines** - Zone satisfaction state transitions with hysteresis
-4. **Process Management** - Job queuing, locking, and coordination
-5. **Data Schema** - Redis storage structure and key patterns
-6. **Automation Flows** - Event triggers and job execution
-7. **Timing Sequences** - Real-time behavior and valve coordination
-8. **Safety Mechanisms** - Open-first-then-close, valve locks, minimum valves
-9. **Configuration** - Setup flows and user interfaces
-10. **Error Handling** - Recovery and retry mechanisms
-
-All diagrams use Mermaid syntax for easy rendering in GitHub, documentation tools, and Markdown viewers.
+✅ **Separation of Concerns:** Each container has a clear purpose
+✅ **Performance:** GoLang for speed, TypeScript for UX
+✅ **Flexibility:** Three integration options (HA API, MQTT, Python)
+✅ **Use Existing Entities:** HA Service API leverages your current setup
+✅ **Scalability:** Containers can scale independently
+✅ **Maintainability:** Type-safe code in both Go and TS
+✅ **Observability:** Comprehensive metrics and logging
+✅ **User Experience:** Modern web UI with real-time updates
 
 ---
 
-## Viewing These Diagrams
-
-### GitHub
-These diagrams render automatically when viewing this file on GitHub.
-
-### Automated PDF Generation
-When DIAGRAMS.md is updated in the `master` or `dev` branches, a PDF is automatically generated via GitHub Actions:
-- **Download**: Go to the **Actions** tab, open the **Generate Diagrams PDF** workflow, and download the latest artifact
-- **Manual Trigger**: You can also manually trigger the workflow from the Actions tab
-- **Auto-commit**: The generated PDF is automatically committed back to the repository
-
-### VS Code
-Install the "Markdown Preview Mermaid Support" extension.
-
-### Command Line
-Use `mermaid-cli` to generate images locally:
-```bash
-npm install -g @mermaid-js/mermaid-cli
-mmdc -i DIAGRAMS.md -o diagrams.pdf -t dark -b transparent
-```
-
-### Online
-Copy any diagram to [Mermaid Live Editor](https://mermaid.live/) for interactive viewing and editing.
+**For more information, see [README.md](README.md)**
