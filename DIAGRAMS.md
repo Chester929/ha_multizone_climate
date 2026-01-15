@@ -672,19 +672,21 @@ flowchart TD
         T1[Zone Temperature Changed]
         T2[Zone Target Changed]
         T3[Zone State Changed]
-        T4[Timer: Every valve_delay/2]
+        T4[Main Climate Temperature Changed]
+        T5[Timer: Every valve_delay/2]
     end
     
     subgraph "Update Main Target Automation"
         T1 --> Check1{Debounce<br/>~5 seconds}
         T2 --> Check1
         T3 --> Check1
+        T4 --> Check1
         Check1 --> Enqueue1[Enqueue Job:<br/>calculate_main_temp]
         Check1 --> Enqueue2[Enqueue Job:<br/>update_valves]
     end
     
     subgraph "Safety Check Automation"
-        T4 --> DirectExec[Direct Execute:<br/>safety_valve_check]
+        T5 --> DirectExec[Direct Execute:<br/>safety_valve_check]
     end
     
     subgraph "Job Queues in Redis"
@@ -710,7 +712,8 @@ flowchart TD
     style T1 fill:#e1f5ff
     style T2 fill:#e1f5ff
     style T3 fill:#e1f5ff
-    style T4 fill:#ffcccc
+    style T4 fill:#e1f5ff
+    style T5 fill:#ffcccc
     style CalcQueue fill:#fff4e1
     style ValveQueue fill:#fff4e1
     style UpdateMain fill:#ffe1e1
