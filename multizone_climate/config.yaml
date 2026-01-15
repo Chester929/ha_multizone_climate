@@ -1,0 +1,41 @@
+name: "Multizone Climate"
+version: "1.0.0"
+slug: multizone_climate
+description: "Advanced HVAC zone management with Redis-backed automation for multi-room heating and cooling control"
+arch:
+  - amd64
+  - armv7
+  - aarch64
+  - i386
+url: "https://github.com/Chester929/ha_multizone_climate"
+startup: services
+boot: auto
+init: false
+services:
+  - mqtt:want
+
+options:
+  redis_host: "localhost"
+  redis_port: 6379
+  redis_password: ""
+  redis_db: 0
+  redis_key_prefix: "ha_multizone"
+  install_integration: true
+  log_level: "info"
+
+schema:
+  redis_host: str
+  redis_port: port
+  redis_password: password?
+  redis_db: int(0,15)
+  redis_key_prefix: str
+  install_integration: bool
+  log_level: list(debug|info|warning|error)
+
+ports:
+  6379/tcp: 6379
+
+ports_description:
+  6379/tcp: "Redis port (internal use)"
+
+image: "ghcr.io/chester929/ha_multizone_climate-{arch}"

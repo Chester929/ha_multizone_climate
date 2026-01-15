@@ -4,3 +4,27 @@ package.json
 *.log
 .DS_Store
 diagrams.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Placeholder files (replace with actual images)
+*.placeholder

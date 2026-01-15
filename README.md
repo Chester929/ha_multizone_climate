@@ -1,6 +1,35 @@
 # ha_multizone_climate
 Home Assistant Automation integration to better manage heat zones.
 
+## Installation Methods
+
+This project can be installed in **two ways**:
+
+### Method 1: Home Assistant Add-on (Recommended)
+The add-on bundles everything you need, including a Redis server.
+
+1. Add this repository to your Home Assistant add-on store
+2. Install the "Multizone Climate" add-on
+3. Configure and start the add-on
+4. The integration will be automatically installed
+5. Restart Home Assistant
+6. Configure through Settings → Devices & Services
+
+**Benefits:** Redis included, one-click installation, automatic setup
+
+### Method 2: HACS Custom Integration
+Install just the integration if you already have Redis running.
+
+1. Install via HACS or manually copy `custom_components/multizone_climate`
+2. Ensure Redis 4.5+ is running and accessible
+3. Restart Home Assistant
+4. Add integration through Settings → Devices & Services
+5. Configure Redis connection and settings
+
+**Benefits:** Use existing Redis, more control over configuration
+
+See the [Add-on Documentation](multizone_climate/DOCS.md) for detailed installation instructions.
+
 ## Documentation
 
 For comprehensive system diagrams and algorithm documentation, see [DIAGRAMS.md](DIAGRAMS.md).
