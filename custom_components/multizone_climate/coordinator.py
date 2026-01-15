@@ -85,11 +85,17 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             # Fetch main climate state from Redis
             main_climate = await self.redis_client.get_main_climate_state()
             
+            # Fetch job queue sizes
+            calculate_queue_size = await self.redis_client.get_queue_size("calculate_main_temp")
+            valve_queue_size = await self.redis_client.get_queue_size("update_valves")
+            
             # Store in cached data for entity access
             self._cached_data = {
                 "config": config,
                 "zones": zones,
                 "main_climate": main_climate,
+                "calculate_queue_size": calculate_queue_size,
+                "valve_queue_size": valve_queue_size,
             }
             
             # Dequeue and execute calculate_main_temp job if available

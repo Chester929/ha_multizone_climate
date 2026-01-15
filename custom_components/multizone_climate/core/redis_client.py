@@ -443,6 +443,30 @@ class RedisClient:
             _LOGGER.error("Failed to dequeue job %s: %s", job_type, err)
             return None
 
+    async def get_queue_size(self, job_type: str) -> int:
+        """
+        Get the number of jobs in a queue.
+
+        Args:
+            job_type: Job type queue to check
+
+        Returns:
+            int: Number of jobs in queue
+
+        Redis Key: {prefix}:queue:{job_type}
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return 0
+
+        try:
+            queue_key = self._get_key(f"queue:{job_type}")
+            size = await self._redis.llen(queue_key)
+            return size if size else 0
+        except Exception as err:
+            _LOGGER.error("Failed to get queue size for %s: %s", job_type, err)
+            return 0
+
     async def acquire_job_lock(self, job_type: str, timeout: int = 60) -> bool:
         """
         Try to acquire a job lock.
