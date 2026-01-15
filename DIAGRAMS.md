@@ -101,6 +101,7 @@ graph TB
     
     %% Data flow connections
     Sensors -->|Read Temps| ZoneDevices
+    ZoneDevices -->|Calculate Satisfaction| ZoneState
     ZoneDevices -->|Target Change| UpdateTempAuto
     UpdateTempAuto -->|Enqueue Job| CalcQueue
     UpdateTempAuto -->|Enqueue Job| ValveQueue
@@ -245,7 +246,7 @@ flowchart TD
     
     CheckMultizone -->|No| IndividualMode[Individual Zone Mode<br/>Each zone manages own valve]
     IndividualMode --> IndivLoop{For each<br/>active zone}
-    IndivLoop --> CheckSat[Check satisfaction state]
+    IndivLoop --> CheckSat[Read satisfaction state<br/>from zone entity]
     CheckSat --> IndivAction{State?}
     IndivAction -->|Underheated| OpenValve[Add to valves_to_open]
     IndivAction -->|Overheated| CloseValve[Add to valves_to_close]
@@ -255,9 +256,9 @@ flowchart TD
     MaintainValve --> IndivLoop
     IndivLoop -->|Done| SafetyCheck
     
-    CheckMultizone -->|Yes| DetermineSat[Determine Satisfaction State<br/>for each zone]
+    CheckMultizone -->|Yes| ReadStates[Read Zone States from Redis<br/>satisfaction pre-calculated by entities]
     
-    DetermineSat --> CalcSort[Calculate Sort Key<br/>priority, deficit]
+    ReadStates --> CalcSort[Calculate Sort Key<br/>priority, deficit]
     
     CalcSort --> SortZones[Sort Zones by Priority<br/>user priority first, then deficit]
     
