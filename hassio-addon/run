@@ -1,0 +1,45 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Starting Multizone Climate Add-on..."
+
+# Get configuration options
+REDIS_MODE=$(bashio::config 'redis.mode')
+REDIS_PASSWORD=$(bashio::config 'redis.password')
+MQTT_ENABLED=$(bashio::config 'mqtt.enabled')
+MQTT_BROKER=$(bashio::config 'mqtt.broker')
+MQTT_PORT=$(bashio::config 'mqtt.port')
+MQTT_USERNAME=$(bashio::config 'mqtt.username')
+MQTT_PASSWORD=$(bashio::config 'mqtt.password')
+LOG_LEVEL=$(bashio::config 'logic.log_level')
+FRONTEND_PORT=$(bashio::config 'frontend.port')
+
+bashio::log.info "Redis mode: ${REDIS_MODE}"
+bashio::log.info "MQTT enabled: ${MQTT_ENABLED}"
+bashio::log.info "Log level: ${LOG_LEVEL}"
+
+# Export environment variables
+export REDIS_PASSWORD="${REDIS_PASSWORD}"
+export LOG_LEVEL="${LOG_LEVEL}"
+export WEB_PORT="${FRONTEND_PORT}"
+
+if [ "${MQTT_ENABLED}" = "true" ]; then
+    export MQTT_BROKER="${MQTT_BROKER}"
+    export MQTT_PORT="${MQTT_PORT}"
+    export MQTT_USERNAME="${MQTT_USERNAME}"
+    export MQTT_PASSWORD="${MQTT_PASSWORD}"
+fi
+
+# Start services using docker-compose
+bashio::log.info "Starting containers..."
+cd /app
+
+if [ "${MQTT_ENABLED}" = "true" ]; then
+    docker-compose --profile mqtt up -d
+else
+    docker-compose up -d
+fi
+
+bashio::log.info "Multizone Climate Add-on started successfully"
+
+# Keep the script running
+tail -f /dev/null
