@@ -1,0 +1,34 @@
+version: '3.8'
+
+# This file is used for local development
+# Use: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  logic:
+    build:
+      context: ./logic
+      dockerfile: Dockerfile
+    volumes:
+      - ./logic:/app
+    environment:
+      - LOG_LEVEL=debug
+    command: go run cmd/server/main.go
+
+  frontend:
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    environment:
+      - LOG_LEVEL=debug
+    command: npm run dev
+
+  mqtt-middleware:
+    volumes:
+      - ./mqtt-middleware/src:/app/src
+    environment:
+      - LOG_LEVEL=debug
+
+  redis:
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes

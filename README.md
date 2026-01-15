@@ -7,9 +7,39 @@ This project provides a complete solution for managing multiple heating/cooling 
 
 ## Documentation
 
-For comprehensive system diagrams and architecture documentation, see [DIAGRAMS.md](DIAGRAMS.md).
+- **[DIAGRAMS.md](DIAGRAMS.md)**: Comprehensive system diagrams and architecture documentation
+- **[IMPLEMENTATION.md](IMPLEMENTATION.md)**: Detailed implementation guide, API documentation, and deployment instructions
+- **PDF Diagrams**: Automatically generated from DIAGRAMS.md - available in [GitHub Actions artifacts](../../actions/workflows/generate-diagrams-pdf.yml)
 
-A PDF version of the diagrams is automatically generated when DIAGRAMS.md is updated in the `master` or `dev` branches. You can download the latest version from the [GitHub Actions artifacts](../../actions/workflows/generate-diagrams-pdf.yml), or access it directly from the repository root as `diagrams.pdf` after generation.
+## Quick Start
+
+### Using Docker Compose (Local Development)
+
+```bash
+# Clone the repository
+git clone https://github.com/Chester929/ha_multizone_climate.git
+cd ha_multizone_climate
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Start the services
+make start
+# Or: docker-compose up -d
+
+# Access the frontend
+# Open http://localhost:8099 in your browser
+```
+
+### As a Home Assistant Add-on
+
+1. Add this repository to your Home Assistant add-on store
+2. Install the "Multizone Climate" add-on
+3. Configure and start the add-on
+4. Access through the sidebar or Web UI button
+
+For detailed instructions, see [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## The Problem
 

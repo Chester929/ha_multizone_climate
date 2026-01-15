@@ -1,6 +1,42 @@
 node_modules/
 package-lock.json
-package.json
 *.log
 .DS_Store
 diagrams.pdf
+
+# Environment files
+.env
+*.env.local
+
+# Build artifacts
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+*.test
+*.out
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Redis
+dump.rdb
+appendonly.aof
