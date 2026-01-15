@@ -51,22 +51,8 @@ class MultizoneClimateEntity(Entity):
         self.async_on_remove(
             self.coordinator.async_add_listener(self.async_write_ha_state)
         )
-        Run when entity is added to hass.
-        
-        Tasks:
-            - Register with coordinator
-            - Subscribe to updates
-        """
-        # TODO: Register coordinator listener
-        pass
 
     async def async_will_remove_from_hass(self) -> None:
-        """
-        Run when entity will be removed from hass.
-        
-        Tasks:
-            - Unregister from coordinator
-            - Clean up resources
-        """
-        # TODO: Unregister coordinator listener
+        """Run when entity will be removed from hass."""
+        # Cleanup handled by async_on_remove in async_added_to_hass
         pass

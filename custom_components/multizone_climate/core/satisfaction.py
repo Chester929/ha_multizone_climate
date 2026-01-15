@@ -209,6 +209,12 @@ class ZoneSatisfactionStateMachine:
             - Overcooled: temp < lower_bound (target - closing_offset)
             - Satisfied: between bounds with hysteresis
         """
+        # In cooling mode, the satisfaction thresholds are symmetric to heating
+        # satisfied_entry_cooling = target - satisfaction_eps (for undercooled -> satisfied while falling)
+        # satisfied_exit_cooling = target + satisfaction_eps (for overcooled -> satisfied while rising)
+        satisfied_entry_cooling = self.target_temperature - self.satisfaction_eps
+        satisfied_exit_cooling = self.target_temperature + self.satisfaction_eps
+        
         # Check if currently undercooled (above upper bound - needs cooling)
         if current_temperature > self.upper_bound:
             # If we're undercooled, stay undercooled until we reach target - eps while falling
@@ -216,7 +222,7 @@ class ZoneSatisfactionStateMachine:
                 # Transition to satisfied only when reaching target - eps while falling
                 if (
                     temp_direction == "falling"
-                    and current_temperature <= self.satisfied_exit_heating
+                    and current_temperature <= satisfied_entry_cooling
                 ):
                     return "satisfied"
                 return "undercooled"
@@ -231,7 +237,7 @@ class ZoneSatisfactionStateMachine:
                 # Transition to satisfied only when reaching target + eps while rising
                 if (
                     temp_direction == "rising"
-                    and current_temperature >= self.satisfied_entry_heating
+                    and current_temperature >= satisfied_exit_cooling
                 ):
                     return "satisfied"
                 return "overcooled"
@@ -246,7 +252,7 @@ class ZoneSatisfactionStateMachine:
                 # Must reach target - eps while falling to become satisfied
                 if (
                     temp_direction == "falling"
-                    and current_temperature <= self.satisfied_exit_heating
+                    and current_temperature <= satisfied_entry_cooling
                 ):
                     return "satisfied"
                 return "undercooled"
@@ -256,7 +262,7 @@ class ZoneSatisfactionStateMachine:
                 # Must reach target + eps while rising to become satisfied
                 if (
                     temp_direction == "rising"
-                    and current_temperature >= self.satisfied_entry_heating
+                    and current_temperature >= satisfied_exit_cooling
                 ):
                     return "satisfied"
                 return "overcooled"

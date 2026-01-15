@@ -206,16 +206,24 @@ class ValveController:
             
             satisfaction = zone.get("satisfaction", "unknown")
             
+            # Per README: Each zone manages its own valve based on satisfaction
+            # Satisfied zones should have valves OPEN to maintain temperature
             if hvac_state.upper() == "HEATING":
                 if satisfaction == "underheated":
                     actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
                 elif satisfaction == "overheated":
                     actions.append({"valve_id": valve_id, "action": "close", "delay": 0})
+                elif satisfaction == "satisfied":
+                    # Satisfied zones keep valves open to maintain temperature
+                    actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
             elif hvac_state.upper() == "COOLING":
                 if satisfaction == "undercooled":
                     actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
                 elif satisfaction == "overcooled":
                     actions.append({"valve_id": valve_id, "action": "close", "delay": 0})
+                elif satisfaction == "satisfied":
+                    # Satisfied zones keep valves open to maintain temperature
+                    actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
         
         return actions
 
