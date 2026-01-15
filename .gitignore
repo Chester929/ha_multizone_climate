@@ -4,3 +4,9 @@ package.json
 *.log
 .DS_Store
 diagrams.pdf
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
