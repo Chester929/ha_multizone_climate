@@ -86,9 +86,10 @@ def round_to_half_degree(temperature: float) -> float:
         22.3 -> 22.5
         22.2 -> 22.0
         21.75 -> 22.0
-        21.25 -> 21.0
+        21.25 -> 21.5
     """
-    # TODO: Implement rounding: round(temp * 2) / 2
+    # TODO: Implement rounding using round half up: math.floor(temp * 2 + 0.5) / 2
+    # This ensures consistent rounding behavior (0.25 always rounds to 0.5)
     return 0.0
 
 
