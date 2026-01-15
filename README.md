@@ -49,6 +49,7 @@ This project uses a modern microservices architecture with the following contain
 │  │  • Algorithms    │  │  • Statistics    │  │  • Config    │ │
 │  │  • Valve Control │  │  • Metrics       │  │  • Queues    │ │
 │  │  • Safety Checks │  │  • Configuration │  │              │ │
+│  │  • HA API Client │  │  • MQTT Settings │  │              │ │
 │  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘ │
 │           │                     │                    │         │
 │           └─────────────────────┴────────────────────┘         │
@@ -59,25 +60,31 @@ This project uses a modern microservices architecture with the following contain
 │                          └──────┬──────┘                       │
 │                                 │                              │
 │           ┌─────────────────────┴────────────────────┐         │
-│           │                                          │         │
-│  ┌────────▼─────────┐                     ┌──────────▼──────┐ │
-│  │  MQTT Middleware │                     │  Auto-Install   │ │
-│  │   (Optional)     │                     │   Integration   │ │
-│  │                  │                     │   (HA Custom)   │ │
-│  │  Redis ←→ MQTT   │                     └─────────────────┘ │
-│  └────────┬─────────┘                                         │
-│           │                                                   │
-└───────────┼───────────────────────────────────────────────────┘
-            │
-            │ MQTT over TCP
-            ▼
+│           │                     │                    │         │
+│  ┌────────▼─────────┐  ┌────────▼─────────┐  ┌──────▼──────┐ │
+│  │  MQTT Middleware │  │  HA API Client   │  │ Auto-Install│ │
+│  │   (Optional)     │  │   (Optional)     │  │ Integration │ │
+│  │                  │  │                  │  │ (Optional)  │ │
+│  │  Redis ←→ MQTT   │  │  Redis ←→ HA API │  └─────────────┘ │
+│  └────────┬─────────┘  └────────┬─────────┘                  │
+│           │                     │                             │
+└───────────┼─────────────────────┼─────────────────────────────┘
+            │                     │
+            │ MQTT over TCP       │ REST API + WebSocket
+            ▼                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Home Assistant                             │
 │                                                                 │
+│  Via MQTT (creates new entities):                              │
 │  • Climate Entities (zones + main)                             │
 │  • Sensor Entities (temperatures, states)                      │
 │  • Binary Sensor Entities (valve states)                       │
 │  • Switch Entities (zone enable/disable)                       │
+│                                                                 │
+│  Via Service API (uses existing entities):                     │
+│  • Existing temperature sensors (read via state API)           │
+│  • Existing switch entities (control via service calls)        │
+│  • Existing climate entity (main thermostat)                   │
 │  • Automations & Scripts                                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -100,7 +107,9 @@ This project uses a modern microservices architecture with the following contain
 
 **Communication:**
 - Reads/writes state to Redis
-- Publishes events to MQTT (if enabled)
+- Publishes events to MQTT (if MQTT enabled)
+- Calls Home Assistant REST API and WebSocket (if HA API enabled)
+- Uses existing HA entities (sensors, switches) for control
 
 #### 2. Frontend WebApp (TypeScript)
 **Purpose:** User interface for management and monitoring
@@ -110,6 +119,8 @@ This project uses a modern microservices architecture with the following contain
 - Thermostat configuration
 - Real-time statistics and metrics
 - Configuration interface for MQTT integration
+- Configuration interface for HA Service API integration
+- Entity mapping (existing HA entities to zones)
 - Visual dashboards for monitoring
 - Historical data visualization
 
@@ -125,6 +136,8 @@ This project uses a modern microservices architecture with the following contain
 - Reads/writes configuration to Redis
 - Displays real-time data from Redis
 - Manages MQTT settings
+- Manages HA Service API settings
+- Configures entity ID mappings
 
 #### 3. Redis Container (Optional)
 **Purpose:** Data persistence and message queuing
@@ -165,14 +178,44 @@ This project uses a modern microservices architecture with the following contain
 - `multizone/` prefix for state/command topics
 - JSON payloads for entity states
 
-#### 5. Auto-Install Integration (Python)
-**Purpose:** Optional HA custom integration for direct API access
+#### 5. Home Assistant Service API Integration (Optional)
+**Purpose:** Direct integration using Home Assistant's REST API and WebSocket
 
-**Alternative to MQTT:**
+**Functionality:**
+- Logic container connects directly to Home Assistant API
+- Uses existing HA entities (sensors, switches) - no new entities created
+- Calls HA services to control valves and read sensors
+- Bidirectional real-time updates via WebSocket
+- No MQTT broker required
+
+**Enabled when:** User configures HA API integration in frontend
+
+**Uses Existing HA Entities:**
+- Reads from existing temperature sensor entities
+- Controls existing switch entities (valves)
+- Monitors existing climate entity (main thermostat)
+- No discovery needed - user maps existing entities in configuration
+
+**Configuration:**
+- Home Assistant URL and access token
+- Entity ID mapping (zone name → sensor/switch entity IDs)
+- Polling interval and WebSocket settings
+
+**Benefits:**
+- No additional infrastructure (MQTT broker)
+- Uses entities already configured in HA
+- Direct service calls for instant control
+- Real-time state updates via WebSocket
+
+#### 6. Auto-Install Integration (Python)
+**Purpose:** Optional HA custom integration for advanced users
+
+**Alternative to Service API/MQTT:**
 - Direct Python integration installed automatically
+- Runs inside Home Assistant core
 - Communicates with Logic container via HTTP API or Redis
 - Provides same entities as MQTT approach
-- For users who prefer native integration over MQTT
+- For users who prefer native integration over external API calls
 
 ## Installation Methods
 
@@ -202,6 +245,95 @@ For advanced users running Home Assistant Container/Core:
    - `multizone-mqtt:latest` (if using MQTT)
 2. Configure via environment variables or config files
 3. Connect to MQTT broker or install custom integration
+
+## Integration Options
+
+The add-on offers **three flexible integration methods** with Home Assistant:
+
+### Option 1: Home Assistant Service API (Recommended for most users)
+**Best for:** Users who want to use their existing HA entities without MQTT infrastructure
+
+**How it works:**
+- Logic container connects directly to Home Assistant's REST API and WebSocket
+- Uses your existing temperature sensor and switch entities
+- No new entities created in HA
+- Real-time bidirectional communication
+- No MQTT broker required
+
+**Configuration:**
+- Provide HA URL and long-lived access token
+- Map existing entity IDs to zones in the frontend UI
+- Example: Zone "Bedroom" → `sensor.bedroom_temperature` + `switch.bedroom_valve`
+
+**Pros:**
+- ✅ Simple setup - no MQTT broker needed
+- ✅ Uses entities you already have
+- ✅ Direct service calls for instant control
+- ✅ Real-time state updates via WebSocket
+
+**Cons:**
+- ⚠️ Requires access token management
+- ⚠️ Slightly higher latency than Python integration
+
+### Option 2: MQTT Integration (zigbee2mqtt style)
+**Best for:** Users familiar with MQTT or running other MQTT-based integrations
+
+**How it works:**
+- MQTT middleware bridges Redis state to MQTT topics
+- Auto-discovers and creates new entities in Home Assistant
+- Uses `homeassistant/` discovery prefix
+- Bidirectional MQTT communication
+
+**Configuration:**
+- Configure MQTT broker connection in frontend
+- Entities automatically appear in HA
+- Example: `climate.multizone_bedroom`, `sensor.multizone_bedroom_temperature`
+
+**Pros:**
+- ✅ Standardized MQTT pattern (like zigbee2mqtt)
+- ✅ Auto-discovery - no manual entity creation
+- ✅ Works with existing MQTT infrastructure
+- ✅ Event-driven architecture
+
+**Cons:**
+- ⚠️ Requires MQTT broker (Mosquitto, etc.)
+- ⚠️ Creates new entities (not using existing ones)
+
+### Option 3: Python Custom Integration
+**Best for:** Advanced users who want native HA integration
+
+**How it works:**
+- Python integration installed automatically by add-on
+- Runs inside Home Assistant core
+- Communicates with Logic container via HTTP API or Redis
+- Creates native HA entities
+
+**Configuration:**
+- Auto-installed by add-on
+- Configured through HA integration UI
+- Provides same functionality as other methods
+
+**Pros:**
+- ✅ Native Home Assistant integration
+- ✅ No external dependencies
+- ✅ Tight integration with HA core
+
+**Cons:**
+- ⚠️ More complex to debug
+- ⚠️ Creates new entities (not using existing ones)
+
+### Comparison Table
+
+| Feature | HA Service API | MQTT | Python Integration |
+|---------|---------------|------|-------------------|
+| Uses existing HA entities | ✅ Yes | ❌ Creates new | ❌ Creates new |
+| Requires MQTT broker | ❌ No | ✅ Yes | ❌ No |
+| Setup complexity | ⭐⭐ Medium | ⭐⭐⭐ Higher | ⭐ Simple |
+| Real-time updates | ✅ WebSocket | ✅ MQTT | ✅ Native |
+| External dependencies | Access token | MQTT broker | None |
+| Integration style | API calls | Event-driven | Native |
+
+**Recommendation:** Start with **Home Assistant Service API** if you have existing sensors and switches configured in HA. Switch to **MQTT** if you want auto-discovery or already use MQTT. Use **Python Integration** for the most native experience.
 
 ## Project Goals
 
@@ -269,10 +401,11 @@ For advanced users running Home Assistant Container/Core:
   - Persistence options
   - Cluster support
 
-- **Integration:** MQTT or Python
+- **Integration:** Multiple options
   - MQTT: Industry standard, widely supported
-  - Python: Native Home Assistant integration
-  - Both: User choice based on preference
+  - HA Service API: Direct integration with existing entities
+  - Python: Native Home Assistant custom integration
+  - User choice based on preference and setup
 
 ## Configuration Example
 
@@ -285,13 +418,20 @@ redis:
   password: ""
   
 mqtt:
-  enabled: true
+  enabled: false  # Enable MQTT integration
   broker: homeassistant.local
   port: 1883
   username: mqtt_user
   password: mqtt_pass
   discovery_prefix: homeassistant
   topic_prefix: multizone
+
+homeassistant_api:
+  enabled: true  # Enable HA Service API integration
+  url: http://homeassistant.local:8123
+  access_token: "your_long_lived_access_token"
+  websocket_enabled: true
+  polling_interval: 5  # seconds
 
 logic:
   coordinator_interval: 15  # seconds
@@ -303,16 +443,30 @@ frontend:
   auth: basic  # or 'none'
   
 custom_integration:
-  auto_install: true
+  auto_install: false  # Not needed when using MQTT or HA API
 ```
 
 ### Frontend Configuration
 - Access web interface at `http://homeassistant.local:8099`
-- Configure zones (name, temp sensor, valve switch, offsets)
-- Set main climate entity and parameters
-- View real-time statistics and metrics
-- Enable/disable MQTT integration
-- Configure MQTT broker settings
+- **Zone Configuration:**
+  - Zone name and settings
+  - Map existing HA entities to zones:
+    - Temperature sensor entity ID (e.g., `sensor.bedroom_temperature`)
+    - Valve switch entity ID (e.g., `switch.bedroom_valve`)
+  - Or create new entities via MQTT (if MQTT enabled)
+  - Set temperature offsets and thresholds
+- **Main Climate:**
+  - Select existing main climate entity (e.g., `climate.main_thermostat`)
+  - Configure calculation parameters
+- **Integration Settings:**
+  - Choose integration method (MQTT, HA Service API, or Python)
+  - Configure MQTT broker (if MQTT selected)
+  - Configure HA API connection (if Service API selected)
+  - Test connection and validate entity access
+- **Statistics & Metrics:**
+  - View real-time temperature graphs
+  - Monitor valve activity
+  - Historical data analysis
 
 ## Development Roadmap
 
@@ -330,9 +484,12 @@ custom_integration:
 
 ### Phase 3: Integration
 - [ ] MQTT middleware container
-- [ ] Home Assistant entity discovery
+- [ ] Home Assistant entity discovery (MQTT)
 - [ ] Bidirectional MQTT communication
-- [ ] Auto-install custom integration (alternative to MQTT)
+- [ ] Home Assistant Service API client
+- [ ] WebSocket connection for real-time updates
+- [ ] Entity ID mapping and validation
+- [ ] Auto-install custom integration (alternative to MQTT/API)
 
 ### Phase 4: Enhancement
 - [ ] Statistics and historical data

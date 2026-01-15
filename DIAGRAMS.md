@@ -11,22 +11,25 @@ The system uses a modern microservices architecture with separate containers for
 **New to the system?** Start here:
 - [Containerized Architecture](#containerized-architecture) - Multi-container add-on structure
 - [Component Communication](#component-communication) - How containers interact
-- [MQTT Integration Pattern](#mqtt-integration-pattern) - zigbee2mqtt-style integration
+- [Integration Options](#integration-options) - MQTT vs HA Service API vs Python
 
 **Understanding the containers?** Check these:
 - [Logic Container (GoLang)](#logic-container-golang) - Core algorithms and business logic
 - [Frontend Container (TypeScript)](#frontend-container-typescript) - Web UI and management
 - [MQTT Middleware](#mqtt-middleware-container) - Redis to MQTT bridge
+- [HA Service API Client](#ha-service-api-client) - Direct HA integration
 
 **Data flow?** Essential diagrams:
 - [Redis Data Schema](#redis-data-schema) - Complete data model
 - [State Synchronization](#state-synchronization) - Redis ↔ MQTT ↔ Home Assistant
+- [HA API Communication Flow](#ha-api-communication-flow) - Service API integration
 - [Job Processing Flow](#job-processing-flow) - Background job execution
 
-**MQTT Topics?** Look at:
+**Integration patterns?** Look at:
 - [MQTT Topic Structure](#mqtt-topic-structure) - Topic hierarchy and payloads
-- [Entity Discovery](#entity-discovery) - Home Assistant auto-discovery
-- [Command/State Topics](#commandstate-topics) - Bidirectional communication
+- [Entity Discovery](#entity-discovery) - Home Assistant auto-discovery (MQTT)
+- [HA Service API Calls](#ha-service-api-calls) - REST API and WebSocket
+- [Entity ID Mapping](#entity-id-mapping) - Existing entity usage
 
 **Algorithms?** Core logic:
 - [Main Target Temperature Algorithm](#main-target-temperature-algorithm) - Temperature calculation
@@ -63,16 +66,27 @@ The system uses a modern microservices architecture with separate containers for
 18. [Command/State Topics](#commandstate-topics)
 19. [State Synchronization](#state-synchronization)
 
+### Home Assistant Service API Integration
+20. [HA Service API Integration](#ha-service-api-integration)
+21. [HA API Communication Flow](#ha-api-communication-flow)
+22. [HA Service API Calls](#ha-service-api-calls)
+23. [Entity ID Mapping](#entity-id-mapping)
+24. [WebSocket Real-time Updates](#websocket-real-time-updates)
+
 ### Data Management
-20. [Redis Data Schema](#redis-data-schema)
-21. [Data Flow Diagrams](#data-flow-diagrams)
-22. [Persistence Strategy](#persistence-strategy)
+25. [Redis Data Schema](#redis-data-schema)
+26. [Data Flow Diagrams](#data-flow-diagrams)
+27. [Persistence Strategy](#persistence-strategy)
 
 ### Safety & Timing
-23. [Open-First-Then-Close Sequence](#open-first-then-close-sequence)
-24. [Valve Lock Mechanism](#valve-lock-mechanism)
-25. [Timing Sequences](#timing-sequences)
-26. [Error Handling](#error-handling)
+28. [Open-First-Then-Close Sequence](#open-first-then-close-sequence)
+29. [Valve Lock Mechanism](#valve-lock-mechanism)
+30. [Timing Sequences](#timing-sequences)
+31. [Error Handling](#error-handling)
+
+### Integration Comparison
+32. [Integration Options](#integration-options)
+33. [Choosing the Right Integration](#choosing-the-right-integration)
 
 ---
 
@@ -357,6 +371,254 @@ homeassistant/
   "locked_until": "2026-01-15T17:32:00Z"
 }
 ```
+
+---
+
+## HA Service API Integration
+
+### Overview
+
+The Home Assistant Service API integration provides direct communication between the Logic Container and Home Assistant using REST API and WebSocket, allowing the add-on to use **existing Home Assistant entities** without creating new ones.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "Logic Container"
+        HAClient[HA API Client]
+        StateCache[Entity State Cache]
+        WSListener[WebSocket Listener]
+    end
+    
+    subgraph "Home Assistant"
+        RESTAPI[REST API :8123]
+        WSEndpoint[WebSocket API]
+        EntityRegistry[Entity Registry]
+        
+        subgraph "Existing Entities"
+            TempSensors[Temperature Sensors]
+            ValveSwitches[Valve Switches]
+            MainClimate[Main Climate Entity]
+        end
+    end
+    
+    HAClient -->|HTTP GET| RESTAPI
+    HAClient -->|HTTP POST service calls| RESTAPI
+    RESTAPI --> EntityRegistry
+    
+    WSListener -->|Subscribe| WSEndpoint
+    WSEndpoint -->|State changes| WSListener
+    
+    EntityRegistry --> TempSensors
+    EntityRegistry --> ValveSwitches
+    EntityRegistry --> MainClimate
+    
+    WSListener --> StateCache
+    HAClient --> StateCache
+```
+
+### HA API Communication Flow
+
+```mermaid
+sequenceDiagram
+    participant Logic as Logic Container
+    participant HAClient as HA API Client
+    participant WS as WebSocket
+    participant REST as HA REST API
+    participant Entity as HA Entity
+    
+    Note over Logic,Entity: Initialization
+    Logic->>HAClient: Initialize with URL + Token
+    HAClient->>REST: GET /api/
+    REST-->>HAClient: API info
+    HAClient->>WS: Connect WebSocket
+    WS-->>HAClient: Connected
+    HAClient->>WS: Subscribe to state_changed
+    
+    Note over Logic,Entity: Read Temperature
+    Logic->>HAClient: Get state of sensor.bedroom_temperature
+    HAClient->>REST: GET /api/states/sensor.bedroom_temperature
+    REST-->>HAClient: {"state": "21.5", "attributes": {...}}
+    HAClient-->>Logic: Temperature: 21.5°C
+    
+    Note over Logic,Entity: Real-time Update
+    Entity->>WS: State changed event
+    WS->>HAClient: state_changed: sensor.bedroom_temperature
+    HAClient->>StateCache: Update cached state
+    HAClient-->>Logic: Notify temperature change
+    Logic->>Logic: Recalculate and update valves
+    
+    Note over Logic,Entity: Control Valve
+    Logic->>HAClient: Turn on switch.bedroom_valve
+    HAClient->>REST: POST /api/services/switch/turn_on
+    REST->>Entity: Execute service
+    REST-->>HAClient: {"success": true}
+    HAClient-->>Logic: Valve opened successfully
+```
+
+### HA Service API Calls
+
+**Reading Entity States:**
+```go
+// Get current temperature
+func (c *HAClient) GetTemperature(entityID string) (float64, error) {
+    url := fmt.Sprintf("%s/api/states/%s", c.baseURL, entityID)
+    
+    req, _ := http.NewRequest("GET", url, nil)
+    req.Header.Set("Authorization", "Bearer "+c.token)
+    
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return 0, err
+    }
+    defer resp.Body.Close()
+    
+    var state struct {
+        State      string                 `json:"state"`
+        Attributes map[string]interface{} `json:"attributes"`
+    }
+    
+    json.NewDecoder(resp.Body).Decode(&state)
+    return strconv.ParseFloat(state.State, 64)
+}
+```
+
+**Calling Services:**
+```go
+// Turn on/off valve switch
+func (c *HAClient) SetValveState(entityID string, state bool) error {
+    service := "turn_on"
+    if !state {
+        service = "turn_off"
+    }
+    
+    url := fmt.Sprintf("%s/api/services/switch/%s", c.baseURL, service)
+    
+    data := map[string]interface{}{
+        "entity_id": entityID,
+    }
+    
+    body, _ := json.Marshal(data)
+    req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
+    req.Header.Set("Authorization", "Bearer "+c.token)
+    req.Header.Set("Content-Type", "application/json")
+    
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    
+    return nil
+}
+```
+
+### Entity ID Mapping
+
+**Configuration in Redis:**
+```yaml
+# Zone configuration with entity mapping
+multizone:zone:bedroom:
+  id: "bedroom"
+  name: "Bedroom"
+  enabled: true
+  
+  # Entity ID mapping - using existing HA entities
+  temperature_sensor_entity_id: "sensor.bedroom_temperature"
+  valve_switch_entity_id: "switch.bedroom_valve"
+  
+  # Zone settings
+  target_temperature: 22.0
+  opening_offset: 0.3
+  closing_offset: 0.3
+  is_fallback_valve: true
+  priority: 10
+
+# Main climate entity mapping
+multizone:main_climate:
+  entity_id: "climate.main_thermostat"  # Existing climate entity
+  use_ha_service_api: true
+```
+
+**Frontend UI for Mapping:**
+```typescript
+interface ZoneEntityMapping {
+  zoneName: string;
+  temperatureSensorEntityId: string;  // User selects from HA entities
+  valveSwitchEntityId: string;         // User selects from HA entities
+  
+  // Alternative: Create new via MQTT
+  createNewEntities: boolean;
+}
+
+// Entity selector in UI
+<EntitySelector
+  hass={hassConnection}
+  domain="sensor"
+  filter={(entity) => entity.attributes.device_class === "temperature"}
+  value={zone.temperatureSensorEntityId}
+  onChange={(entityId) => updateZone({temperatureSensorEntityId: entityId})}
+/>
+```
+
+### WebSocket Real-time Updates
+
+**Subscribe to State Changes:**
+```go
+type WSMessage struct {
+    Type   string                 `json:"type"`
+    Event  map[string]interface{} `json:"event"`
+}
+
+func (c *HAClient) SubscribeToStateChanges() {
+    // Subscribe to all state_changed events
+    subscribe := map[string]interface{}{
+        "id":   1,
+        "type": "subscribe_events",
+        "event_type": "state_changed",
+    }
+    
+    c.ws.WriteJSON(subscribe)
+    
+    go func() {
+        for {
+            var msg WSMessage
+            err := c.ws.ReadJSON(&msg)
+            if err != nil {
+                log.Printf("WebSocket error: %v", err)
+                c.reconnect()
+                continue
+            }
+            
+            if msg.Type == "event" {
+                c.handleStateChange(msg.Event)
+            }
+        }
+    }()
+}
+
+func (c *HAClient) handleStateChange(event map[string]interface{}) {
+    data := event["data"].(map[string]interface{})
+    entityID := data["entity_id"].(string)
+    newState := data["new_state"].(map[string]interface{})
+    
+    // Update cache and notify logic container
+    c.stateCache.Set(entityID, newState)
+    c.notifyStateChange(entityID, newState)
+}
+```
+
+### Benefits vs MQTT
+
+| Feature | HA Service API | MQTT |
+|---------|---------------|------|
+| Uses existing entities | ✅ Yes | ❌ Creates new |
+| Setup complexity | Medium | Higher |
+| External dependencies | Access token only | MQTT broker |
+| Real-time updates | WebSocket | MQTT subscribe |
+| Service calls | Direct REST | Via MQTT command |
+| Entity discovery | Manual mapping | Auto-discovery |
+| Integration type | API-based | Message-based |
 
 ---
 
@@ -1095,13 +1357,108 @@ func actuateValve(valveID string, action string) error {
 
 **Decision:** TypeScript for modern, type-safe, real-time web UI.
 
+## Integration Options
+
+### Choosing the Right Integration
+
+```mermaid
+flowchart TD
+    Start{What's your<br/>setup?}
+    
+    Start -->|Have existing<br/>sensors/switches| HasEntities{Want to use<br/>existing entities?}
+    Start -->|Starting fresh| Fresh{Prefer MQTT or<br/>native HA?}
+    
+    HasEntities -->|Yes| ServiceAPI[HA Service API<br/>✅ Recommended]
+    HasEntities -->|No, create new| MQTT1[MQTT Integration]
+    
+    Fresh -->|MQTT familiar| MQTT2[MQTT Integration]
+    Fresh -->|Native HA| Python[Python Integration]
+    
+    ServiceAPI --> Benefits1[✅ Uses existing entities<br/>✅ No MQTT broker<br/>✅ WebSocket real-time<br/>⚠️ Requires token]
+    
+    MQTT1 --> Benefits2[✅ Auto-discovery<br/>✅ Standard pattern<br/>✅ Event-driven<br/>⚠️ Needs MQTT broker]
+    MQTT2 --> Benefits2
+    
+    Python --> Benefits3[✅ Native integration<br/>✅ No external deps<br/>✅ Tight HA coupling<br/>⚠️ More complex]
+```
+
+### Integration Comparison Matrix
+
+| Criteria | HA Service API | MQTT | Python Integration |
+|----------|---------------|------|-------------------|
+| **Use existing HA entities** | ✅ Yes | ❌ No (creates new) | ❌ No (creates new) |
+| **Setup complexity** | ⭐⭐ Medium | ⭐⭐⭐ Higher | ⭐ Low (auto-install) |
+| **External dependencies** | Access token | MQTT broker | None |
+| **Real-time updates** | WebSocket | MQTT Pub/Sub | Native HA events |
+| **Latency** | Low (~50ms) | Very low (~10ms) | Lowest (native) |
+| **Entity discovery** | Manual mapping | Auto-discovery | Auto-discovery |
+| **Service calls** | Direct REST | MQTT command topics | Native HA services |
+| **Debugging** | HTTP logs | MQTT spy tools | HA logs |
+| **Use case** | Existing setup | MQTT infrastructure | Native integration |
+
+### Decision Guide
+
+**Choose HA Service API if:**
+- ✅ You already have temperature sensors and switches configured in HA
+- ✅ You don't want to install/manage an MQTT broker
+- ✅ You prefer direct API integration
+- ✅ You want to keep existing entity IDs
+
+**Choose MQTT if:**
+- ✅ You already run MQTT for other integrations (zigbee2mqtt, etc.)
+- ✅ You want auto-discovery of new entities
+- ✅ You prefer event-driven architecture
+- ✅ You're comfortable with MQTT tools and debugging
+
+**Choose Python Integration if:**
+- ✅ You want the most native HA experience
+- ✅ You prefer zero external dependencies
+- ✅ You're okay with Python-based integration
+- ✅ You want automatic setup
+
+### Example Configurations
+
+**HA Service API Configuration:**
+```yaml
+homeassistant_api:
+  enabled: true
+  url: "http://homeassistant.local:8123"
+  access_token: "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  websocket_enabled: true
+  
+zones:
+  - name: "Bedroom"
+    temperature_sensor: "sensor.bedroom_temperature"  # Existing entity
+    valve_switch: "switch.bedroom_valve"              # Existing entity
+  - name: "Living Room"
+    temperature_sensor: "sensor.living_room_temp"     # Existing entity
+    valve_switch: "switch.living_room_valve"          # Existing entity
+```
+
+**MQTT Configuration:**
+```yaml
+mqtt:
+  enabled: true
+  broker: "homeassistant.local"
+  port: 1883
+  username: "mqtt_user"
+  password: "mqtt_password"
+  
+# New entities will be created automatically:
+# - climate.multizone_bedroom
+# - sensor.multizone_bedroom_temperature
+# - binary_sensor.multizone_bedroom_valve
+# - etc.
+```
+
 ## Summary
 
 This v2.0 architecture provides:
 
 ✅ **Separation of Concerns:** Each container has a clear purpose
 ✅ **Performance:** GoLang for speed, TypeScript for UX
-✅ **Flexibility:** MQTT or direct integration options
+✅ **Flexibility:** Three integration options (HA API, MQTT, Python)
+✅ **Use Existing Entities:** HA Service API leverages your current setup
 ✅ **Scalability:** Containers can scale independently
 ✅ **Maintainability:** Type-safe code in both Go and TS
 ✅ **Observability:** Comprehensive metrics and logging
