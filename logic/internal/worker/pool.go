@@ -99,7 +99,7 @@ func (p *Pool) worker(id int) {
 // processNextJob attempts to pop and process the next job from the queue
 func (p *Pool) processNextJob(workerID int) error {
 	// Pop job from queue (LIFO - using RPop on a list that's pushed with LPush)
-	// Note: This creates LIFO behavior. For FIFO, use LPush with BLPop or RPush with RPop
+	// Note: This creates LIFO behavior. For FIFO, use RPush with RPop instead.
 	jobData, err := p.client.RPop(p.ctx, "multizone:job_queue")
 	if err != nil {
 		return err
@@ -133,7 +133,7 @@ func (p *Pool) processNextJob(workerID int) error {
 		Status:    "running",
 		StartedAt: time.Now(),
 	}
-	
+
 	// Save initial status
 	if err := p.saveJobStatus(status); err != nil {
 		log.Printf("Worker %d failed to save initial status for job %s: %v", workerID, job.ID, err)
@@ -166,7 +166,7 @@ func (p *Pool) processNextJob(workerID int) error {
 	completedAt := time.Now()
 	status.CompletedAt = &completedAt
 	status.DurationMs = completedAt.Sub(status.StartedAt).Milliseconds()
-	
+
 	if processingErr != nil {
 		status.Status = "failed"
 		status.Error = processingErr.Error()
