@@ -101,6 +101,7 @@ graph TB
     
     %% Data flow connections
     Sensors -->|Read Temps| ZoneDevices
+    ZoneDevices -->|Calculate Satisfaction| ZoneState
     ZoneDevices -->|Target Change| UpdateTempAuto
     UpdateTempAuto -->|Enqueue Job| CalcQueue
     UpdateTempAuto -->|Enqueue Job| ValveQueue
@@ -169,15 +170,15 @@ flowchart TD
     
     FindMinMax --> CheckEqual{min == max?}
     CheckEqual -->|Yes| UseSingle[main_target_raw = min]
-    CheckEqual -->|No| CalcInterp[main_target_raw = min +<br/>slider × (max - min)]
+    CheckEqual -->|No| CalcInterp["main_target_raw = min +<br/>slider × (max - min)"]
     
     CalcAverage --> Round
     UseSingle --> Round
     CalcInterp --> Round
     
-    Round[Round to nearest 0.5°C<br/>(round(value × 2)) / 2] --> Clamp[Clamp to limits<br/>main_min_temp, main_max_temp]
+    Round["Round to nearest 0.5°C<br/>(round(value × 2)) / 2"] --> Clamp["Clamp to limits<br/>main_min_temp, main_max_temp"]
     
-    Clamp --> CheckThreshold{abs(main_target -<br/>current_main_target)<br/>>= threshold?}
+    Clamp --> CheckThreshold{"Change exceeds<br/>threshold?"}
     
     CheckThreshold -->|No| ReturnNull
     CheckThreshold -->|Yes| ReturnTarget[Return main_target]
@@ -197,28 +198,28 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph Input
-        Z1[Bedroom: 20°C]
-        Z2[Living: 22°C]
-        Z3[Kitchen: 19°C]
-        Z4[Bath: 23°C]
+        Z1["Bedroom: 20°C"]
+        Z2["Living: 22°C"]
+        Z3["Kitchen: 19°C"]
+        Z4["Bath: 23°C"]
     end
     
     subgraph Config
-        Slider[Slider: 0.5 (50%)]
-        Min[Min: 18°C]
-        Max[Max: 30°C]
-        Thresh[Threshold: 0.5°C]
+        Slider["Slider: 0.5 (50%)"]
+        Min["Min: 18°C"]
+        Max["Max: 30°C"]
+        Thresh["Threshold: 0.5°C"]
     end
     
     subgraph Calculation
-        FindRange[Min: 19°C<br/>Max: 23°C]
-        Interpolate[19 + 0.5 × (23-19)<br/>= 19 + 2 = 21°C]
-        RoundVal[Round: 21.0°C]
-        ClampVal[Clamp: 21.0°C<br/>within 18-30]
+        FindRange["Min: 19°C<br/>Max: 23°C"]
+        Interpolate["19 + 0.5 × (23-19)<br/>= 19 + 2 = 21°C"]
+        RoundVal["Round: 21.0°C"]
+        ClampVal["Clamp: 21.0°C<br/>within 18-30"]
     end
     
     subgraph Output
-        Result[Main Target: 21.0°C]
+        Result["Main Target: 21.0°C"]
     end
     
     Z1 & Z2 & Z3 & Z4 --> FindRange
@@ -245,7 +246,7 @@ flowchart TD
     
     CheckMultizone -->|No| IndividualMode[Individual Zone Mode<br/>Each zone manages own valve]
     IndividualMode --> IndivLoop{For each<br/>active zone}
-    IndivLoop --> CheckSat[Check satisfaction state]
+    IndivLoop --> CheckSat[Read satisfaction state<br/>from zone entity]
     CheckSat --> IndivAction{State?}
     IndivAction -->|Underheated| OpenValve[Add to valves_to_open]
     IndivAction -->|Overheated| CloseValve[Add to valves_to_close]
@@ -255,9 +256,9 @@ flowchart TD
     MaintainValve --> IndivLoop
     IndivLoop -->|Done| SafetyCheck
     
-    CheckMultizone -->|Yes| DetermineSat[Determine Satisfaction State<br/>for each zone]
+    CheckMultizone -->|Yes| ReadStates[Read Zone States from Redis<br/>satisfaction pre-calculated by entities]
     
-    DetermineSat --> CalcSort[Calculate Sort Key<br/>priority, deficit]
+    ReadStates --> CalcSort[Calculate Sort Key<br/>priority, deficit]
     
     CalcSort --> SortZones[Sort Zones by Priority<br/>user priority first, then deficit]
     
@@ -671,19 +672,21 @@ flowchart TD
         T1[Zone Temperature Changed]
         T2[Zone Target Changed]
         T3[Zone State Changed]
-        T4[Timer: Every valve_delay/2]
+        T4[Main Climate Temperature Changed]
+        T5[Timer: Every valve_delay/2]
     end
     
     subgraph "Update Main Target Automation"
         T1 --> Check1{Debounce<br/>~5 seconds}
         T2 --> Check1
         T3 --> Check1
+        T4 --> Check1
         Check1 --> Enqueue1[Enqueue Job:<br/>calculate_main_temp]
         Check1 --> Enqueue2[Enqueue Job:<br/>update_valves]
     end
     
     subgraph "Safety Check Automation"
-        T4 --> DirectExec[Direct Execute:<br/>safety_valve_check]
+        T5 --> DirectExec[Direct Execute:<br/>safety_valve_check]
     end
     
     subgraph "Job Queues in Redis"
@@ -709,7 +712,8 @@ flowchart TD
     style T1 fill:#e1f5ff
     style T2 fill:#e1f5ff
     style T3 fill:#e1f5ff
-    style T4 fill:#ffcccc
+    style T4 fill:#e1f5ff
+    style T5 fill:#ffcccc
     style CalcQueue fill:#fff4e1
     style ValveQueue fill:#fff4e1
     style UpdateMain fill:#ffe1e1

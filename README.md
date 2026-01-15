@@ -58,6 +58,7 @@ It has to be clean code, nice, effective, fast, and safe! Also this component sh
     - Target change threshold
     - Opening offset below target
     - Closing offset above target
+    - Temperature direction (rising, falling) - calculated by comparing current temperature with previous temperature
   - REDIS CONFIG (Redis required)
    - host
    - port
@@ -142,15 +143,18 @@ Inputs:
   - All climate zones
     - current temperature
     - target temperature
+    - satisfaction status (pre-calculated by zone entities)
+    - temperature direction (pre-calculated by zone entities)
     - valve switch
 
 Steps:
   - Fetch config from Redis
-  - Fetch data from Redis
-  - Check satisfaction
-  - Update status
+  - Fetch zone data from Redis (including pre-calculated satisfaction states and temperature direction)
+  - Read satisfaction state for each zone (no calculation needed - already set by entities)
+  - Sort zones by priority and temperature deficit
+  - Determine valve actions based on satisfaction states
   - hass.service.call to open/close valve for each zone (respect at least one valve has to be open - fallback can be used if necessary)
-  - Update data to Redis
+  - Update valve states in Redis
 
 ## Integration Setup
 When creating the integration, there will be inputs for:
@@ -182,7 +186,57 @@ Inputs:
   - Climate closing offset above target - temperature offset above target to trigger valve closing (default: 0.3°C)
 These climates should be subdevices of the main device which holds the main climate entity target temperature sensor and core automation as well.
 These zone climate entities control target temperature, but they do not control valves.
-They only provide information about current temperature, target temperature, and satisfaction status in the zone.
+They calculate and provide information about current temperature, target temperature, satisfaction status (underheated/satisfied/overheated), and temperature direction (rising/falling) in the zone.
+
+**Zone Entity Responsibilities:**
+- Read temperature from sensor entity
+- Store and manage target temperature
+- Calculate satisfaction state based on current temperature, target temperature, and configured offsets (opening_offset, closing_offset, satisfaction_eps)
+- Determine temperature direction by comparing current temperature with previous temperature:
+  - Rising: current_temp > previous_temp
+  - Falling: current_temp < previous_temp
+- Write all state data (temperature, target, satisfaction, direction) to Redis immediately upon changes
+- The satisfaction calculation uses a hysteresis state machine to prevent rapid state changes
+
+## Climate Zone Entity - Satisfaction Calculation
+
+Each climate zone entity calculates its own satisfaction state and temperature direction. This calculation happens immediately when the temperature sensor updates, ensuring real-time status updates.
+
+### Temperature Direction Determination
+
+```python
+def update_temperature_direction(current_temp, previous_temp):
+    """
+    Determine if temperature is rising or falling.
+    
+    Args:
+        current_temp: Current temperature reading
+        previous_temp: Previous temperature reading
+    
+    Returns:
+        "rising" if current > previous
+        "falling" if current < previous
+    """
+    if current_temp > previous_temp:
+        return "rising"
+    elif current_temp < previous_temp:
+        return "falling"
+    else:
+        # Temperature unchanged - keep previous direction
+        return previous_direction
+```
+
+### Satisfaction State Calculation
+
+Each zone entity is responsible for calculating its own satisfaction state. The zone entity:
+
+1. Reads its current temperature from the sensor
+2. Compares with previous temperature to determine direction (rising/falling)
+3. Applies the hysteresis state machine logic (described below in the satisfaction states section)
+4. Writes the calculated satisfaction state to Redis
+5. Writes the temperature direction to Redis
+
+The satisfaction state determination uses hysteresis to prevent rapid state changes. Zones transition between underheated, satisfied, and overheated states based on configured temperature offsets and satisfaction epsilon thresholds.
 
 # Algorithms
 
@@ -361,11 +415,11 @@ main_target = clamp(21.0, 18.0, 30.0) = 21.0°C
 
 ## Update Valves Algorithm
 
-This algorithm manages the opening and closing of zone valves based on current and target temperatures, ensuring system safety and preventing rapid valve cycling (chattering).
+This algorithm manages the opening and closing of zone valves based on zone satisfaction states, ensuring system safety and preventing rapid valve cycling (chattering).
 
 ### Core Behavior
 
-1. **Determine zone satisfaction state** for each zone
+1. **Read zone satisfaction states** from Redis
 2. **Sort zones by priority** (those needing heat most urgently)
 3. **Apply safety rules** (minimum valves open)
 4. **Execute valve changes** using open-first-then-close sequence
@@ -498,10 +552,10 @@ ha_multizone:valvelock:{valve_id} = {"locked_until": "2026-01-13T14:30:00Z"}
 ```python
 def update_valves(zones, config, main_climate_state, multizone_enabled):
     """
-    Update valve states based on zone temperatures and satisfaction.
+    Update valve states based on zone satisfaction states (pre-calculated by zone entities).
     
     Args:
-        zones: List of climate zones with current_temp, target_temp, valve_id, state
+        zones: List of climate zones with current_temp, target_temp, valve_id, state, satisfaction (from Redis)
         config: Configuration with min_valves_open, valve_actuation_delay, opening_offset, closing_offset
         main_climate_state: Main HVAC state (HEATING, COOLING, OFF)
         multizone_enabled: Whether multizone feature is active
@@ -511,93 +565,35 @@ def update_valves(zones, config, main_climate_state, multizone_enabled):
     """
     if not multizone_enabled:
         # Multizone feature OFF - each zone manages its own valve
-        # Underheated zones open valves, overheated zones close valves
-        # Safety check still ensures minimum valves open
+        # Satisfaction states are still calculated by zone entities and written to Redis
+        # This job reads those states and uses them for individual zone valve control
         actions = []
         
         for zone in zones:
             if zone.state == "OFF":
                 continue
             
-            # Determine satisfaction (same logic as when multizone is on)
+            # Read satisfaction state from zone (already calculated by entity)
+            # Zone entity has already determined if it's underheated/satisfied/overheated
             if main_climate_state == "HEATING":
-                if zone.current_temp < (zone.target_temp - config.opening_offset):
+                if zone.satisfaction == "underheated":
                     actions.append({"valve_id": zone.valve_id, "action": "open"})
-                elif zone.current_temp > (zone.target_temp + config.closing_offset):
+                elif zone.satisfaction == "overheated":
                     actions.append({"valve_id": zone.valve_id, "action": "close"})
             else:  # COOLING
-                if zone.current_temp > (zone.target_temp + config.opening_offset):
+                if zone.satisfaction == "undercooled":
                     actions.append({"valve_id": zone.valve_id, "action": "open"})
-                elif zone.current_temp < (zone.target_temp - config.closing_offset):
+                elif zone.satisfaction == "overcooled":
                     actions.append({"valve_id": zone.valve_id, "action": "close"})
         
         return actions
     
-    # Determine satisfaction state for each zone
-    # Note: Satisfaction uses state machine with hysteresis
-    # - Enters satisfied when reaching target ± satisfaction_eps
-    # - Exits satisfied when crossing opening_offset or closing_offset bounds
-    # Valve opening/closing still uses opening_offset and closing_offset
-    for zone in zones:
-        if zone.state == "OFF":
-            zone.satisfaction = "off"
-            continue
-        
-        # Get previous satisfaction state (needed for hysteresis)
-        prev_satisfaction = zone.satisfaction if hasattr(zone, 'satisfaction') else None
-        
-        if main_climate_state == "HEATING":
-            # Check if zone crosses outer bounds (forces state change)
-            if zone.current_temp < (zone.target_temp - config.opening_offset):
-                # Below lower bound - definitely underheated
-                zone.satisfaction = "underheated"
-            elif zone.current_temp > (zone.target_temp + config.closing_offset):
-                # Above upper bound - definitely overheated
-                zone.satisfaction = "overheated"
-            else:
-                # Within hysteresis band - check transitions based on previous state
-                if prev_satisfaction == "underheated":
-                    # Was underheated, check if reached satisfaction threshold
-                    if zone.current_temp >= (zone.target_temp + config.satisfaction_eps):
-                        zone.satisfaction = "satisfied"  # Reached target + eps while rising
-                    else:
-                        zone.satisfaction = "underheated"  # Still underheated
-                elif prev_satisfaction == "overheated":
-                    # Was overheated, check if reached satisfaction threshold
-                    if zone.current_temp <= (zone.target_temp - config.satisfaction_eps):
-                        zone.satisfaction = "satisfied"  # Reached target - eps while falling
-                    else:
-                        zone.satisfaction = "overheated"  # Still overheated
-                else:
-                    # Was satisfied or unknown - stay satisfied (within bounds)
-                    # Initialize as satisfied if unknown
-                    zone.satisfaction = "satisfied"
-        else:  # COOLING
-            # Check if zone crosses outer bounds (forces state change)
-            if zone.current_temp > (zone.target_temp + config.opening_offset):
-                # Above upper bound - definitely undercooled
-                zone.satisfaction = "undercooled"
-            elif zone.current_temp < (zone.target_temp - config.closing_offset):
-                # Below lower bound - definitely overcooled
-                zone.satisfaction = "overcooled"
-            else:
-                # Within hysteresis band - check transitions based on previous state
-                if prev_satisfaction == "undercooled":
-                    # Was undercooled, check if reached satisfaction threshold
-                    if zone.current_temp <= (zone.target_temp - config.satisfaction_eps):
-                        zone.satisfaction = "satisfied"  # Reached target - eps while falling
-                    else:
-                        zone.satisfaction = "undercooled"  # Still undercooled
-                elif prev_satisfaction == "overcooled":
-                    # Was overcooled, check if reached satisfaction threshold
-                    if zone.current_temp >= (zone.target_temp + config.satisfaction_eps):
-                        zone.satisfaction = "satisfied"  # Reached target + eps while rising
-                    else:
-                        zone.satisfaction = "overcooled"  # Still overcooled
-                else:
-                    # Was satisfied or unknown - stay satisfied (within bounds)
-                    # Initialize as satisfied if unknown
-                    zone.satisfaction = "satisfied"
+    # Fetch zone states from Redis
+    # Satisfaction states are already calculated by zone entities
+    # zone.satisfaction is already set to "underheated", "satisfied", "overheated", etc.
+    # zone.temperature_rising and zone.temperature_falling are also available
+    
+    # No satisfaction calculation needed here - just read from Redis!
     
     # Calculate sort key (user priority + temperature deficit)
     for zone in zones:
@@ -873,6 +869,8 @@ Description: Stores state and configuration for a specific zone
   "state": "ON",
   "satisfaction": "underheated",
   "valve_state": "open",
+  "temperature_rising": false,
+  "temperature_falling": true,
   "target_change_threshold": 0.1,
   "opening_offset": 0.3,
   "closing_offset": 0.3,
@@ -1101,7 +1099,9 @@ This section maps the UI configuration fields to their JSON storage format and p
   "target_temperature": 20.0,
   "state": "OFF",
   "satisfaction": "unknown",
-  "valve_state": "closed"
+  "valve_state": "closed",
+  "temperature_rising": false,
+  "temperature_falling": false
 }
 ```
 
@@ -1145,6 +1145,8 @@ This section maps the UI configuration fields to their JSON storage format and p
   "state": "ON",
   "satisfaction": "underheated",
   "valve_state": "open",
+  "temperature_rising": false,
+  "temperature_falling": true,
   "target_change_threshold": 0.1,
   "opening_offset": 0.3,
   "closing_offset": 0.3,
