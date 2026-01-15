@@ -1,3 +1,4 @@
 """Services module initialization."""
 
-# TODO: Service registration and handlers will be implemented here
+# Services are registered in __init__.py
+# This module can be used for service schemas and handlers in the future

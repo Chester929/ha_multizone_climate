@@ -6,8 +6,10 @@ import logging
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from ..const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,9 +25,14 @@ async def async_setup_entry(
     Creates switches for:
     - Multizone feature enable/disable
     """
-    # TODO: Create multizone enable switch
-    # TODO: Call async_add_entities()
-    pass
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = data["coordinator"]
+    redis_client = data["redis_client"]
+    
+    # Create multizone enable switch
+    multizone_switch = MultizoneEnableSwitch(coordinator, redis_client)
+    
+    async_add_entities([multizone_switch])
 
 
 class MultizoneEnableSwitch(SwitchEntity):
@@ -41,11 +48,19 @@ class MultizoneEnableSwitch(SwitchEntity):
         """
         self.coordinator = coordinator
         self.redis_client = redis_client
+        self._attr_unique_id = f"{DOMAIN}_multizone_enabled"
+        self._attr_name = "Multizone Enabled"
+        self._attr_should_poll = False
 
     @property
-    def name(self) -> str:
-        """Return switch name."""
-        return "Multizone Enabled"
+    def device_info(self) -> dict:
+        """Return device information for grouping entities."""
+        return {
+            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "name": "Multizone Climate",
+            "manufacturer": "Chester929",
+            "model": "Multizone Climate Controller",
+        }
 
     @property
     def is_on(self) -> bool:
@@ -55,8 +70,10 @@ class MultizoneEnableSwitch(SwitchEntity):
         Returns:
             bool: Current enable state
         """
-        # TODO: Get from config in Redis
-        return False
+        config = self.coordinator.get_config()
+        if not config:
+            return False
+        return config.get("multizone_enabled", False)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """
@@ -65,10 +82,35 @@ class MultizoneEnableSwitch(SwitchEntity):
         Requirements:
         - At least one zone must be turned ON
         """
-        # TODO: Check if at least one zone is ON
-        # TODO: Update config in Redis
-        # TODO: Trigger coordinator update
-        pass
+        # Check if at least one zone is ON
+        zones = self.coordinator.data.get("zones", {}) if self.coordinator.data else {}
+        has_on_zone = any(
+            zone.get("is_on", False) for zone in zones.values()
+        )
+        
+        if not has_on_zone:
+            _LOGGER.warning("Cannot enable multizone: no zones are turned ON")
+            return
+        
+        try:
+            # Update config in Redis
+            config = self.coordinator.get_config() or {}
+            config["multizone_enabled"] = True
+            await self.redis_client.set_config(config)
+            
+            # Trigger coordinator update and recalculation
+            await self.coordinator.async_request_refresh()
+            await self.redis_client.enqueue_job(
+                JOB_TYPE_CALCULATE_MAIN_TEMP,
+                {
+                    "job_id": f"enable_multizone_{int(self.coordinator.hass.loop.time())}",
+                    "trigger": "multizone_enabled",
+                    "enqueued_at": self.coordinator.hass.loop.time(),
+                }
+            )
+        except Exception as err:
+            _LOGGER.error("Failed to enable multizone: %s", err)
+            raise
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """
@@ -76,6 +118,25 @@ class MultizoneEnableSwitch(SwitchEntity):
         
         Each zone will manage its own valve independently.
         """
-        # TODO: Update config in Redis
-        # TODO: Trigger coordinator update
-        pass
+        try:
+            # Update config in Redis
+            config = self.coordinator.get_config() or {}
+            config["multizone_enabled"] = False
+            await self.redis_client.set_config(config)
+            
+            # Trigger coordinator update
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Failed to disable multizone: %s", err)
+            raise
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to hass."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
+        )

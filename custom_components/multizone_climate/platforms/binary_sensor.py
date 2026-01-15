@@ -25,8 +25,9 @@ async def async_setup_entry(
     - Redis connection status
     - Minimum valves requirement status
     """
-    # TODO: Create binary sensor entities
-    # TODO: Call async_add_entities()
+    # For now, binary sensors are optional
+    # Can be implemented later if needed for status monitoring
+    _LOGGER.debug("Binary sensor platform setup (no entities yet)")
     pass
 
 

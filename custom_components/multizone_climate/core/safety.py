@@ -57,16 +57,26 @@ class SafetyChecker:
             currently_open = 0
             -> Force open 2 fallback valves
         """
-        # TODO: Count currently open valves
-        # TODO: Get min_valves_open from config
-        # TODO: If count >= minimum, return []
-        # TODO: Calculate shortage
-        # TODO: Log warning
-        # TODO: Get fallback valves sorted by priority
-        # TODO: Select first 'shortage' fallback valves
-        # TODO: Log which valves being forced open
-        # TODO: Return valve IDs to force open
-        return []
+        currently_open_count = self._count_open_valves(zones)
+        min_valves_open = self.config.get("min_valves_open", 1)
+        
+        if currently_open_count >= min_valves_open:
+            return []
+        
+        shortage = min_valves_open - currently_open_count
+        _LOGGER.warning(
+            "Safety check: Only %d valves open, need %d",
+            currently_open_count,
+            min_valves_open
+        )
+        
+        fallback_valves = self._get_fallback_valves_sorted(zones, exclude_open=True)
+        valves_to_force_open = fallback_valves[:shortage]
+        
+        for valve_id in valves_to_force_open:
+            _LOGGER.warning("Safety: Force opening fallback valve %s", valve_id)
+        
+        return valves_to_force_open
 
     def _count_open_valves(self, zones: list[dict[str, Any]]) -> int:
         """
@@ -78,8 +88,7 @@ class SafetyChecker:
         Returns:
             int: Number of open valves
         """
-        # TODO: Count zones where valve_state == "open"
-        return 0
+        return sum(1 for zone in zones if zone.get("valve_state") == "open")
 
     def _get_fallback_valves_sorted(
         self, zones: list[dict[str, Any]], exclude_open: bool = True
@@ -100,9 +109,17 @@ class SafetyChecker:
             - Sort by priority (descending)
             - Return valve IDs
         """
-        # TODO: Filter fallback valves
-        # TODO: Optionally filter out open valves
-        # TODO: Sort by priority descending
-        # TODO: Extract valve IDs
-        # TODO: Return list
-        return []
+        fallback_zones = [
+            zone for zone in zones
+            if zone.get("is_fallback_valve", False)
+        ]
+        
+        if exclude_open:
+            fallback_zones = [
+                zone for zone in fallback_zones
+                if zone.get("valve_state") != "open"
+            ]
+        
+        fallback_zones.sort(key=lambda z: z.get("priority", 0), reverse=True)
+        
+        return [zone["valve_id"] for zone in fallback_zones if zone.get("valve_id")]
