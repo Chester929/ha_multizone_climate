@@ -166,3 +166,189 @@ class TestClampTemperature:
     def test_clamp_above_max(self):
         """Test clamping above maximum: 32.0 -> 30.0"""
         assert clamp_temperature(32.0, 18.0, 30.0) == 30.0
+
+    def test_clamp_within_range(self):
+        """Test that values within range are unchanged."""
+        assert clamp_temperature(25.0, 18.0, 30.0) == 25.0
+
+
+class TestCalculateMainTargetTemperatureEdgeCases:
+    """Test edge cases for calculate_main_target_temperature."""
+
+    def test_empty_zones_list(self):
+        """Test with empty zones list."""
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature([], config, 20.0)
+        assert result is None
+
+    def test_all_zones_off(self):
+        """Test with all zones off."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "OFF",
+                "target_temperature": 20.0,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature(zones, config, 20.0)
+        assert result is None
+
+    def test_all_zones_overheated(self):
+        """Test with all zones overheated (uses all active zones as fallback)."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "ON",
+                "target_temperature": 20.0,
+                "satisfaction": "overheated",
+            },
+            {
+                "id": "kitchen",
+                "state": "ON",
+                "target_temperature": 22.0,
+                "satisfaction": "overheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        # Should use all zones as fallback
+        result = calculate_main_target_temperature(zones, config, 18.0)
+        assert result == 21.0  # midpoint of 20 and 22
+
+    def test_single_zone_slider_mode(self):
+        """Test with single zone in slider mode."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "ON",
+                "target_temperature": 21.0,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature(zones, config, 18.0)
+        # With single zone, min == max, so result should be that temperature
+        assert result == 21.0
+
+    def test_slider_at_minimum(self):
+        """Test slider at 0% (minimum)."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "ON",
+                "target_temperature": 20.0,
+                "satisfaction": "underheated",
+            },
+            {
+                "id": "kitchen",
+                "state": "ON",
+                "target_temperature": 24.0,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.0,  # 0%
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature(zones, config, 18.0)
+        assert result == 20.0  # minimum zone target
+
+    def test_slider_at_maximum(self):
+        """Test slider at 100% (maximum)."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "ON",
+                "target_temperature": 20.0,
+                "satisfaction": "underheated",
+            },
+            {
+                "id": "kitchen",
+                "state": "ON",
+                "target_temperature": 24.0,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 1.0,  # 100%
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature(zones, config, 18.0)
+        assert result == 24.0  # maximum zone target
+
+    def test_clamping_to_limits(self):
+        """Test that result is clamped to configured limits."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "ON",
+                "target_temperature": 35.0,  # Above max limit
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature(zones, config, 18.0)
+        assert result == 30.0  # clamped to max
+
+    def test_rounding_behavior(self):
+        """Test that rounding works correctly."""
+        zones = [
+            {
+                "id": "bedroom",
+                "state": "ON",
+                "target_temperature": 20.3,
+                "satisfaction": "underheated",
+            },
+            {
+                "id": "kitchen",
+                "state": "ON",
+                "target_temperature": 21.3,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": True,  # Average of 20.3 and 21.3 = 20.8
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        result = calculate_main_target_temperature(zones, config, 18.0)
+        # 20.8 should round to 21.0
+        assert result == 21.0
