@@ -40,6 +40,7 @@ type GlobalConfig struct {
 	MainClimateEntityID       string  `json:"main_climate_entity_id"`
 	MainTargetAllZonesSatisfied float64 `json:"main_target_all_zones_satisfied"`
 	UseAverageMode            bool    `json:"use_average_mode"`
+	SliderPosition            float64 `json:"slider_position"` // 0.0 to 1.0, used when UseAverageMode is false
 	MinValvesOpen             int     `json:"min_valves_open"`
 	MainMinTemp               float64 `json:"main_min_temp"`
 	MainMaxTemp               float64 `json:"main_max_temp"`

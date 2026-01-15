@@ -193,10 +193,20 @@ async function start() {
     // Subscribe to Redis changes
     await subscribeToRedisChanges();
     
-    // Publish discovery after a short delay
-    setTimeout(async () => {
+    // Wait for MQTT connection to be stable before publishing discovery
+    let retries = 0;
+    const maxRetries = 10;
+    while (!mqttClient.connected && retries < maxRetries) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      retries++;
+    }
+    
+    if (mqttClient.connected) {
       await publishDiscovery();
-    }, 5000);
+      console.log('MQTT Discovery published successfully');
+    } else {
+      console.warn('MQTT not connected, discovery will be published on next connection');
+    }
     
     console.log('MQTT Middleware running');
   } catch (error) {

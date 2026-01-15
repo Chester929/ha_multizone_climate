@@ -23,8 +23,14 @@ const redisClient = createClient({
 redisClient.on('error', (err) => console.error('Redis Client Error', err));
 
 // Health endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', time: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    // Verify Redis connection
+    await redisClient.ping();
+    res.json({ status: 'healthy', redis: 'connected', time: new Date().toISOString() });
+  } catch (error) {
+    res.status(503).json({ status: 'unhealthy', redis: 'disconnected', time: new Date().toISOString() });
+  }
 });
 
 // API endpoints

@@ -32,17 +32,20 @@ func CalculateMainTargetTemperature(zones []models.ZoneState, config models.Glob
 		}
 		rawTarget = sum / float64(len(activeZones))
 	} else {
-		// Slider mode: interpolate between min and max
-		// For now, we'll use a simple average as slider position isn't in GlobalConfig
-		// In a full implementation, this would use config.SliderPosition
+		// Slider mode: interpolate between min and max targets
 		targets := make([]float64, len(activeZones))
 		for i, z := range activeZones {
 			targets[i] = z.TargetTemperature
 		}
 		minTarget := minFloat64(targets)
 		maxTarget := maxFloat64(targets)
-		// Using 0.5 as default slider position (middle)
-		rawTarget = minTarget + 0.5*(maxTarget-minTarget)
+		
+		// Use configured slider position (default to 0.5 if not set)
+		sliderPos := config.SliderPosition
+		if sliderPos < 0 || sliderPos > 1 {
+			sliderPos = 0.5 // Default to middle if invalid
+		}
+		rawTarget = minTarget + sliderPos*(maxTarget-minTarget)
 	}
 
 	// Round to 0.5°C

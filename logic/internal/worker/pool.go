@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 )
@@ -61,8 +62,13 @@ func (p *Pool) worker(id int) {
 			// 2. Pop a job from the queue
 			// 3. Process the job based on its type
 			// 4. Update job status in Redis
-			// For now, this is a placeholder
-			// time.Sleep(1 * time.Second)
+			// For now, sleep to avoid CPU spinning
+			select {
+			case <-p.ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+				// Worker waiting for jobs
+			}
 		}
 	}
 }
