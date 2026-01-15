@@ -178,8 +178,8 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         
         job_executor = self._job_executors["calculate_main_temp"]
         
-        # Execute job (job handles its own locking internally, but we already have the lock)
-        result = await job_executor._execute_impl(job_data)
+        # Execute job (uses public execute method with internal locking)
+        result = await job_executor.execute(job_data)
         
         _LOGGER.debug("Calculate main temp job result: %s", result)
 
@@ -208,8 +208,8 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         
         job_executor = self._job_executors["update_valves"]
         
-        # Execute job (job handles its own locking internally, but we already have the lock)
-        result = await job_executor._execute_impl(job_data)
+        # Execute job (uses public execute method with internal locking)
+        result = await job_executor.execute(job_data)
         
         _LOGGER.debug("Update valves job result: %s", result)
 

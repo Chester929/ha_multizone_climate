@@ -1,7 +1,6 @@
 """Climate platform for Multizone Climate integration."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 import logging
 
@@ -15,6 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from ..const import (
     DOMAIN,
@@ -482,10 +482,7 @@ class ZoneClimateEntity(ClimateEntity):
             return
         
         # Round to target change threshold
-        temperature = round(temperature / self._target_change_threshold) * self._target_change_threshold
-        
-        # Clamp to min/max
-        temperature = max(self.min_temp, min(self.max_temp, temperature))
+        temperature = self._round_to_threshold(temperature)
         
         _LOGGER.debug(
             "Setting target temperature for zone %s to %.1f°C",
@@ -508,7 +505,7 @@ class ZoneClimateEntity(ClimateEntity):
         await self._update_zone_state_in_redis()
         
         # Trigger recalculation by enqueuing jobs
-        job_id_suffix = int(self.hass.loop.time())
+        job_id_suffix = f"{int(self.hass.loop.time() * 1000)}"  # milliseconds for uniqueness
         
         await self.redis_client.enqueue_job(
             JOB_TYPE_CALCULATE_MAIN_TEMP,
@@ -599,14 +596,16 @@ class ZoneClimateEntity(ClimateEntity):
         
         # Get HVAC mode from main climate
         main_climate_data = self.coordinator.get_main_climate_data()
-        hvac_action = "heating"  # Default
+        hvac_action = HVAC_ACTION_HEATING  # Default to heating
         
         if main_climate_data:
-            hvac_action_str = main_climate_data.get("hvac_action", "heating").lower()
+            hvac_action_str = main_climate_data.get("hvac_action", HVAC_ACTION_HEATING).lower()
             if hvac_action_str in ("cooling", "cool"):
-                hvac_action = "cooling"
+                hvac_action = HVAC_ACTION_COOLING
             elif hvac_action_str in ("off", "idle"):
-                hvac_action = "off"
+                hvac_action = HVAC_ACTION_OFF
+            else:
+                hvac_action = HVAC_ACTION_HEATING
         
         # Call state machine
         new_state, temp_direction = self._state_machine.update_state(
@@ -658,10 +657,25 @@ class ZoneClimateEntity(ClimateEntity):
             "closing_offset": self._closing_offset,
             "is_fallback_valve": self._is_fallback,
             "priority": self._priority,
-            "last_updated": datetime.utcnow().isoformat(),
+            "last_updated": dt_util.utcnow().isoformat(),
         }
         
         await self.redis_client.set_zone_state(self.zone_id, zone_state)
+    
+    def _round_to_threshold(self, temperature: float) -> float:
+        """
+        Round temperature to target change threshold and clamp to min/max.
+        
+        Args:
+            temperature: Temperature to round
+            
+        Returns:
+            float: Rounded and clamped temperature
+        """
+        # Round to target change threshold
+        temperature = round(temperature / self._target_change_threshold) * self._target_change_threshold
+        # Clamp to min/max
+        return max(self.min_temp, min(self.max_temp, temperature))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
