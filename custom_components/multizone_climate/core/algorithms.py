@@ -1,4 +1,5 @@
 """Core algorithms for multizone climate control."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -15,11 +16,11 @@ def calculate_main_target_temperature(
 ) -> float | None:
     """
     Calculate the main HVAC target temperature based on zone targets.
-    
+
     Implements two calculation methods:
     - Slider-based: Linear interpolation between min and max zone targets
     - Average mode: Arithmetic mean of all active zone targets
-    
+
     Args:
         zones: List of climate zones with the following keys:
             - id: Zone identifier
@@ -33,10 +34,10 @@ def calculate_main_target_temperature(
             - main_max_temp: float - Maximum main climate temperature
             - main_change_threshold: float - Minimum change to trigger update
         current_main_target: Current main climate target temperature
-    
+
     Returns:
         float: New main target temperature or None if no update needed
-    
+
     Algorithm Steps:
         1. Filter active zones (state != OFF)
         2. Exclude overheated zones from calculation
@@ -46,7 +47,7 @@ def calculate_main_target_temperature(
         4. Round to nearest 0.5°C increment
         5. Clamp to configured limits
         6. Only return if change exceeds threshold
-    
+
     Example:
         zones = [
             {
@@ -127,13 +128,13 @@ def calculate_main_target_temperature(
 def round_to_half_degree(temperature: float) -> float:
     """
     Round temperature to nearest 0.5°C increment.
-    
+
     Args:
         temperature: Temperature value to round
-    
+
     Returns:
         float: Rounded temperature
-    
+
     Examples:
         22.3 -> 22.5
         22.2 -> 22.0
@@ -143,20 +144,18 @@ def round_to_half_degree(temperature: float) -> float:
     return math.floor(temperature * 2 + 0.5) / 2
 
 
-def clamp_temperature(
-    temperature: float, min_temp: float, max_temp: float
-) -> float:
+def clamp_temperature(temperature: float, min_temp: float, max_temp: float) -> float:
     """
     Clamp temperature to configured limits.
-    
+
     Args:
         temperature: Temperature to clamp
         min_temp: Minimum allowed temperature
         max_temp: Maximum allowed temperature
-    
+
     Returns:
         float: Clamped temperature
-    
+
     Examples:
         clamp_temperature(17.0, 18.0, 30.0) -> 18.0
         clamp_temperature(32.0, 18.0, 30.0) -> 30.0

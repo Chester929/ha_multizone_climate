@@ -1,4 +1,5 @@
 """Data update coordinator for Multizone Climate."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -19,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 class MultizoneClimateCoordinator(DataUpdateCoordinator):
     """
     Coordinator to manage data updates and job execution.
-    
+
     Runs every 15 seconds (configurable) to:
     - Fetch latest data from Redis
     - Update sensor states
@@ -34,7 +35,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     ) -> None:
         """
         Initialize the coordinator.
-        
+
         Args:
             hass: Home Assistant instance
             redis_client: Redis client instance for data access
@@ -53,10 +54,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """
         Fetch data from Redis and execute pending jobs.
-        
+
         Returns:
             dict: Updated data from Redis
-        
+
         Tasks:
             1. Fetch global config from Redis
             2. Fetch all zone states from Redis
@@ -66,14 +67,14 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             6. Execute calculate_main_temp job
             7. Dequeue update_valves job (if any and lock available)
             8. Execute update_valves job
-        
+
         Raises:
             UpdateFailed: If data fetch or job execution fails
         """
         try:
             # Fetch global config from Redis
             config = await self.redis_client.get_config()
-            
+
             # Fetch all zone states from Redis
             zone_ids = await self.redis_client.get_zone_ids()
             zones = {}
@@ -81,14 +82,16 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 zone_state = await self.redis_client.get_zone_state(zone_id)
                 if zone_state:
                     zones[zone_id] = zone_state
-            
+
             # Fetch main climate state from Redis
             main_climate = await self.redis_client.get_main_climate_state()
-            
+
             # Fetch job queue sizes
-            calculate_queue_size = await self.redis_client.get_queue_size("calculate_main_temp")
+            calculate_queue_size = await self.redis_client.get_queue_size(
+                "calculate_main_temp"
+            )
             valve_queue_size = await self.redis_client.get_queue_size("update_valves")
-            
+
             # Store in cached data for entity access
             self._cached_data = {
                 "config": config,
@@ -97,25 +100,25 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 "calculate_queue_size": calculate_queue_size,
                 "valve_queue_size": valve_queue_size,
             }
-            
+
             # Dequeue and execute calculate_main_temp job if available
             await self.async_dequeue_and_execute_job("calculate_main_temp")
-            
+
             # Dequeue and execute update_valves job if available
             await self.async_dequeue_and_execute_job("update_valves")
-            
+
             return self._cached_data
-            
+
         except Exception as err:
             raise UpdateFailed(f"Error updating data: {err}") from err
 
     async def async_dequeue_and_execute_job(self, job_type: str) -> None:
         """
         Dequeue and execute a background job.
-        
+
         Args:
             job_type: Type of job (calculate_main_temp, update_valves)
-        
+
         Tasks:
             - Check if job is in queue
             - Try to acquire job lock
@@ -131,16 +134,16 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 job_type,
             )
             return
-        
+
         try:
             # Dequeue job from queue
             job_data = await self.redis_client.dequeue_job(job_type)
             if not job_data:
                 # No job in queue
                 return
-            
+
             _LOGGER.debug("Dequeued job %s: %s", job_type, job_data)
-            
+
             # Execute job based on type
             if job_type == "calculate_main_temp":
                 await self.async_execute_calculate_main_temp(job_data)
@@ -148,7 +151,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 await self.async_execute_update_valves(job_data)
             else:
                 _LOGGER.warning("Unknown job type: %s", job_type)
-                
+
         except Exception as err:
             _LOGGER.error(
                 "Error executing job %s: %s",
@@ -163,10 +166,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     async def async_execute_calculate_main_temp(self, job_data: dict) -> None:
         """
         Execute calculate main target temperature job.
-        
+
         Args:
             job_data: Job parameters and context
-        
+
         Tasks:
             - Fetch current zone states
             - Call core algorithm to calculate main target
@@ -174,28 +177,28 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             - Update job status
         """
         from .jobs.calculate_main_temp import CalculateMainTempJob
-        
+
         # Get or create job executor
         if "calculate_main_temp" not in self._job_executors:
             self._job_executors["calculate_main_temp"] = CalculateMainTempJob(
                 self.redis_client,
                 self.hass,
             )
-        
+
         job_executor = self._job_executors["calculate_main_temp"]
-        
+
         # Execute job (uses public execute method with internal locking)
         result = await job_executor.execute(job_data)
-        
+
         _LOGGER.debug("Calculate main temp job result: %s", result)
 
     async def async_execute_update_valves(self, job_data: dict) -> None:
         """
         Execute update valves job.
-        
+
         Args:
             job_data: Job parameters and context
-        
+
         Tasks:
             - Fetch current zone states
             - Call core algorithm to determine valve actions
@@ -204,56 +207,56 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             - Update zone states in Redis
         """
         from .jobs.update_valves import UpdateValvesJob
-        
+
         # Get or create job executor
         if "update_valves" not in self._job_executors:
             self._job_executors["update_valves"] = UpdateValvesJob(
                 self.redis_client,
                 self.hass,
             )
-        
+
         job_executor = self._job_executors["update_valves"]
-        
+
         # Execute job (uses public execute method with internal locking)
         result = await job_executor.execute(job_data)
-        
+
         _LOGGER.debug("Update valves job result: %s", result)
 
     def get_zone_data(self, zone_id: str) -> dict[str, Any] | None:
         """
         Get cached zone data.
-        
+
         Args:
             zone_id: Zone identifier
-        
+
         Returns:
             dict: Zone data or None if not found
         """
         if not self._cached_data or "zones" not in self._cached_data:
             return None
-        
+
         return self._cached_data["zones"].get(zone_id)
 
     def get_main_climate_data(self) -> dict[str, Any] | None:
         """
         Get cached main climate data.
-        
+
         Returns:
             dict: Main climate data or None if not available
         """
         if not self._cached_data or "main_climate" not in self._cached_data:
             return None
-        
+
         return self._cached_data.get("main_climate")
 
     def get_config(self) -> dict[str, Any] | None:
         """
         Get cached global configuration.
-        
+
         Returns:
             dict: Global configuration or None if not available
         """
         if not self._cached_data or "config" not in self._cached_data:
             return None
-        
+
         return self._cached_data.get("config")

@@ -1,4 +1,5 @@
 """Binary sensor platform for Multizone Climate integration."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -19,7 +20,7 @@ async def async_setup_entry(
 ) -> None:
     """
     Set up binary sensor entities.
-    
+
     Creates binary sensors for:
     - System status (OK/Error)
     - Redis connection status
@@ -37,7 +38,7 @@ class MultizoneBinarySensor(BinarySensorEntity):
     def __init__(self, coordinator: Any, sensor_type: str) -> None:
         """
         Initialize binary sensor.
-        
+
         Args:
             coordinator: Data update coordinator
             sensor_type: Type of binary sensor
@@ -54,7 +55,7 @@ class MultizoneBinarySensor(BinarySensorEntity):
     def is_on(self) -> bool:
         """
         Return binary sensor state.
-        
+
         Returns:
             bool: True if condition is met
         """

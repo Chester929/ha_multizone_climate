@@ -1,4 +1,5 @@
 """Sensor platform for Multizone Climate integration."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,10 +27,10 @@ async def async_setup_entry(
 ) -> None:
     """
     Set up sensor entities.
-    
+
     Creates sensors for:
     - Main climate current/target temperature
-    - Outdoor temperature  
+    - Outdoor temperature
     - Zone satisfaction states
     - Valve states
     - Job status
@@ -38,39 +39,49 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
-    
+
     entities = []
-    
+
     # Temperature sensors
-    entities.extend([
-        MultizoneTemperatureSensor(coordinator, "main_current_temperature"),
-        MultizoneTemperatureSensor(coordinator, "main_target_temperature"),
-        MultizoneTemperatureSensor(coordinator, "outdoor_temperature"),
-    ])
-    
+    entities.extend(
+        [
+            MultizoneTemperatureSensor(coordinator, "main_current_temperature"),
+            MultizoneTemperatureSensor(coordinator, "main_target_temperature"),
+            MultizoneTemperatureSensor(coordinator, "outdoor_temperature"),
+        ]
+    )
+
     # System sensors
-    entities.extend([
-        MultizoneTextSensor(coordinator, "open_valve_count"),
-        MultizoneTextSensor(coordinator, "calculate_queue_size"),
-        MultizoneTextSensor(coordinator, "valve_queue_size"),
-    ])
-    
+    entities.extend(
+        [
+            MultizoneTextSensor(coordinator, "open_valve_count"),
+            MultizoneTextSensor(coordinator, "calculate_queue_size"),
+            MultizoneTextSensor(coordinator, "valve_queue_size"),
+        ]
+    )
+
     # Fetch zones from Redis
     zone_ids = await redis_client.get_zone_ids()
-    
+
     # Create per-zone sensors
     for zone_id in zone_ids:
         zone_config = await redis_client.get_zone_state(zone_id)
         if zone_config:
             zone_name = zone_config.get("name", f"Zone {zone_id}")
-            entities.extend([
-                ZoneTemperatureSensor(coordinator, zone_id, zone_name, "current_temperature"),
-                ZoneTemperatureSensor(coordinator, zone_id, zone_name, "target_temperature"),
-                ZoneTextSensor(coordinator, zone_id, zone_name, "satisfaction"),
-                ZoneTextSensor(coordinator, zone_id, zone_name, "valve_state"),
-                ZoneTextSensor(coordinator, zone_id, zone_name, "direction"),
-            ])
-    
+            entities.extend(
+                [
+                    ZoneTemperatureSensor(
+                        coordinator, zone_id, zone_name, "current_temperature"
+                    ),
+                    ZoneTemperatureSensor(
+                        coordinator, zone_id, zone_name, "target_temperature"
+                    ),
+                    ZoneTextSensor(coordinator, zone_id, zone_name, "satisfaction"),
+                    ZoneTextSensor(coordinator, zone_id, zone_name, "valve_state"),
+                    ZoneTextSensor(coordinator, zone_id, zone_name, "direction"),
+                ]
+            )
+
     async_add_entities(entities)
 
 
@@ -80,7 +91,7 @@ class MultizoneTemperatureSensor(SensorEntity):
     def __init__(self, coordinator: Any, sensor_type: str) -> None:
         """
         Initialize temperature sensor.
-        
+
         Args:
             coordinator: Data update coordinator
             sensor_type: Type of sensor (main_current_temperature, main_target_temperature, outdoor_temperature)
@@ -92,7 +103,7 @@ class MultizoneTemperatureSensor(SensorEntity):
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_should_poll = False
-        
+
         # Set name based on sensor type
         type_names = {
             "main_current_temperature": "Main Current Temperature",
@@ -115,22 +126,22 @@ class MultizoneTemperatureSensor(SensorEntity):
     def native_value(self) -> float | None:
         """
         Return sensor state.
-        
+
         Returns:
             State value from coordinator data
         """
         if not self.coordinator.data:
             return None
-        
+
         main_climate = self.coordinator.data.get("main_climate", {})
-        
+
         if self.sensor_type == "main_current_temperature":
             return main_climate.get("current_temperature")
         elif self.sensor_type == "main_target_temperature":
             return main_climate.get("target_temperature")
         elif self.sensor_type == "outdoor_temperature":
             return main_climate.get("outdoor_temperature")
-        
+
         return None
 
     @callback
@@ -151,7 +162,7 @@ class MultizoneTextSensor(SensorEntity):
     def __init__(self, coordinator: Any, sensor_type: str) -> None:
         """
         Initialize text sensor.
-        
+
         Args:
             coordinator: Data update coordinator
             sensor_type: Type of sensor
@@ -160,7 +171,7 @@ class MultizoneTextSensor(SensorEntity):
         self.sensor_type = sensor_type
         self._attr_unique_id = f"{DOMAIN}_{sensor_type}"
         self._attr_should_poll = False
-        
+
         # Set name based on sensor type
         type_names = {
             "open_valve_count": "Open Valve Count",
@@ -183,19 +194,18 @@ class MultizoneTextSensor(SensorEntity):
     def native_value(self) -> Any:
         """
         Return sensor state.
-        
+
         Returns:
             State value from coordinator data
         """
         if not self.coordinator.data:
             return None
-        
+
         if self.sensor_type == "open_valve_count":
             # Count open valves from zones
             zones = self.coordinator.data.get("zones", {})
             return sum(
-                1 for zone in zones.values()
-                if zone.get("valve_state") == "open"
+                1 for zone in zones.values() if zone.get("valve_state") == "open"
             )
         elif self.sensor_type == "calculate_queue_size":
             # Return cached queue size from coordinator data
@@ -203,7 +213,7 @@ class MultizoneTextSensor(SensorEntity):
         elif self.sensor_type == "valve_queue_size":
             # Return cached queue size from coordinator data
             return self.coordinator.data.get("valve_queue_size", 0)
-        
+
         return None
 
     @callback
@@ -221,10 +231,12 @@ class MultizoneTextSensor(SensorEntity):
 class ZoneTemperatureSensor(SensorEntity):
     """Temperature sensor for a specific zone."""
 
-    def __init__(self, coordinator: Any, zone_id: str, zone_name: str, sensor_type: str) -> None:
+    def __init__(
+        self, coordinator: Any, zone_id: str, zone_name: str, sensor_type: str
+    ) -> None:
         """
         Initialize zone temperature sensor.
-        
+
         Args:
             coordinator: Data update coordinator
             zone_id: Zone identifier
@@ -240,7 +252,7 @@ class ZoneTemperatureSensor(SensorEntity):
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_should_poll = False
-        
+
         # Set name based on sensor type
         type_names = {
             "current_temperature": "Current Temperature",
@@ -263,14 +275,14 @@ class ZoneTemperatureSensor(SensorEntity):
     def native_value(self) -> float | None:
         """
         Return sensor state.
-        
+
         Returns:
             State value from coordinator data
         """
         zone_data = self.coordinator.get_zone_data(self.zone_id)
         if not zone_data:
             return None
-        
+
         return zone_data.get(self.sensor_type)
 
     @callback
@@ -288,10 +300,12 @@ class ZoneTemperatureSensor(SensorEntity):
 class ZoneTextSensor(SensorEntity):
     """Text sensor for a specific zone."""
 
-    def __init__(self, coordinator: Any, zone_id: str, zone_name: str, sensor_type: str) -> None:
+    def __init__(
+        self, coordinator: Any, zone_id: str, zone_name: str, sensor_type: str
+    ) -> None:
         """
         Initialize zone text sensor.
-        
+
         Args:
             coordinator: Data update coordinator
             zone_id: Zone identifier
@@ -304,7 +318,7 @@ class ZoneTextSensor(SensorEntity):
         self.sensor_type = sensor_type
         self._attr_unique_id = f"{DOMAIN}_zone_{zone_id}_{sensor_type}"
         self._attr_should_poll = False
-        
+
         # Set name based on sensor type
         type_names = {
             "satisfaction": "Satisfaction State",
@@ -328,14 +342,14 @@ class ZoneTextSensor(SensorEntity):
     def native_value(self) -> str | None:
         """
         Return sensor state.
-        
+
         Returns:
             State value from coordinator data
         """
         zone_data = self.coordinator.get_zone_data(self.zone_id)
         if not zone_data:
             return None
-        
+
         if self.sensor_type == "satisfaction":
             return zone_data.get("satisfaction_state")
         elif self.sensor_type == "valve_state":
@@ -348,7 +362,7 @@ class ZoneTextSensor(SensorEntity):
                 return "falling"
             else:
                 return "stable"
-        
+
         return None
 
     @callback
