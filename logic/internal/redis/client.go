@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/config"
 	"github.com/go-redis/redis/v8"
@@ -88,12 +89,12 @@ func (c *Client) Ping(ctx context.Context) error {
 
 // BRPop blocks and pops an element from the right of a list with timeout
 func (c *Client) BRPop(ctx context.Context, timeout int, keys ...string) ([]string, error) {
-	return c.rdb.BRPop(ctx, 0, keys...).Result()
+	return c.rdb.BRPop(ctx, time.Duration(timeout)*time.Second, keys...).Result()
 }
 
 // SetNX sets a value only if the key does not exist (for distributed locking)
 func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expiration int) (bool, error) {
-	return c.rdb.SetNX(ctx, key, value, 0).Result()
+	return c.rdb.SetNX(ctx, key, value, time.Duration(expiration)*time.Second).Result()
 }
 
 // GetClient returns the underlying Redis client for advanced operations

@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
-	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
+	redisclient "github.com/chester929/ha_multizone_climate/logic/internal/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 // JobType constants define the types of jobs that can be processed
@@ -28,7 +29,7 @@ type JobProcessor interface {
 
 // Pool represents a worker pool for processing background jobs
 type Pool struct {
-	client     *redis.Client
+	client     *redisclient.Client
 	numWorkers int
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -37,7 +38,7 @@ type Pool struct {
 }
 
 // NewPool creates a new worker pool
-func NewPool(client *redis.Client, numWorkers int, processor JobProcessor) *Pool {
+func NewPool(client *redisclient.Client, numWorkers int, processor JobProcessor) *Pool {
 	return &Pool{
 		client:     client,
 		numWorkers: numWorkers,
@@ -79,7 +80,7 @@ func (p *Pool) worker(id int) {
 			// Try to acquire and process a job
 			if err := p.processNextJob(id); err != nil {
 				// If no job available (redis.Nil), wait a bit before trying again
-				if err.Error() == "redis: nil" {
+				if err == redis.Nil {
 					select {
 					case <-p.ctx.Done():
 						return
@@ -97,7 +98,8 @@ func (p *Pool) worker(id int) {
 
 // processNextJob attempts to pop and process the next job from the queue
 func (p *Pool) processNextJob(workerID int) error {
-	// Pop job from queue (FIFO - using RPop on a list that's pushed with LPush)
+	// Pop job from queue (LIFO - using RPop on a list that's pushed with LPush)
+	// Note: This creates LIFO behavior. For FIFO, use LPush with BLPop or RPush with RPop
 	jobData, err := p.client.RPop(p.ctx, "multizone:job_queue")
 	if err != nil {
 		return err
