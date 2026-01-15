@@ -47,7 +47,10 @@ class MultizoneClimateEntity(Entity):
         return False
 
     async def async_added_to_hass(self) -> None:
-        """
+        """Register callbacks when entity added to hass."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
         Run when entity is added to hass.
         
         Tasks:
