@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Redis Configuration",
+        "description": "Configure Redis connection for Multizone Climate",
+        "data": {
+          "redis_host": "Redis Host",
+          "redis_port": "Redis Port",
+          "redis_password": "Redis Password (optional)",
+          "redis_db": "Redis Database",
+          "redis_key_prefix": "Redis Key Prefix"
+        }
+      },
+      "main_climate": {
+        "title": "Main Climate Entity",
+        "description": "Select your main HVAC thermostat entity",
+        "data": {
+          "main_climate_entity_id": "Main Climate Entity"
+        }
+      },
+      "automation_config": {
+        "title": "Automation Configuration",
+        "description": "Configure multizone automation parameters",
+        "data": {
+          "use_average_mode": "Use Average Mode",
+          "main_target_all_zones_satisfied": "Main Target When All Zones Satisfied (%)",
+          "min_valves_open": "Minimum Valves Open",
+          "main_min_temp": "Main Minimum Temperature",
+          "main_max_temp": "Main Maximum Temperature",
+          "main_change_threshold": "Main Change Threshold",
+          "valve_actuation_delay": "Valve Actuation Delay (seconds)",
+          "coordinator_interval": "Coordinator Interval (seconds)",
+          "satisfaction_eps": "Satisfaction Epsilon"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Redis",
+      "invalid_auth": "Invalid Redis authentication",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Integration is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Multizone Climate Options",
+        "menu_options": {
+          "config": "Edit Configuration",
+          "zones": "Manage Zones"
+        }
+      }
+    }
+  }
+}

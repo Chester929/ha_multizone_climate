@@ -1,0 +1,13 @@
+"""Services configuration for Multizone Climate."""
+
+# Service: Recalculate main target temperature
+recalculate:
+  name: Recalculate Main Target
+  description: Force recalculation of main climate target temperature
+  fields: {}
+
+# Service: Force valve update
+force_valve_update:
+  name: Force Valve Update
+  description: Force immediate valve state update
+  fields: {}
