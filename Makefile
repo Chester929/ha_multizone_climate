@@ -81,3 +81,10 @@ status: ## Check status of all services
 	@echo "Checking services..."
 	@curl -s http://localhost:8080/health | jq . || echo "Logic container not responding"
 	@curl -s http://localhost:8099/health | jq . || echo "Frontend container not responding"
+
+init-redis: ## Initialize Redis with example data
+	./examples/init-redis.sh
+
+reset-redis: ## Reset Redis data
+	docker-compose exec redis redis-cli --scan --pattern "multizone:*" | xargs docker-compose exec -T redis redis-cli DEL
+	@echo "Redis data cleared"
