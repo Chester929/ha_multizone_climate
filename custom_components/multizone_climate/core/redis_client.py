@@ -33,6 +33,8 @@ class RedisClient:
         password: str | None = None,
         db: int = 0,
         key_prefix: str = "ha_multizone",
+        max_connections: int = 10,
+        job_status_ttl: int = 900,
     ) -> None:
         """
         Initialize Redis client.
@@ -43,12 +45,16 @@ class RedisClient:
             password: Redis password (optional)
             db: Redis database number
             key_prefix: Prefix for all Redis keys
+            max_connections: Maximum connections in pool (default: 10)
+            job_status_ttl: TTL for job status in seconds (default: 900)
         """
         self.host = host
         self.port = port
         self.password = password
         self.db = db
         self.key_prefix = key_prefix
+        self.max_connections = max_connections
+        self.job_status_ttl = job_status_ttl
         self._redis: aioredis.Redis | None = None
         self._pool: aioredis.ConnectionPool | None = None
 
@@ -71,19 +77,13 @@ class RedisClient:
                 password=self.password,
                 db=self.db,
                 decode_responses=True,
-                max_connections=10,
+                max_connections=self.max_connections,
             )
             self._redis = aioredis.Redis(connection_pool=self._pool)
 
             # Test connection
             await self._redis.ping()
             _LOGGER.info("Connected to Redis at %s:%s", self.host, self.port)
-
-            # Initialize config key if it doesn't exist
-            config_key = self._get_key("config")
-            if not await self._redis.exists(config_key):
-                _LOGGER.debug("Initializing Redis config key")
-                await self._redis.hset(config_key, mapping={})
 
         except Exception as err:
             _LOGGER.error("Failed to connect to Redis: %s", err)
@@ -286,9 +286,10 @@ class RedisClient:
         try:
             zones_key = self._get_key("zones")
 
-            # Check if zone already exists in list
-            existing_zones = await self._redis.lrange(zones_key, 0, -1)
-            if zone_id not in existing_zones:
+            # Use LPOS to check if zone exists (more efficient than LRANGE)
+            # LPOS returns position or None if not found
+            position = await self._redis.lpos(zones_key, zone_id)
+            if position is None:
                 await self._redis.rpush(zones_key, zone_id)
                 _LOGGER.debug("Added zone %s to zones list", zone_id)
 
@@ -590,11 +591,12 @@ class RedisClient:
                 # Store job status hash
                 await self._redis.hset(status_key, mapping=serialized_status)
 
-                # Set TTL (default 900 seconds = 15 minutes)
-                ttl = 900
-                await self._redis.expire(status_key, ttl)
+                # Set TTL using configured value
+                await self._redis.expire(status_key, self.job_status_ttl)
 
-                _LOGGER.debug("Set job status for %s (TTL: %ds)", job_id, ttl)
+                _LOGGER.debug(
+                    "Set job status for %s (TTL: %ds)", job_id, self.job_status_ttl
+                )
             else:
                 _LOGGER.warning("Attempted to set empty job status for %s", job_id)
         except Exception as err:
