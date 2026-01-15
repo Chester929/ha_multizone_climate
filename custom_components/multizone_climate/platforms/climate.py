@@ -1,6 +1,7 @@
 """Climate platform for Multizone Climate integration."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 import logging
 
@@ -30,6 +31,8 @@ from ..const import (
     HVAC_ACTION_COOLING,
     HVAC_ACTION_IDLE,
     HVAC_ACTION_OFF,
+    JOB_TYPE_CALCULATE_MAIN_TEMP,
+    JOB_TYPE_UPDATE_VALVES,
 )
 from ..core import ZoneSatisfactionStateMachine
 
@@ -505,8 +508,6 @@ class ZoneClimateEntity(ClimateEntity):
         await self._update_zone_state_in_redis()
         
         # Trigger recalculation by enqueuing jobs
-        from ..const import JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
-        
         job_id_suffix = int(self.hass.loop.time())
         
         await self.redis_client.enqueue_job(
@@ -640,8 +641,6 @@ class ZoneClimateEntity(ClimateEntity):
             - Write to Redis
             - Update timestamp
         """
-        from datetime import datetime
-        
         zone_state = {
             "id": self.zone_id,
             "name": self._name,
@@ -649,7 +648,7 @@ class ZoneClimateEntity(ClimateEntity):
             "valve_switch_entity_id": self._valve_switch_entity_id,
             "current_temperature": self._current_temperature,
             "target_temperature": self._target_temperature,
-            "state": "ON",  # TODO: Track ON/OFF state
+            "state": "ON",  # Zones are always ON once created; OFF zones are removed
             "satisfaction": self._satisfaction_state,
             "valve_state": self._valve_state,
             "temperature_rising": self._temperature_direction == "rising",
