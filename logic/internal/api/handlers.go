@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
+	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/gorilla/mux"
@@ -162,5 +163,172 @@ func CalculateMainTempHandler(client *redis.Client) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
+	}
+}
+
+// HAStatusHandler returns the status of Home Assistant integration
+func HAStatusHandler(integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		status := map[string]interface{}{
+			"enabled":    integration.IsEnabled(),
+			"websocket":  false,
+			"time":       time.Now().Format(time.RFC3339),
+		}
+
+		if integration.IsEnabled() {
+			wsClient := integration.GetWebSocketClient()
+			status["websocket"] = wsClient.IsConnected()
+		}
+
+		json.NewEncoder(w).Encode(status)
+	}
+}
+
+// HATestConnectionHandler tests the Home Assistant connection
+func HATestConnectionHandler(integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
+
+		client := integration.GetClient()
+		err := client.Ping(ctx)
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"connected": false,
+				"error":     err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"connected": true,
+			"message":   "Home Assistant connection successful",
+		})
+	}
+}
+
+// HASyncStatesHandler triggers a manual synchronization of all states
+func HASyncStatesHandler(integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !integration.IsEnabled() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Home Assistant integration is not enabled",
+			})
+			return
+		}
+
+		ctx := context.Background()
+		err := integration.SyncAllStates(ctx)
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "success",
+			"message": "States synchronized successfully",
+		})
+	}
+}
+
+// HASetValveHandler controls a valve via Home Assistant
+func HASetValveHandler(integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !integration.IsEnabled() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Home Assistant integration is not enabled",
+			})
+			return
+		}
+
+		var req struct {
+			EntityID string `json:"entity_id"`
+			Open     bool   `json:"open"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ctx := context.Background()
+		err := integration.SetValveState(ctx, req.EntityID, req.Open)
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "success",
+			"entity_id": req.EntityID,
+			"state":     map[string]bool{"open": req.Open},
+		})
+	}
+}
+
+// HASetMainTempHandler sets the main climate temperature via Home Assistant
+func HASetMainTempHandler(integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !integration.IsEnabled() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Home Assistant integration is not enabled",
+			})
+			return
+		}
+
+		var req struct {
+			EntityID    string  `json:"entity_id"`
+			Temperature float64 `json:"temperature"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		ctx := context.Background()
+		err := integration.SetMainTemperature(ctx, req.EntityID, req.Temperature)
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":      "success",
+			"entity_id":   req.EntityID,
+			"temperature": req.Temperature,
+		})
 	}
 }

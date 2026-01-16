@@ -12,6 +12,7 @@ import (
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/api"
 	"github.com/chester929/ha_multizone_climate/logic/internal/config"
+	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/chester929/ha_multizone_climate/logic/internal/worker"
 	"github.com/gorilla/mux"
@@ -32,6 +33,35 @@ func main() {
 	}
 	defer redisClient.Close()
 	log.Println("Connected to Redis successfully")
+
+	// Initialize Home Assistant integration if enabled
+	var haIntegration *homeassistant.Integration
+	if cfg.HAEnabled && cfg.HAToken != "" {
+		log.Println("Initializing Home Assistant integration...")
+		haIntegration = homeassistant.NewIntegration(
+			cfg.HABaseURL,
+			cfg.HAToken,
+			redisClient,
+			cfg.HAWebsocket,
+		)
+
+		if err := haIntegration.Start(); err != nil {
+			log.Printf("Warning: Failed to start Home Assistant integration: %v", err)
+			log.Println("Continuing without Home Assistant integration...")
+			haIntegration = nil
+		} else {
+			log.Println("Home Assistant integration started successfully")
+
+			// Perform initial state sync
+			if err := haIntegration.SyncAllStates(ctx); err != nil {
+				log.Printf("Warning: Initial state sync failed: %v", err)
+			} else {
+				log.Println("Initial state synchronization completed")
+			}
+		}
+	} else {
+		log.Println("Home Assistant integration is disabled (set HA_ENABLED=true and HA_TOKEN to enable)")
+	}
 
 	// Initialize worker pool
 	// Passing nil for processor as a placeholder - in a full implementation,
@@ -55,6 +85,16 @@ func main() {
 
 	// Temperature calculation endpoints
 	router.HandleFunc("/api/calculate", api.CalculateMainTempHandler(redisClient)).Methods("POST")
+
+	// Home Assistant integration endpoints (only if integration is enabled)
+	if haIntegration != nil {
+		router.HandleFunc("/api/ha/status", api.HAStatusHandler(haIntegration)).Methods("GET")
+		router.HandleFunc("/api/ha/test", api.HATestConnectionHandler(haIntegration)).Methods("GET")
+		router.HandleFunc("/api/ha/sync", api.HASyncStatesHandler(haIntegration)).Methods("POST")
+		router.HandleFunc("/api/ha/valve", api.HASetValveHandler(haIntegration)).Methods("POST")
+		router.HandleFunc("/api/ha/temperature", api.HASetMainTempHandler(haIntegration)).Methods("POST")
+		log.Println("Home Assistant API endpoints registered")
+	}
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%s", cfg.HTTPPort)
@@ -89,5 +129,13 @@ func main() {
 	}
 
 	workerPool.Stop()
+
+	// Stop Home Assistant integration if running
+	if haIntegration != nil {
+		if err := haIntegration.Stop(); err != nil {
+			log.Printf("Error stopping Home Assistant integration: %v", err)
+		}
+	}
+
 	log.Println("Server exited")
 }
