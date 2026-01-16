@@ -1,7 +1,8 @@
 """Constants for the Multizone Climate integration."""
 
-# Integration domain
+# Integration domain and version
 DOMAIN = "multizone_climate"
+VERSION = "0.1.0"  # Should match version in manifest.json
 
 # Configuration and options
 CONF_REDIS_HOST = "redis_host"

@@ -58,10 +58,8 @@ class MultizoneBinarySensor(BinarySensorEntity):
         Returns:
             bool: True if condition is met
         """
-        # TODO: Get state from coordinator
+        # Placeholder implementation: binary sensors not yet wired to real data
+        # The coordinator populates 'config', 'zones', 'main_climate',
+        # 'calculate_queue_size', and 'valve_queue_size', but not the fields
+        # referenced below. This avoids errors while maintaining the structure.
         return False
-
-    async def async_update(self) -> None:
-        """Update sensor state from coordinator."""
-        # TODO: Request coordinator update
-        pass
