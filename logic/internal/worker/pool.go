@@ -20,6 +20,12 @@ const (
 	
 	// workerBackoffDuration is the duration to wait before retrying after an error
 	workerBackoffDuration = 1 * time.Second
+	
+	// Queue keys
+	jobQueueKey        = "multizone:job_queue"
+	deadLetterQueueKey = "multizone:dead_letter_queue"
+	jobLockKeyPrefix   = "multizone:job_lock:"
+	jobStatusKeyPrefix = "multizone:job_status:"
 )
 
 // JobType constants define the types of jobs that can be processed
@@ -46,8 +52,9 @@ type Pool struct {
 	processor  JobProcessor
 }
 
-// NewPool creates a new worker pool
-// Note: Start() must be called before EnqueueJob() or other operations that use the context
+// NewPool creates a new worker pool.
+// A temporary context is created here to allow EnqueueJob() to be called before Start().
+// The context will be replaced when Start() is called with a parent context.
 func NewPool(client *redisclient.Client, numWorkers int, processor JobProcessor) *Pool {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Pool{
@@ -59,7 +66,8 @@ func NewPool(client *redisclient.Client, numWorkers int, processor JobProcessor)
 	}
 }
 
-// Start starts the worker pool
+// Start starts the worker pool.
+// Note: This should only be called once. Calling it multiple times may cause race conditions.
 func (p *Pool) Start(parentCtx context.Context) {
 	// Cancel existing context and create new one from parent
 	if p.cancel != nil {
@@ -117,7 +125,7 @@ func (p *Pool) worker(id int) {
 func (p *Pool) processNextJob(workerID int) error {
 	// Pop job from queue in FIFO order.
 	// When jobs are enqueued with LPush, using RPop ensures the earliest enqueued jobs are processed first.
-	jobData, err := p.client.RPop(p.ctx, "multizone:job_queue")
+	jobData, err := p.client.RPop(p.ctx, jobQueueKey)
 	if err != nil {
 		return err
 	}
@@ -127,7 +135,7 @@ func (p *Pool) processNextJob(workerID int) error {
 		log.Printf("Worker %d failed to unmarshal job: %v", workerID, err)
 		
 		// Send malformed job data to a dead letter queue so it can be inspected later
-		if dlqErr := p.client.LPush(p.ctx, "multizone:dead_letter_queue", jobData); dlqErr != nil {
+		if dlqErr := p.client.LPush(p.ctx, deadLetterQueueKey, jobData); dlqErr != nil {
 			log.Printf("Worker %d failed to push job to dead letter queue: %v (original unmarshal error: %v)", workerID, dlqErr, err)
 		}
 		
@@ -138,8 +146,8 @@ func (p *Pool) processNextJob(workerID int) error {
 	log.Printf("Worker %d processing job %s (type: %s)", workerID, job.ID, job.Type)
 
 	// Try to acquire distributed lock for this job
-	lockKey := fmt.Sprintf("multizone:job_lock:%s", job.ID)
-	lockValue := fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
+	lockKey := jobLockKeyPrefix + job.ID
+	lockValue := p.generateLockValue(workerID)
 	acquired, err := p.acquireLock(lockKey, lockValue)
 	if err != nil {
 		log.Printf("Worker %d failed to acquire lock for job %s: %v", workerID, job.ID, err)
@@ -252,12 +260,17 @@ func (p *Pool) releaseLock(lockKey string, expectedValue string) error {
 
 // saveJobStatus saves the job status to Redis
 func (p *Pool) saveJobStatus(status models.JobStatus) error {
-	statusKey := fmt.Sprintf("multizone:job_status:%s", status.JobID)
+	statusKey := jobStatusKeyPrefix + status.JobID
 	statusJSON, err := json.Marshal(status)
 	if err != nil {
 		return err
 	}
 	return p.client.Set(p.ctx, statusKey, statusJSON)
+}
+
+// generateLockValue creates a unique lock value for a worker
+func (p *Pool) generateLockValue(workerID int) string {
+	return fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
 }
 
 // EnqueueJob adds a job to the queue
@@ -266,5 +279,5 @@ func (p *Pool) EnqueueJob(job models.Job) error {
 	if err != nil {
 		return err
 	}
-	return p.client.LPush(p.ctx, "multizone:job_queue", jobJSON)
+	return p.client.LPush(p.ctx, jobQueueKey, jobJSON)
 }
