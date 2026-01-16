@@ -143,8 +143,7 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 // CalculateMainTempHandler triggers main temperature calculation
 func CalculateMainTempHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
-		
+		// TODO: Implement actual temperature calculation logic
 		// In a full implementation, this would:
 		// 1. Load all zones from Redis
 		// 2. Load global configuration

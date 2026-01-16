@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/config"
 	"github.com/go-redis/redis/v8"
@@ -66,6 +67,11 @@ func (c *Client) RPop(ctx context.Context, key string) (string, error) {
 	return c.rdb.RPop(ctx, key).Result()
 }
 
+// LPop pops an element from the left of a list
+func (c *Client) LPop(ctx context.Context, key string) (string, error) {
+	return c.rdb.LPop(ctx, key).Result()
+}
+
 // Exists checks if a key exists
 func (c *Client) Exists(ctx context.Context, keys ...string) (int64, error) {
 	return c.rdb.Exists(ctx, keys...).Result()
@@ -84,4 +90,15 @@ func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
 // Ping checks if Redis is available
 func (c *Client) Ping(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
+}
+
+// SetNX sets a value only if the key does not exist (for distributed locking).
+// expirationSeconds specifies the key TTL in seconds.
+func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expirationSeconds int) (bool, error) {
+	return c.rdb.SetNX(ctx, key, value, time.Duration(expirationSeconds)*time.Second).Result()
+}
+
+// GetString retrieves a string value and returns an error if the key doesn't exist
+func (c *Client) GetString(ctx context.Context, key string) (string, error) {
+	return c.rdb.Get(ctx, key).Result()
 }
