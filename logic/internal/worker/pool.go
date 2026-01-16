@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	// defaultLockTimeout is the TTL for distributed locks in seconds.
+	// defaultLockTimeoutSeconds is the TTL for distributed locks in seconds.
 	// This prevents locks from being held indefinitely if a worker crashes.
-	defaultLockTimeout = 30
+	defaultLockTimeoutSeconds = 30
 )
 
 // JobType constants define the types of jobs that can be processed
@@ -194,7 +194,7 @@ func (p *Pool) processNextJob(workerID int) error {
 // acquireLock attempts to acquire a distributed lock
 func (p *Pool) acquireLock(lockKey string, workerID int) (bool, error) {
 	lockValue := fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
-	acquired, err := p.client.SetNX(p.ctx, lockKey, lockValue, defaultLockTimeout)
+	acquired, err := p.client.SetNX(p.ctx, lockKey, lockValue, defaultLockTimeoutSeconds)
 	if err != nil {
 		return false, err
 	}

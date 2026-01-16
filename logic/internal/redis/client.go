@@ -97,7 +97,7 @@ func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expir
 	return c.rdb.SetNX(ctx, key, value, time.Duration(expiration)*time.Second).Result()
 }
 
-// Get retrieves a value and returns an error if the key doesn't exist
+// GetString retrieves a string value and returns an error if the key doesn't exist
 func (c *Client) GetString(ctx context.Context, key string) (string, error) {
 	return c.rdb.Get(ctx, key).Result()
 }
