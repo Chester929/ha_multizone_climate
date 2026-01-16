@@ -170,8 +170,10 @@ class TestEndToEndScenarios:
         valve_job = UpdateValvesJob(mock_redis, mock_hass)
         valve_result = await valve_job.execute({"trigger": "calc_temp_complete"})
 
-        assert "valves_opened" in valve_result
-        assert result["actions_taken"] > 0 or "actions_taken" not in valve_result
+        assert "result" in valve_result
+        result = valve_result["result"]
+        assert "valves_opened" in result
+        assert result["actions_taken"] > 0 or "actions_taken" not in result
 
     async def test_scenario_all_zones_satisfied(self, mock_hass, mock_redis):
         """

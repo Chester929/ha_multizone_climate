@@ -398,7 +398,7 @@ class TestSafetyCheckJob:
         assert response["status"] == "completed"
         result = response["result"]
         # Safety should be satisfied when minimum is met
-        assert result.get("safety_satisfied") is True or result.get("safety_violation") is False
+        assert result.get("safety_satisfied") is True
 
     async def test_safety_check_no_fallback_valves(self, mock_redis, mock_hass):
         """
