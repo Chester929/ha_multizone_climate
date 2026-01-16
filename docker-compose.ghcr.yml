@@ -1,0 +1,85 @@
+version: '3.8'
+
+# Example docker-compose file for using pre-built multi-architecture images from GHCR
+# This file pulls images instead of building them locally
+
+services:
+  logic:
+    image: ghcr.io/chester929/multizone-logic:latest
+    container_name: multizone-logic
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - HTTP_PORT=8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    image: ghcr.io/chester929/multizone-frontend:latest
+    container_name: multizone-frontend
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - WEB_PORT=8099
+      - LOGIC_API_URL=http://logic:8080
+    ports:
+      - "8099:8099"
+    depends_on:
+      - redis
+      - logic
+
+  mqtt-middleware:
+    image: ghcr.io/chester929/multizone-mqtt:latest
+    container_name: multizone-mqtt
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - MQTT_BROKER=${MQTT_BROKER:-homeassistant.local}
+      - MQTT_PORT=${MQTT_PORT:-1883}
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_DISCOVERY_PREFIX=homeassistant
+      - MQTT_TOPIC_PREFIX=multizone
+    depends_on:
+      - redis
+      - logic
+    profiles:
+      - mqtt
+
+  redis:
+    image: redis:7-alpine
+    container_name: multizone-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  default:
+    name: multizone-network

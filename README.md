@@ -13,6 +13,25 @@ This project provides a complete solution for managing multiple heating/cooling 
 
 ## Quick Start
 
+### Using Pre-built Multi-architecture Images
+
+Pre-built Docker images are available on GitHub Container Registry (GHCR) supporting multiple architectures:
+- **amd64** (x86_64)
+- **armv7** (32-bit ARM)
+- **aarch64** (64-bit ARM)
+
+```bash
+# Pull the latest images
+docker pull ghcr.io/chester929/multizone-logic:latest
+docker pull ghcr.io/chester929/multizone-frontend:latest
+docker pull ghcr.io/chester929/multizone-mqtt:latest
+
+# Or use specific versions
+docker pull ghcr.io/chester929/multizone-logic:v1.0.0
+```
+
+The images will automatically select the correct architecture for your platform.
+
 ### Using Docker Compose (Local Development)
 
 ```bash
@@ -268,11 +287,15 @@ Install as a multi-container add-on:
 
 For advanced users running Home Assistant Container/Core:
 
-1. Deploy containers separately:
-   - `multizone-logic:latest` (GoLang)
-   - `multizone-frontend:latest` (TypeScript)
-   - `redis:latest` (if not using external)
-   - `multizone-mqtt:latest` (if using MQTT)
+1. Deploy containers separately using pre-built multi-architecture images from GHCR:
+   ```bash
+   docker pull ghcr.io/chester929/multizone-logic:latest
+   docker pull ghcr.io/chester929/multizone-frontend:latest
+   docker pull ghcr.io/chester929/multizone-mqtt:latest
+   ```
+   - Supports amd64, armv7, and aarch64 architectures
+   - Or use specific version tags (e.g., `v1.0.0`)
+   - Add external Redis if needed: `docker pull redis:7-alpine`
 2. Configure via environment variables or config files
 3. Connect to MQTT broker or install custom integration
 
@@ -532,7 +555,7 @@ custom_integration:
 - [ ] Comprehensive testing
 - [ ] Documentation completion
 - [ ] CI/CD pipelines
-- [ ] Multi-architecture builds
+- [x] Multi-architecture builds
 - [ ] Performance optimization
 
 ## Contributing
