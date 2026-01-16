@@ -46,7 +46,23 @@ disable = [
     "too-few-public-methods",
     "too-many-instance-attributes",
     "too-many-arguments",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-return-statements",
+    "too-many-positional-arguments",
+    "too-many-lines",
+    "abstract-method",
+    "fixme",
+    "broad-exception-caught",
+    "duplicate-code",
+    "import-outside-toplevel",
+    "unused-argument",
+    "unnecessary-pass",
+    "import-error",
 ]
+
+[tool.pylint.FORMAT]
+max-line-length = 115
 
 [tool.mypy]
 python_version = "3.11"

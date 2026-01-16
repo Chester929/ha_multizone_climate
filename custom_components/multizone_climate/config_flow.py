@@ -8,8 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import entity_registry as er, selector
 
@@ -748,7 +747,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
                 # Show zone selector
                 zone_options = {
-                    zone_id: zones[zone_id].get("name", zone_id) for zone_id in zones
+                    zone_id: zone_data.get("name", zone_id)
+                    for zone_id, zone_data in zones.items()
                 }
                 data_schema = vol.Schema(
                     {
@@ -954,7 +954,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
                 # Show zone selector
                 zone_options = {
-                    zone_id: zones[zone_id].get("name", zone_id) for zone_id in zones
+                    zone_id: zone_data.get("name", zone_id)
+                    for zone_id, zone_data in zones.items()
                 }
                 data_schema = vol.Schema(
                     {

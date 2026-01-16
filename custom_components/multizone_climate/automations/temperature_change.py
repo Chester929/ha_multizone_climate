@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 import logging
 import asyncio
-from datetime import timedelta
 
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -93,6 +92,7 @@ class TemperatureChangeAutomation:
             await asyncio.sleep(5)
             await self._enqueue_jobs()
         except asyncio.CancelledError:
+            # Task was cancelled during debounce wait, this is expected behavior
             pass
 
     async def _enqueue_jobs(self) -> None:
@@ -135,4 +135,5 @@ class TemperatureChangeAutomation:
             try:
                 await self._debounce_task
             except asyncio.CancelledError:
+                # Task cancellation is expected during cleanup
                 pass
