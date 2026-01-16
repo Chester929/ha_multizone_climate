@@ -137,9 +137,9 @@ class MultizoneTemperatureSensor(SensorEntity):
 
         if self.sensor_type == "main_current_temperature":
             return main_climate.get("current_temperature")
-        elif self.sensor_type == "main_target_temperature":
+        if self.sensor_type == "main_target_temperature":
             return main_climate.get("target_temperature")
-        elif self.sensor_type == "outdoor_temperature":
+        if self.sensor_type == "outdoor_temperature":
             return main_climate.get("outdoor_temperature")
 
         return None
@@ -207,10 +207,10 @@ class MultizoneTextSensor(SensorEntity):
             return sum(
                 1 for zone in zones.values() if zone.get("valve_state") == "open"
             )
-        elif self.sensor_type == "calculate_queue_size":
+        if self.sensor_type == "calculate_queue_size":
             # Return cached queue size from coordinator data
             return self.coordinator.data.get("calculate_queue_size", 0)
-        elif self.sensor_type == "valve_queue_size":
+        if self.sensor_type == "valve_queue_size":
             # Return cached queue size from coordinator data
             return self.coordinator.data.get("valve_queue_size", 0)
 
@@ -352,16 +352,15 @@ class ZoneTextSensor(SensorEntity):
 
         if self.sensor_type == "satisfaction":
             return zone_data.get("satisfaction_state")
-        elif self.sensor_type == "valve_state":
+        if self.sensor_type == "valve_state":
             return zone_data.get("valve_state")
-        elif self.sensor_type == "direction":
+        if self.sensor_type == "direction":
             # Determine direction from temperature_rising and temperature_falling
             if zone_data.get("temperature_rising"):
                 return "rising"
-            elif zone_data.get("temperature_falling"):
+            if zone_data.get("temperature_falling"):
                 return "falling"
-            else:
-                return "stable"
+            return "stable"
 
         return None
 

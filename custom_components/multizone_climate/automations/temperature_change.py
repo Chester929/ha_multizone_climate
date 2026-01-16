@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 import logging
 import asyncio
-from datetime import timedelta
 
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
