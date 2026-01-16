@@ -42,20 +42,20 @@ func main() {
 
 	// Create HTTP router
 	router := mux.NewRouter()
-	
+
 	// Health and status endpoints
 	router.HandleFunc("/health", api.HealthHandler).Methods("GET")
 	router.HandleFunc("/status", api.StatusHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/metrics", api.MetricsHandler(redisClient)).Methods("GET")
-	
+
 	// Zone management endpoints
 	router.HandleFunc("/api/zones", api.ListZonesHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/api/zones/{id}", api.GetZoneHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/api/zones/{id}", api.UpdateZoneHandler(redisClient)).Methods("PUT")
-	
+
 	// Temperature calculation endpoints
 	router.HandleFunc("/api/calculate", api.CalculateMainTempHandler(redisClient)).Methods("POST")
-	
+
 	// Create HTTP server
 	addr := fmt.Sprintf(":%s", cfg.HTTPPort)
 	srv := &http.Server{

@@ -17,7 +17,7 @@ type Client struct {
 // NewClient creates a new Redis client
 func NewClient(ctx context.Context, cfg *config.Config) (*Client, error) {
 	addr := fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort)
-	
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: cfg.RedisPassword,

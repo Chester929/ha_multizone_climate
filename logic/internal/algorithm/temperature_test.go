@@ -75,11 +75,11 @@ func TestCalculateMainTargetTemperature(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			target, shouldUpdate := CalculateMainTargetTemperature(tt.zones, tt.config, tt.currentTarget)
-			
+
 			if shouldUpdate != tt.shouldUpdate {
 				t.Errorf("shouldUpdate = %v, want %v", shouldUpdate, tt.shouldUpdate)
 			}
-			
+
 			if shouldUpdate && target != tt.expectedTarget {
 				t.Errorf("target = %v, want %v", target, tt.expectedTarget)
 			}
@@ -89,10 +89,10 @@ func TestCalculateMainTargetTemperature(t *testing.T) {
 
 func TestDetermineZoneSatisfaction(t *testing.T) {
 	tests := []struct {
-		name         string
-		zone         models.ZoneState
-		epsilon      float64
-		expectedSat  string
+		name        string
+		zone        models.ZoneState
+		epsilon     float64
+		expectedSat string
 	}{
 		{
 			name: "Underheated zone",
@@ -141,10 +141,10 @@ func TestDetermineZoneSatisfaction(t *testing.T) {
 
 func TestCheckMinimumValves(t *testing.T) {
 	tests := []struct {
-		name            string
-		zones           []models.ZoneState
-		minValvesOpen   int
-		expectedValves  int
+		name           string
+		zones          []models.ZoneState
+		minValvesOpen  int
+		expectedValves int
 	}{
 		{
 			name: "Sufficient valves open",

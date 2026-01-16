@@ -17,10 +17,10 @@ const (
 	// defaultLockTimeoutSeconds is the TTL for distributed locks in seconds.
 	// This prevents locks from being held indefinitely if a worker crashes.
 	defaultLockTimeoutSeconds = 30
-	
+
 	// workerBackoffDuration is the duration to wait before retrying after an error
 	workerBackoffDuration = 1 * time.Second
-	
+
 	// Queue keys
 	jobQueueKey        = "multizone:job_queue"
 	deadLetterQueueKey = "multizone:dead_letter_queue"
@@ -135,12 +135,12 @@ func (p *Pool) processNextJob(workerID int) error {
 	var job models.Job
 	if err := json.Unmarshal([]byte(jobData), &job); err != nil {
 		log.Printf("Worker %d failed to unmarshal job: %v", workerID, err)
-		
+
 		// Send malformed job data to a dead letter queue so it can be inspected later
 		if dlqErr := p.client.LPush(p.ctx, deadLetterQueueKey, jobData); dlqErr != nil {
 			log.Printf("Worker %d failed to push job to dead letter queue: %v (original unmarshal error: %v)", workerID, dlqErr, err)
 		}
-		
+
 		// Do not propagate the error, as the malformed job has already been removed from the main queue
 		return nil
 	}
@@ -249,12 +249,12 @@ func (p *Pool) releaseLock(lockKey string, expectedValue string) error {
 		}
 		return err
 	}
-	
+
 	// Only delete if we own the lock
 	if currentValue == expectedValue {
 		return p.client.Del(p.ctx, lockKey)
 	}
-	
+
 	// Lock was acquired by another worker (shouldn't happen, but log it)
 	log.Printf("Lock ownership mismatch for %s: expected %s, got %s", lockKey, expectedValue, currentValue)
 	return nil

@@ -40,7 +40,7 @@ func CalculateMainTargetTemperature(zones []models.ZoneState, config models.Glob
 		}
 		minTarget := slices.Min(targets)
 		maxTarget := slices.Max(targets)
-		
+
 		// Use configured slider position (default to 0.5 if not set)
 		sliderPos := config.SliderPosition
 		if sliderPos < 0 || sliderPos > 1 {
