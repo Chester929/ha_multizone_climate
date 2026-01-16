@@ -1,0 +1,151 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Redis Configuration",
+        "description": "Configure Redis connection for Multizone Climate",
+        "data": {
+          "redis_host": "Redis Host",
+          "redis_port": "Redis Port",
+          "redis_password": "Redis Password (optional)",
+          "redis_db": "Redis Database",
+          "redis_key_prefix": "Redis Key Prefix"
+        }
+      },
+      "main_climate": {
+        "title": "Main Climate Entity",
+        "description": "Select your main HVAC thermostat entity",
+        "data": {
+          "main_climate_entity_id": "Main Climate Entity"
+        }
+      },
+      "automation_config": {
+        "title": "Automation Configuration",
+        "description": "Configure multizone automation parameters",
+        "data": {
+          "use_average_mode": "Use Average Mode",
+          "main_target_all_zones_satisfied": "Main Target When All Zones Satisfied (%)",
+          "min_valves_open": "Minimum Valves Open",
+          "main_min_temp": "Main Minimum Temperature",
+          "main_max_temp": "Main Maximum Temperature",
+          "main_change_threshold": "Main Change Threshold",
+          "valve_actuation_delay": "Valve Actuation Delay (seconds)",
+          "coordinator_interval": "Coordinator Interval (seconds)",
+          "satisfaction_eps": "Satisfaction Epsilon"
+        },
+        "data_description": {
+          "use_average_mode": "Calculate main target using average of zone targets instead of slider-based interpolation",
+          "main_target_all_zones_satisfied": "Only visible when Average Mode is disabled. 0% = lowest zone target, 50% = midpoint, 100% = highest zone target",
+          "satisfaction_eps": "Buffer zone around target temperature for satisfaction determination (0.0 = exact target, 0.1 = ±0.1°C)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Redis",
+      "invalid_auth": "Invalid Redis authentication",
+      "invalid_entity": "Selected entity does not exist",
+      "not_climate_entity": "Selected entity is not a climate entity",
+      "invalid_temp_range": "Minimum temperature must be less than maximum temperature",
+      "invalid_min_valves": "Minimum valves open must be at least 1",
+      "invalid_slider_value": "Slider value must be between 0 and 1",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Integration is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Multizone Climate Options",
+        "menu_options": {
+          "config": "Edit Configuration",
+          "zones": "Manage Zones"
+        }
+      },
+      "config": {
+        "title": "Edit Configuration",
+        "description": "Update multizone automation parameters",
+        "data": {
+          "use_average_mode": "Use Average Mode",
+          "main_target_all_zones_satisfied": "Main Target When All Zones Satisfied (%)",
+          "min_valves_open": "Minimum Valves Open",
+          "main_min_temp": "Main Minimum Temperature",
+          "main_max_temp": "Main Maximum Temperature",
+          "main_change_threshold": "Main Change Threshold",
+          "valve_actuation_delay": "Valve Actuation Delay (seconds)",
+          "coordinator_interval": "Coordinator Interval (seconds)",
+          "satisfaction_eps": "Satisfaction Epsilon"
+        }
+      },
+      "zones": {
+        "title": "Manage Climate Zones",
+        "menu_options": {
+          "add_zone": "Add New Zone",
+          "edit_zone": "Edit Existing Zone",
+          "delete_zone": "Delete Zone"
+        }
+      },
+      "add_zone": {
+        "title": "Add Climate Zone",
+        "description": "Configure a new climate zone",
+        "data": {
+          "zone_name": "Zone Name",
+          "zone_temperature_sensor": "Temperature Sensor",
+          "zone_valve_switch": "Valve Switch",
+          "zone_target_change_threshold": "Target Change Threshold",
+          "zone_opening_offset": "Opening Offset Below Target",
+          "zone_closing_offset": "Closing Offset Above Target",
+          "zone_is_fallback_valve": "Is Fallback Valve",
+          "zone_priority": "Priority"
+        },
+        "data_description": {
+          "zone_is_fallback_valve": "Force this valve to stay open when minimum valves requirement applies",
+          "zone_priority": "Higher values are managed first (0 = prioritize by temperature deficit)"
+        }
+      },
+      "edit_zone": {
+        "title": "Edit Climate Zone",
+        "description": "Update zone configuration or select a zone to edit",
+        "data": {
+          "zone_id": "Select Zone",
+          "zone_name": "Zone Name",
+          "zone_temperature_sensor": "Temperature Sensor",
+          "zone_valve_switch": "Valve Switch",
+          "zone_target_change_threshold": "Target Change Threshold",
+          "zone_opening_offset": "Opening Offset Below Target",
+          "zone_closing_offset": "Closing Offset Above Target",
+          "zone_is_fallback_valve": "Is Fallback Valve",
+          "zone_priority": "Priority"
+        }
+      },
+      "delete_zone": {
+        "title": "Delete Climate Zone",
+        "description": "Select a zone to delete and confirm deletion. Zone: {zone_name}",
+        "data": {
+          "zone_id": "Select Zone",
+          "confirm": "Confirm Deletion"
+        }
+      }
+    },
+    "error": {
+      "redis_update_failed": "Failed to update Redis configuration",
+      "invalid_temp_sensor": "Selected temperature sensor does not exist",
+      "invalid_valve_switch": "Selected valve switch does not exist",
+      "not_sensor_entity": "Selected entity is not a sensor",
+      "not_switch_entity": "Selected entity is not a switch",
+      "zone_already_exists": "A zone with this name already exists",
+      "create_zone_failed": "Failed to create zone",
+      "update_zone_failed": "Failed to update zone",
+      "delete_zone_failed": "Failed to delete zone",
+      "invalid_temp_range": "Minimum temperature must be less than maximum temperature",
+      "invalid_min_valves": "Minimum valves open must be at least 1",
+      "invalid_slider_value": "Slider value must be between 0 and 1"
+    },
+    "abort": {
+      "no_zones": "No zones available",
+      "load_zones_failed": "Failed to load zones from Redis",
+      "deletion_cancelled": "Zone deletion cancelled"
+    }
+  }
+}

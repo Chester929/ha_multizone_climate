@@ -1,0 +1,16 @@
+{
+  "domain": "multizone_climate",
+  "name": "Multizone Climate",
+  "version": "0.1.0",
+  "documentation": "https://github.com/Chester929/ha_multizone_climate",
+  "issue_tracker": "https://github.com/Chester929/ha_multizone_climate/issues",
+  "dependencies": [],
+  "codeowners": ["@Chester929"],
+  "requirements": [
+    "redis>=4.5.0",
+    "aioredis>=2.0.0"
+  ],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "integration_type": "device"
+}
