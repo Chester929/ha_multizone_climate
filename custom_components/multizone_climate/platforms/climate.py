@@ -31,7 +31,6 @@ from ..const import (
     STATE_UNKNOWN,
     HVAC_ACTION_HEATING,
     HVAC_ACTION_COOLING,
-    HVAC_ACTION_IDLE,
     HVAC_ACTION_OFF,
     JOB_TYPE_CALCULATE_MAIN_TEMP,
     JOB_TYPE_UPDATE_VALVES,
@@ -212,9 +211,9 @@ class MainClimateDevice(ClimateEntity):
         # Map from main climate entity mode
         if hvac_mode_str in ("heat", "manual", "heating"):
             return HVACMode.HEAT
-        elif hvac_mode_str in ("cool", "cooling"):
+        if hvac_mode_str in ("cool", "cooling"):
             return HVACMode.COOL
-        elif hvac_mode_str in ("off", "anti-freeze"):
+        if hvac_mode_str in ("off", "anti-freeze"):
             return HVACMode.OFF
 
         return HVACMode.OFF
@@ -245,11 +244,11 @@ class MainClimateDevice(ClimateEntity):
 
         if hvac_action_str == "heating":
             return HVACAction.HEATING
-        elif hvac_action_str == "cooling":
+        if hvac_action_str == "cooling":
             return HVACAction.COOLING
-        elif hvac_action_str == "idle":
+        if hvac_action_str == "idle":
             return HVACAction.IDLE
-        elif hvac_action_str == "off":
+        if hvac_action_str == "off":
             return HVACAction.OFF
 
         return HVACAction.IDLE

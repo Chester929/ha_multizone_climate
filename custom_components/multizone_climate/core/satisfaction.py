@@ -142,12 +142,11 @@ class ZoneSatisfactionStateMachine:
                 ):
                     return "satisfied"
                 return "overheated"
-            else:
-                # Any other state -> overheated when exceeding upper bound
-                return "overheated"
+            # Any other state -> overheated when exceeding upper bound
+            return "overheated"
 
         # Check if currently underheated (below lower bound)
-        elif current_temperature < self.lower_bound:
+        if current_temperature < self.lower_bound:
             # If we're underheated, stay underheated until we reach target + eps while rising
             if current_state == "underheated":
                 # Transition to satisfied only when reaching target + eps while rising
@@ -157,35 +156,32 @@ class ZoneSatisfactionStateMachine:
                 ):
                     return "satisfied"
                 return "underheated"
-            else:
-                # Any other state -> underheated when falling below lower bound
-                return "underheated"
+            # Any other state -> underheated when falling below lower bound
+            return "underheated"
 
         # Between bounds - handle hysteresis
-        else:
-            # If currently underheated, check for transition to satisfied
-            if current_state == "underheated":
-                # Must reach target + eps while rising to become satisfied
-                if (
-                    temp_direction == "rising"
-                    and current_temperature >= self.satisfied_entry_heating
-                ):
-                    return "satisfied"
-                return "underheated"
-
-            # If currently overheated, check for transition to satisfied
-            elif current_state == "overheated":
-                # Must reach target - eps while falling to become satisfied
-                if (
-                    temp_direction == "falling"
-                    and current_temperature <= self.satisfied_exit_heating
-                ):
-                    return "satisfied"
-                return "overheated"
-
-            # If currently satisfied or unknown, stay/become satisfied (within bounds)
-            else:
+        # If currently underheated, check for transition to satisfied
+        if current_state == "underheated":
+            # Must reach target + eps while rising to become satisfied
+            if (
+                temp_direction == "rising"
+                and current_temperature >= self.satisfied_entry_heating
+            ):
                 return "satisfied"
+            return "underheated"
+
+        # If currently overheated, check for transition to satisfied
+        if current_state == "overheated":
+            # Must reach target - eps while falling to become satisfied
+            if (
+                temp_direction == "falling"
+                and current_temperature <= self.satisfied_exit_heating
+            ):
+                return "satisfied"
+            return "overheated"
+
+        # If currently satisfied or unknown, stay/become satisfied (within bounds)
+        return "satisfied"
 
     def _update_cooling_state(
         self,
@@ -226,12 +222,11 @@ class ZoneSatisfactionStateMachine:
                 ):
                     return "satisfied"
                 return "undercooled"
-            else:
-                # Any other state -> undercooled when exceeding upper bound
-                return "undercooled"
+            # Any other state -> undercooled when exceeding upper bound
+            return "undercooled"
 
         # Check if currently overcooled (below lower bound - too cool)
-        elif current_temperature < self.lower_bound:
+        if current_temperature < self.lower_bound:
             # If we're overcooled, stay overcooled until we reach target + eps while rising
             if current_state == "overcooled":
                 # Transition to satisfied only when reaching target + eps while rising
@@ -241,35 +236,32 @@ class ZoneSatisfactionStateMachine:
                 ):
                     return "satisfied"
                 return "overcooled"
-            else:
-                # Any other state -> overcooled when falling below lower bound
-                return "overcooled"
+            # Any other state -> overcooled when falling below lower bound
+            return "overcooled"
 
         # Between bounds - handle hysteresis
-        else:
-            # If currently undercooled, check for transition to satisfied
-            if current_state == "undercooled":
-                # Must reach target - eps while falling to become satisfied
-                if (
-                    temp_direction == "falling"
-                    and current_temperature <= satisfied_entry_cooling
-                ):
-                    return "satisfied"
-                return "undercooled"
-
-            # If currently overcooled, check for transition to satisfied
-            elif current_state == "overcooled":
-                # Must reach target + eps while rising to become satisfied
-                if (
-                    temp_direction == "rising"
-                    and current_temperature >= satisfied_exit_cooling
-                ):
-                    return "satisfied"
-                return "overcooled"
-
-            # If currently satisfied or unknown, stay/become satisfied (within bounds)
-            else:
+        # If currently undercooled, check for transition to satisfied
+        if current_state == "undercooled":
+            # Must reach target - eps while falling to become satisfied
+            if (
+                temp_direction == "falling"
+                and current_temperature <= satisfied_entry_cooling
+            ):
                 return "satisfied"
+            return "undercooled"
+
+        # If currently overcooled, check for transition to satisfied
+        if current_state == "overcooled":
+            # Must reach target + eps while rising to become satisfied
+            if (
+                temp_direction == "rising"
+                and current_temperature >= satisfied_exit_cooling
+            ):
+                return "satisfied"
+            return "overcooled"
+
+        # If currently satisfied or unknown, stay/become satisfied (within bounds)
+        return "satisfied"
 
     def _determine_direction(
         self, current_temp: float, previous_temp: float
@@ -286,7 +278,6 @@ class ZoneSatisfactionStateMachine:
         """
         if current_temp > previous_temp:
             return "rising"
-        elif current_temp < previous_temp:
+        if current_temp < previous_temp:
             return "falling"
-        else:
-            return "stable"
+        return "stable"
