@@ -1,6 +1,5 @@
 """Unit tests for satisfaction state machine."""
 
-import pytest
 from custom_components.multizone_climate.core.satisfaction import (
     ZoneSatisfactionStateMachine,
 )

@@ -1,6 +1,5 @@
 """Unit tests for core algorithms."""
 
-import pytest
 from custom_components.multizone_climate.core.algorithms import (
     calculate_main_target_temperature,
     round_to_half_degree,
