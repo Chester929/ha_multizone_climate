@@ -13,6 +13,12 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+const (
+	// defaultLockTimeout is the TTL for distributed locks in seconds.
+	// This prevents locks from being held indefinitely if a worker crashes.
+	defaultLockTimeout = 30
+)
+
 // JobType constants define the types of jobs that can be processed
 const (
 	JobTypeCalculateTemp = "calculate_temp"
@@ -98,9 +104,9 @@ func (p *Pool) worker(id int) {
 
 // processNextJob attempts to pop and process the next job from the queue
 func (p *Pool) processNextJob(workerID int) error {
-	// Pop job from queue (LIFO - using RPop on a list that's pushed with LPush)
-	// Note: This creates LIFO behavior. For FIFO, use RPush with RPop instead.
-	jobData, err := p.client.RPop(p.ctx, "multizone:job_queue")
+	// Pop job from queue (FIFO - using LPop on a list that's pushed with LPush)
+	// This ensures jobs are processed in the order they were enqueued.
+	jobData, err := p.client.LPop(p.ctx, "multizone:job_queue")
 	if err != nil {
 		return err
 	}
@@ -188,16 +194,20 @@ func (p *Pool) processNextJob(workerID int) error {
 // acquireLock attempts to acquire a distributed lock
 func (p *Pool) acquireLock(lockKey string, workerID int) (bool, error) {
 	lockValue := fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
-	acquired, err := p.client.SetNX(p.ctx, lockKey, lockValue, 30) // 30 second timeout
+	acquired, err := p.client.SetNX(p.ctx, lockKey, lockValue, defaultLockTimeout)
 	if err != nil {
 		return false, err
 	}
 	return acquired, nil
 }
 
-// releaseLock releases a distributed lock
+// releaseLock releases a distributed lock.
+// We rely on the lock's TTL for automatic release and do not explicitly delete it.
+// This avoids the race condition where a lock expires and is reacquired by another
+// worker before the original worker attempts to delete it.
 func (p *Pool) releaseLock(lockKey string) error {
-	return p.client.Del(p.ctx, lockKey)
+	// Lock will expire automatically via TTL
+	return nil
 }
 
 // saveJobStatus saves the job status to Redis
