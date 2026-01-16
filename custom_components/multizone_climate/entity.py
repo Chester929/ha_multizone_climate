@@ -24,17 +24,20 @@ class MultizoneClimateEntity(Entity):
     @property
     def device_info(self) -> dict:
         """
-        Return device information.
+        Return device information for entity grouping.
+
+        All entities from this integration will be grouped under a single device
+        in the Home Assistant UI, making it easier to manage and monitor.
 
         Returns:
-            dict: Device information for grouping entities
+            dict: Device information with identifiers, name, manufacturer, and model
         """
-        # TODO: Return device info for entity grouping
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
             "name": "Multizone Climate",
             "manufacturer": "Chester929",
             "model": "Multizone Climate Controller",
+            "sw_version": "1.0.0",
         }
 
     @property
