@@ -4,6 +4,27 @@ This directory contains example configurations and scripts for the Multizone Cli
 
 ## Files
 
+### docker-compose.ghcr.yml (Root Directory)
+
+Example docker-compose file that uses pre-built multi-architecture images from GitHub Container Registry (GHCR). This is located in the root directory and is useful for:
+- Quick deployment without building images locally
+- Using tested, released versions
+- Automatic architecture detection (amd64, armv7, aarch64)
+
+To use pre-built images:
+
+```bash
+# From the root directory
+cp .env.example .env
+# Edit .env with your settings
+
+# Start services using pre-built images
+docker-compose -f docker-compose.ghcr.yml up -d
+
+# Or with MQTT middleware
+docker-compose -f docker-compose.ghcr.yml --profile mqtt up -d
+```
+
 ### zones-config.yaml
 
 Example zone configuration in YAML format. This demonstrates:
