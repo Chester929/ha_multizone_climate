@@ -4,6 +4,31 @@ This document provides a comprehensive guide for deploying and using the Multizo
 
 ## Quick Start
 
+### Using Pre-built Multi-architecture Images
+
+The easiest way to get started is using pre-built images from GitHub Container Registry:
+
+```bash
+# Clone the repository
+git clone https://github.com/Chester929/ha_multizone_climate.git
+cd ha_multizone_climate
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Start services using pre-built images
+docker-compose -f docker-compose.ghcr.yml up -d
+
+# Or with MQTT middleware
+docker-compose -f docker-compose.ghcr.yml --profile mqtt up -d
+```
+
+The images automatically support multiple architectures:
+- **amd64** (x86_64)
+- **armv7** (32-bit ARM)
+- **aarch64** (64-bit ARM)
+
 ### Prerequisites
 
 - Docker and Docker Compose installed
@@ -11,7 +36,7 @@ This document provides a comprehensive guide for deploying and using the Multizo
 - Redis (bundled or external)
 - MQTT Broker (optional, for MQTT integration)
 
-### Local Development
+### Local Development (Building from Source)
 
 1. **Clone the repository**
    ```bash
