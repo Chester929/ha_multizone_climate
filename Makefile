@@ -1,4 +1,4 @@
-.PHONY: help build start stop restart logs clean test
+.PHONY: help build start stop restart logs clean test test-integration test-integration-verbose test-integration-clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -88,3 +88,14 @@ init-redis: ## Initialize Redis with example data
 reset-redis: ## Reset Redis data
 	docker-compose exec redis redis-cli --scan --pattern "multizone:*" | xargs docker-compose exec -T redis redis-cli DEL
 	@echo "Redis data cleared"
+
+test-integration: ## Run integration tests
+	cd tests/integration && docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
+	cd tests/integration && docker-compose -f docker-compose.test.yml down
+
+test-integration-verbose: ## Run integration tests with verbose output
+	cd tests/integration && docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans
+
+test-integration-clean: ## Clean up integration test containers and volumes
+	cd tests/integration && docker-compose -f docker-compose.test.yml down -v --remove-orphans
+	@echo "Integration test containers and volumes removed"

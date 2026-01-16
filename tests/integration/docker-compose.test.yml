@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # Test services that mirror production
+  logic-test:
+    build:
+      context: ../../logic
+      dockerfile: Dockerfile
+    container_name: multizone-logic-test
+    environment:
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - LOG_LEVEL=debug
+      - HTTP_PORT=8080
+    ports:
+      - "18080:8080"
+    depends_on:
+      redis-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - test-network
+
+  frontend-test:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: multizone-frontend-test
+    environment:
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - WEB_PORT=8099
+      - LOGIC_API_URL=http://logic-test:8080
+    ports:
+      - "18099:8099"
+    depends_on:
+      redis-test:
+        condition: service_healthy
+      logic-test:
+        condition: service_healthy
+    networks:
+      - test-network
+
+  mqtt-middleware-test:
+    build:
+      context: ../../mqtt-middleware
+      dockerfile: Dockerfile
+    container_name: multizone-mqtt-test
+    environment:
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - MQTT_BROKER=mqtt-broker-test
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
+      - MQTT_DISCOVERY_PREFIX=homeassistant
+      - MQTT_TOPIC_PREFIX=multizone
+      - REDIS_DB=0
+    depends_on:
+      redis-test:
+        condition: service_healthy
+      mqtt-broker-test:
+        condition: service_started
+    networks:
+      - test-network
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: multizone-redis-test
+    command: redis-server --appendonly yes --notify-keyspace-events KEA
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - test-network
+
+  mqtt-broker-test:
+    image: eclipse-mosquitto:2
+    container_name: multizone-mqtt-broker-test
+    ports:
+      - "11883:1883"
+    volumes:
+      - ./mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - test-network
+
+  # Test runner container
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: multizone-test-runner
+    environment:
+      - LOGIC_URL=http://logic-test:8080
+      - FRONTEND_URL=http://frontend-test:8099
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - MQTT_BROKER=mqtt-broker-test
+      - MQTT_PORT=1883
+    depends_on:
+      logic-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      mqtt-broker-test:
+        condition: service_started
+    volumes:
+      - ./tests:/tests:ro
+      - ./results:/results
+    networks:
+      - test-network
+    command: ["./run-tests.sh"]
+
+networks:
+  test-network:
+    name: multizone-test-network
