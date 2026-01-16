@@ -86,9 +86,24 @@ class TestMainTargetCalculationScenarios:
         Slider at 0% should give: 20°C
         """
         zones = [
-            {"zone_id": "z1", "target_temperature": 20.0, "satisfaction": "underheated", "state": "ON"},
-            {"zone_id": "z2", "target_temperature": 22.0, "satisfaction": "satisfied", "state": "ON"},
-            {"zone_id": "z3", "target_temperature": 24.0, "satisfaction": "satisfied", "state": "ON"},
+            {
+                "zone_id": "z1",
+                "target_temperature": 20.0,
+                "satisfaction": "underheated",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z2",
+                "target_temperature": 22.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z3",
+                "target_temperature": 24.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
         ]
 
         config = {
@@ -110,9 +125,24 @@ class TestMainTargetCalculationScenarios:
         Slider at 100% should give: 24°C
         """
         zones = [
-            {"zone_id": "z1", "target_temperature": 20.0, "satisfaction": "satisfied", "state": "ON"},
-            {"zone_id": "z2", "target_temperature": 22.0, "satisfaction": "satisfied", "state": "ON"},
-            {"zone_id": "z3", "target_temperature": 24.0, "satisfaction": "underheated", "state": "ON"},
+            {
+                "zone_id": "z1",
+                "target_temperature": 20.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z2",
+                "target_temperature": 22.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z3",
+                "target_temperature": 24.0,
+                "satisfaction": "underheated",
+                "state": "ON",
+            },
         ]
 
         config = {
@@ -134,9 +164,24 @@ class TestMainTargetCalculationScenarios:
         Average: 22.333... → rounds to 22.5°C
         """
         zones = [
-            {"zone_id": "z1", "target_temperature": 20.0, "satisfaction": "underheated", "state": "ON"},
-            {"zone_id": "z2", "target_temperature": 23.0, "satisfaction": "satisfied", "state": "ON"},
-            {"zone_id": "z3", "target_temperature": 24.0, "satisfaction": "satisfied", "state": "ON"},
+            {
+                "zone_id": "z1",
+                "target_temperature": 20.0,
+                "satisfaction": "underheated",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z2",
+                "target_temperature": 23.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z3",
+                "target_temperature": 24.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
         ]
 
         config = {
@@ -158,9 +203,24 @@ class TestMainTargetCalculationScenarios:
         Should only use 20°C and 22°C for average: 21°C
         """
         zones = [
-            {"zone_id": "z1", "target_temperature": 20.0, "satisfaction": "underheated", "state": "ON"},
-            {"zone_id": "z2", "target_temperature": 22.0, "satisfaction": "satisfied", "state": "ON"},
-            {"zone_id": "z3", "target_temperature": 24.0, "satisfaction": "overheated", "state": "ON"},
+            {
+                "zone_id": "z1",
+                "target_temperature": 20.0,
+                "satisfaction": "underheated",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z2",
+                "target_temperature": 22.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z3",
+                "target_temperature": 24.0,
+                "satisfaction": "overheated",
+                "state": "ON",
+            },
         ]
 
         config = {
@@ -184,8 +244,18 @@ class TestMainTargetCalculationScenarios:
         Change: 0.3°C < 0.5°C → no update
         """
         zones = [
-            {"zone_id": "z1", "target_temperature": 22.0, "satisfaction": "satisfied", "state": "ON"},
-            {"zone_id": "z2", "target_temperature": 22.5, "satisfaction": "satisfied", "state": "ON"},
+            {
+                "zone_id": "z1",
+                "target_temperature": 22.0,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
+            {
+                "zone_id": "z2",
+                "target_temperature": 22.5,
+                "satisfaction": "satisfied",
+                "state": "ON",
+            },
         ]
 
         config = {
@@ -449,13 +519,13 @@ class TestValveControlScenarios:
 
         # Get sorted zones (this tests the internal sorting logic)
         # We'll call the method and check the order of valve operations
-        
+
         # For this test, we just verify the logic is sound
         # The actual sorting happens inside update_valves
         # Let's verify priority values are set correctly
         assert zones[1]["priority"] == 10  # zone_a
-        assert zones[2]["priority"] == 5   # zone_b
-        assert zones[0]["priority"] == 0   # zone_c
+        assert zones[2]["priority"] == 5  # zone_b
+        assert zones[0]["priority"] == 0  # zone_c
 
     def test_scenario_minimum_valves_enforcement(self):
         """
