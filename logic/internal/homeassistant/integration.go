@@ -18,22 +18,16 @@ type Integration struct {
 	redisClient      *redis.Client
 	enabled          bool
 	websocketEnabled bool
-	ctx              context.Context
-	cancel           context.CancelFunc
 }
 
 // NewIntegration creates a new Home Assistant integration
 func NewIntegration(baseURL, token string, redisClient *redis.Client, enableWebSocket bool) *Integration {
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return &Integration{
 		client:           NewClient(baseURL, token),
 		wsClient:         NewWebSocketClient(baseURL, token),
 		redisClient:      redisClient,
 		enabled:          false,
 		websocketEnabled: enableWebSocket,
-		ctx:              ctx,
-		cancel:           cancel,
 	}
 }
 
@@ -450,7 +444,6 @@ func (i *Integration) Stop() error {
 		}
 	}
 
-	i.cancel()
 	i.enabled = false
 
 	log.Println("Home Assistant integration stopped")

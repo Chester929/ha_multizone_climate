@@ -19,7 +19,7 @@ type WebSocketClient struct {
 	mu            sync.Mutex
 	nextID        int64
 	subscriptions map[int64]*Subscription
-	eventHandlers map[string]EventHandler
+	eventHandlers map[string][]EventHandler // Changed to slice to support multiple handlers
 	running       bool
 	stopCh        chan struct{}
 }
@@ -58,7 +58,7 @@ func NewWebSocketClient(baseURL, token string) *WebSocketClient {
 		baseURL:       baseURL,
 		token:         token,
 		subscriptions: make(map[int64]*Subscription),
-		eventHandlers: make(map[string]EventHandler),
+		eventHandlers: make(map[string][]EventHandler),
 		stopCh:        make(chan struct{}),
 	}
 }
@@ -165,11 +165,14 @@ func (ws *WebSocketClient) readMessages() {
 // handleEvent processes incoming events
 func (ws *WebSocketClient) handleEvent(event *Event) {
 	ws.mu.Lock()
-	handler, exists := ws.eventHandlers[event.EventType]
+	handlers := ws.eventHandlers[event.EventType]
 	ws.mu.Unlock()
 
-	if exists && handler != nil {
-		go handler(event)
+	// Call all registered handlers for this event type
+	for _, handler := range handlers {
+		if handler != nil {
+			go handler(event)
+		}
 	}
 }
 
@@ -185,28 +188,40 @@ func (ws *WebSocketClient) SubscribeToStateChanges(handler EventHandler) (int64,
 	id := ws.nextID
 	ws.nextID++
 
-	// Register event handler
-	ws.eventHandlers["state_changed"] = handler
+	// Add handler to the list of handlers for this event type
+	ws.eventHandlers["state_changed"] = append(ws.eventHandlers["state_changed"], handler)
 
-	// Send subscription message
-	subMsg := map[string]interface{}{
-		"id":         id,
-		"type":       "subscribe_events",
-		"event_type": "state_changed",
+	// Send subscription message (only once per event type)
+	if len(ws.subscriptions) == 0 || !ws.hasSubscription("state_changed") {
+		subMsg := map[string]interface{}{
+			"id":         id,
+			"type":       "subscribe_events",
+			"event_type": "state_changed",
+		}
+
+		if err := ws.conn.WriteJSON(subMsg); err != nil {
+			return 0, fmt.Errorf("failed to subscribe: %w", err)
+		}
+
+		ws.subscriptions[id] = &Subscription{
+			ID:        id,
+			EventType: "state_changed",
+		}
+
+		log.Printf("Subscribed to state_changed events with ID: %d", id)
 	}
-
-	if err := ws.conn.WriteJSON(subMsg); err != nil {
-		return 0, fmt.Errorf("failed to subscribe: %w", err)
-	}
-
-	ws.subscriptions[id] = &Subscription{
-		ID:        id,
-		EventType: "state_changed",
-	}
-
-	log.Printf("Subscribed to state_changed events with ID: %d", id)
 
 	return id, nil
+}
+
+// hasSubscription checks if already subscribed to an event type
+func (ws *WebSocketClient) hasSubscription(eventType string) bool {
+	for _, sub := range ws.subscriptions {
+		if sub.EventType == eventType {
+			return true
+		}
+	}
+	return false
 }
 
 // SubscribeToEvents subscribes to specific event types
@@ -221,31 +236,34 @@ func (ws *WebSocketClient) SubscribeToEvents(eventType string, handler EventHand
 	id := ws.nextID
 	ws.nextID++
 
-	// Register event handler
-	ws.eventHandlers[eventType] = handler
+	// Add handler to the list of handlers for this event type
+	ws.eventHandlers[eventType] = append(ws.eventHandlers[eventType], handler)
 
-	// Send subscription message
-	subMsg := map[string]interface{}{
-		"id":         id,
-		"type":       "subscribe_events",
-		"event_type": eventType,
+	// Send subscription message (only once per event type)
+	if !ws.hasSubscription(eventType) {
+		subMsg := map[string]interface{}{
+			"id":         id,
+			"type":       "subscribe_events",
+			"event_type": eventType,
+		}
+
+		if err := ws.conn.WriteJSON(subMsg); err != nil {
+			return 0, fmt.Errorf("failed to subscribe: %w", err)
+		}
+
+		ws.subscriptions[id] = &Subscription{
+			ID:        id,
+			EventType: eventType,
+		}
+
+		log.Printf("Subscribed to %s events with ID: %d", eventType, id)
 	}
-
-	if err := ws.conn.WriteJSON(subMsg); err != nil {
-		return 0, fmt.Errorf("failed to subscribe: %w", err)
-	}
-
-	ws.subscriptions[id] = &Subscription{
-		ID:        id,
-		EventType: eventType,
-	}
-
-	log.Printf("Subscribed to %s events with ID: %d", eventType, id)
 
 	return id, nil
 }
 
-// Unsubscribe unsubscribes from events
+// Unsubscribe unsubscribes from events by subscription ID
+// Note: This removes the subscription but keeps event handlers as they may be used by other subscriptions
 func (ws *WebSocketClient) Unsubscribe(subscriptionID int64) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
@@ -254,7 +272,7 @@ func (ws *WebSocketClient) Unsubscribe(subscriptionID int64) error {
 		return fmt.Errorf("websocket not connected")
 	}
 
-	sub, exists := ws.subscriptions[subscriptionID]
+	_, exists := ws.subscriptions[subscriptionID]
 	if !exists {
 		return fmt.Errorf("subscription not found: %d", subscriptionID)
 	}
@@ -272,7 +290,7 @@ func (ws *WebSocketClient) Unsubscribe(subscriptionID int64) error {
 	}
 
 	delete(ws.subscriptions, subscriptionID)
-	delete(ws.eventHandlers, sub.EventType)
+	// Note: We don't delete event handlers as other subscriptions may still use them
 
 	log.Printf("Unsubscribed from subscription ID: %d", subscriptionID)
 
@@ -288,8 +306,10 @@ func (ws *WebSocketClient) Close() error {
 		return nil
 	}
 
-	close(ws.stopCh)
+	// Set running to false first to prevent race condition
 	ws.running = false
+	// Then close the stop channel to signal goroutines
+	close(ws.stopCh)
 
 	if ws.conn != nil {
 		return ws.conn.Close()
