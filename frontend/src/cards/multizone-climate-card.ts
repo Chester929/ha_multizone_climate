@@ -154,11 +154,13 @@ export class MultizoneClimateCard extends LitElement {
       case 'satisfied':
         return 'satisfied';
       case 'underheated':
-      case 'undercooled':
         return 'needs-heat';
-      case 'overheated':
-      case 'overcooled':
+      case 'undercooled':
         return 'needs-cool';
+      case 'overheated':
+        return 'needs-cool';
+      case 'overcooled':
+        return 'needs-heat';
       default:
         return 'unknown';
     }
@@ -173,8 +175,23 @@ export class MultizoneClimateCard extends LitElement {
     const entityState = this.hass.states[this.entity];
     if (!entityState) return;
     
-    const currentTarget = entityState.attributes.temperature || 20;
-    const newTarget = Math.round((currentTarget + delta) * 2) / 2; // Round to 0.5
+    const attrs = entityState.attributes || {};
+    const currentTarget = attrs.temperature ?? 20;
+
+    // Determine allowed temperature range
+    const minTemp =
+      (typeof attrs.min_temp === 'number' ? attrs.min_temp : undefined) ??
+      (typeof attrs.main_min_temp === 'number' ? attrs.main_min_temp : undefined) ??
+      5;
+    const maxTemp =
+      (typeof attrs.max_temp === 'number' ? attrs.max_temp : undefined) ??
+      (typeof attrs.main_max_temp === 'number' ? attrs.main_max_temp : undefined) ??
+      35;
+
+    // Compute new target and clamp to allowed range, rounding to 0.5
+    const rawTarget = currentTarget + delta;
+    const roundedTarget = Math.round(rawTarget * 2) / 2; // Round to 0.5
+    const newTarget = Math.min(Math.max(roundedTarget, minTemp), maxTemp);
     
     // Call Home Assistant service to set temperature
     this.hass.callService('climate', 'set_temperature', {

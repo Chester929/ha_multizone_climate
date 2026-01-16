@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 
 
 class MultizoneClimateEntity(Entity):
@@ -39,7 +39,7 @@ class MultizoneClimateEntity(Entity):
             "name": "Multizone Climate",
             "manufacturer": "Chester929",
             "model": "Multizone Climate Controller",
-            "sw_version": "1.0.0",
+            "sw_version": VERSION,
         }
 
     @property

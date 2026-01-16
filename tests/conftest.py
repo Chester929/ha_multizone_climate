@@ -39,8 +39,7 @@ def mock_redis_client():
     # Zone state methods
     client.get_zone_state = AsyncMock(return_value=None)
     client.set_zone_state = AsyncMock()
-    client.get_all_zones = AsyncMock(return_value=[])
-    client.get_zone_list = AsyncMock(return_value=[])
+    client.get_zone_ids = AsyncMock(return_value=[])
 
     # Main climate methods
     client.get_main_climate_state = AsyncMock(return_value={})
@@ -49,7 +48,7 @@ def mock_redis_client():
     # Job queue methods
     client.enqueue_job = AsyncMock()
     client.dequeue_job = AsyncMock(return_value=None)
-    client.get_queue_length = AsyncMock(return_value=0)
+    client.get_queue_size = AsyncMock(return_value=0)
 
     # Job lock methods
     client.acquire_job_lock = AsyncMock(return_value=True)

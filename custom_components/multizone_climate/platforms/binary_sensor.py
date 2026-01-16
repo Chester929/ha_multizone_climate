@@ -58,31 +58,8 @@ class MultizoneBinarySensor(BinarySensorEntity):
         Returns:
             bool: True if condition is met
         """
-        # Get state from coordinator data
-        if not hasattr(self.coordinator, "data") or self.coordinator.data is None:
-            return False
-
-        data = self.coordinator.data
-
-        # Determine state based on sensor type
-        if self.sensor_type == "system_status":
-            # System is OK if no errors in data
-            return data.get("system_error", False) is False
-        elif self.sensor_type == "redis_connection":
-            # Redis is connected if we have valid data
-            return data.get("redis_connected", False)
-        elif self.sensor_type == "min_valves_ok":
-            # Minimum valves requirement is met
-            return data.get("min_valves_ok", True)
-
+        # Placeholder implementation: binary sensors not yet wired to real data
+        # The coordinator populates 'config', 'zones', 'main_climate',
+        # 'calculate_queue_size', and 'valve_queue_size', but not the fields
+        # referenced below. This avoids errors while maintaining the structure.
         return False
-
-    async def async_update(self) -> None:
-        """
-        Update sensor state from coordinator.
-
-        This is called by Home Assistant when an update is needed.
-        The coordinator manages the actual data fetching.
-        """
-        # Request coordinator to update data
-        await self.coordinator.async_request_refresh()
