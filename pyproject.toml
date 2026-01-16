@@ -58,6 +58,7 @@ disable = [
     "import-outside-toplevel",
     "unused-argument",
     "unnecessary-pass",
+    "import-error",
 ]
 
 [tool.pylint.FORMAT]
