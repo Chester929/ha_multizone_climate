@@ -29,7 +29,6 @@ async def async_setup_entry(
     # For now, binary sensors are optional
     # Can be implemented later if needed for status monitoring
     _LOGGER.debug("Binary sensor platform setup (no entities yet)")
-    pass
 
 
 class MultizoneBinarySensor(BinarySensorEntity):

@@ -1,7 +1,7 @@
 """Unit tests for safety checker."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from custom_components.multizone_climate.core.safety import SafetyChecker
 
 
