@@ -67,7 +67,7 @@ func NewPool(client *redisclient.Client, numWorkers int, processor JobProcessor)
 }
 
 // Start starts the worker pool.
-// Note: This should only be called once. Calling it multiple times may cause race conditions.
+// Can be called multiple times safely - will cancel existing workers and start new ones.
 func (p *Pool) Start(parentCtx context.Context) {
 	// Cancel existing context and create new one from parent
 	if p.cancel != nil {
@@ -123,8 +123,10 @@ func (p *Pool) worker(id int) {
 
 // processNextJob attempts to pop and process the next job from the queue
 func (p *Pool) processNextJob(workerID int) error {
-	// Pop job from queue in FIFO order.
-	// When jobs are enqueued with LPush, using RPop ensures the earliest enqueued jobs are processed first.
+	// Pop job from queue in FIFO order:
+	// - Jobs are added to the left (head) with LPush
+	// - Jobs are removed from the right (tail) with RPop
+	// This ensures the oldest jobs are processed first (FIFO behavior)
 	jobData, err := p.client.RPop(p.ctx, jobQueueKey)
 	if err != nil {
 		return err
@@ -273,7 +275,9 @@ func (p *Pool) generateLockValue(workerID int) string {
 	return fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
 }
 
-// EnqueueJob adds a job to the queue
+// EnqueueJob adds a job to the queue.
+// Jobs are added to the left (head) with LPush and removed from the right (tail) with RPop,
+// ensuring FIFO (First-In-First-Out) processing order.
 func (p *Pool) EnqueueJob(job models.Job) error {
 	jobJSON, err := json.Marshal(job)
 	if err != nil {
