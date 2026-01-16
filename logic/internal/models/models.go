@@ -25,29 +25,29 @@ type ZoneState struct {
 
 // MainClimateState represents the main HVAC thermostat state
 type MainClimateState struct {
-	EntityID            string    `json:"entity_id"`
-	CurrentTemperature  float64   `json:"current_temperature"`
-	TargetTemperature   float64   `json:"target_temperature"`
-	OutdoorTemperature  float64   `json:"outdoor_temperature"`
-	HVACMode            string    `json:"hvac_mode"`
-	HVACAction          string    `json:"hvac_action"`
-	MultizoneEnabled    bool      `json:"multizone_enabled"`
-	LastUpdated         time.Time `json:"last_updated"`
+	EntityID           string    `json:"entity_id"`
+	CurrentTemperature float64   `json:"current_temperature"`
+	TargetTemperature  float64   `json:"target_temperature"`
+	OutdoorTemperature float64   `json:"outdoor_temperature"`
+	HVACMode           string    `json:"hvac_mode"`
+	HVACAction         string    `json:"hvac_action"`
+	MultizoneEnabled   bool      `json:"multizone_enabled"`
+	LastUpdated        time.Time `json:"last_updated"`
 }
 
 // GlobalConfig represents the global system configuration
 type GlobalConfig struct {
-	MainClimateEntityID       string  `json:"main_climate_entity_id"`
+	MainClimateEntityID         string  `json:"main_climate_entity_id"`
 	MainTargetAllZonesSatisfied float64 `json:"main_target_all_zones_satisfied"`
-	UseAverageMode            bool    `json:"use_average_mode"`
-	SliderPosition            float64 `json:"slider_position"` // 0.0 to 1.0, used when UseAverageMode is false
-	MinValvesOpen             int     `json:"min_valves_open"`
-	MainMinTemp               float64 `json:"main_min_temp"`
-	MainMaxTemp               float64 `json:"main_max_temp"`
-	MainChangeThreshold       float64 `json:"main_change_threshold"`
-	ValveActuationDelay       int     `json:"valve_actuation_delay"`
-	CoordinatorInterval       int     `json:"coordinator_interval"`
-	SatisfactionEpsilon       float64 `json:"satisfaction_eps"`
+	UseAverageMode              bool    `json:"use_average_mode"`
+	SliderPosition              float64 `json:"slider_position"` // 0.0 to 1.0, used when UseAverageMode is false
+	MinValvesOpen               int     `json:"min_valves_open"`
+	MainMinTemp                 float64 `json:"main_min_temp"`
+	MainMaxTemp                 float64 `json:"main_max_temp"`
+	MainChangeThreshold         float64 `json:"main_change_threshold"`
+	ValveActuationDelay         int     `json:"valve_actuation_delay"`
+	CoordinatorInterval         int     `json:"coordinator_interval"`
+	SatisfactionEpsilon         float64 `json:"satisfaction_eps"`
 }
 
 // Job represents a background job

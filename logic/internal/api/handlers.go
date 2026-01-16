@@ -26,7 +26,7 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 func StatusHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
-		
+
 		// Check Redis connection
 		err := client.Ping(ctx)
 		redisStatus := "connected"
@@ -48,10 +48,10 @@ func StatusHandler(client *redis.Client) http.HandlerFunc {
 func MetricsHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
-		
+
 		// Get zone count
 		zoneKeys, _ := client.Keys(ctx, "multizone:zone:*")
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -65,7 +65,7 @@ func MetricsHandler(client *redis.Client) http.HandlerFunc {
 func ListZonesHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
-		
+
 		// Get all zone keys
 		zoneKeys, err := client.Keys(ctx, "multizone:zone:*")
 		if err != nil {
@@ -79,7 +79,7 @@ func ListZonesHandler(client *redis.Client) http.HandlerFunc {
 			if err != nil {
 				continue
 			}
-			
+
 			// Simple zone construction (in full impl, would parse all fields)
 			zone := models.ZoneState{
 				ID:   zoneData["id"],
@@ -98,10 +98,10 @@ func GetZoneHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
-		
+
 		ctx := context.Background()
 		key := "multizone:zone:" + zoneID
-		
+
 		zoneData, err := client.HGetAll(ctx, key)
 		if err != nil || len(zoneData) == 0 {
 			http.Error(w, "Zone not found", http.StatusNotFound)
@@ -118,7 +118,7 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
-		
+
 		var updates map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -127,7 +127,7 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 
 		ctx := context.Background()
 		key := "multizone:zone:" + zoneID
-		
+
 		// Update zone in Redis
 		if err := client.HSet(ctx, key, updates); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -150,7 +150,7 @@ func CalculateMainTempHandler(client *redis.Client) http.HandlerFunc {
 		// 3. Call algorithm.CalculateMainTargetTemperature
 		// 4. Update Redis with new target
 		// 5. Queue valve update job
-		
+
 		// Placeholder response
 		result := map[string]interface{}{
 			"status":  "calculated",
