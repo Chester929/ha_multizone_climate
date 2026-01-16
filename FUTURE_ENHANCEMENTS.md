@@ -72,18 +72,26 @@ All code improvements from the initial code review have been completed. See the 
 
 ### High Priority
 
-1. **Home Assistant Service API Client**
-   - Direct HA API integration (alternative to MQTT)
-   - Read existing entity states
-   - Call HA services
-   - WebSocket for real-time updates
-   - Entity ID mapping configuration
+1. **✅ Home Assistant Service API Client** (logic/internal/homeassistant/)
+   - ✅ Direct HA API integration (alternative to MQTT)
+   - ✅ Read existing entity states via HTTP API
+   - ✅ Call HA services (switch, climate control)
+   - ✅ WebSocket for real-time state updates
+   - ✅ Entity ID mapping through zone configuration
+   - ✅ Automatic state synchronization to Redis
+   - ✅ Trigger recalculation on temperature changes
+   - ✅ Comprehensive test coverage (11 tests)
+   - ✅ API endpoints for integration control
+   - Status: Fully implemented and tested
 
-2. **Real-time Temperature Monitoring**
-   - Subscribe to HA state changes via WebSocket
-   - Update Redis when temperature sensors change
-   - Trigger automatic recalculation
-   - Update valve states based on new data
+2. **✅ Real-time Temperature Monitoring** (logic/internal/homeassistant/integration.go)
+   - ✅ Subscribe to HA state changes via WebSocket
+   - ✅ Update Redis when temperature sensors change
+   - ✅ Trigger automatic recalculation on changes
+   - ✅ Update valve states based on new data
+   - ✅ Support for main climate entity updates
+   - ✅ Automatic entity type detection
+   - Status: Fully implemented and tested
 
 ### Medium Priority
 

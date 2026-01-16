@@ -26,7 +26,7 @@ type WebSocketClient struct {
 
 // Subscription represents a WebSocket subscription
 type Subscription struct {
-	ID      int64
+	ID        int64
 	EventType string
 }
 

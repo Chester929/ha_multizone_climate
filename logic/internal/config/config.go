@@ -12,10 +12,10 @@ type Config struct {
 	HTTPPort      string
 	LogLevel      string
 	// Home Assistant API configuration
-	HAEnabled    bool
-	HABaseURL    string
-	HAToken      string
-	HAWebsocket  bool
+	HAEnabled   bool
+	HABaseURL   string
+	HAToken     string
+	HAWebsocket bool
 }
 
 // Load loads configuration from environment variables

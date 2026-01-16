@@ -13,19 +13,19 @@ import (
 
 // Integration manages the Home Assistant integration
 type Integration struct {
-	client         *Client
-	wsClient       *WebSocketClient
-	redisClient    *redis.Client
-	enabled        bool
+	client           *Client
+	wsClient         *WebSocketClient
+	redisClient      *redis.Client
+	enabled          bool
 	websocketEnabled bool
-	ctx            context.Context
-	cancel         context.CancelFunc
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 // NewIntegration creates a new Home Assistant integration
 func NewIntegration(baseURL, token string, redisClient *redis.Client, enableWebSocket bool) *Integration {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	return &Integration{
 		client:           NewClient(baseURL, token),
 		wsClient:         NewWebSocketClient(baseURL, token),

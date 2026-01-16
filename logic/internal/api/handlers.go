@@ -172,9 +172,9 @@ func HAStatusHandler(integration *homeassistant.Integration) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		status := map[string]interface{}{
-			"enabled":    integration.IsEnabled(),
-			"websocket":  false,
-			"time":       time.Now().Format(time.RFC3339),
+			"enabled":   integration.IsEnabled(),
+			"websocket": false,
+			"time":      time.Now().Format(time.RFC3339),
 		}
 
 		if integration.IsEnabled() {
