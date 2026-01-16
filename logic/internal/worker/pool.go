@@ -17,6 +17,9 @@ const (
 	// defaultLockTimeoutSeconds is the TTL for distributed locks in seconds.
 	// This prevents locks from being held indefinitely if a worker crashes.
 	defaultLockTimeoutSeconds = 30
+	
+	// workerBackoffDuration is the duration to wait before retrying after an error
+	workerBackoffDuration = 1 * time.Second
 )
 
 // JobType constants define the types of jobs that can be processed
@@ -44,16 +47,24 @@ type Pool struct {
 }
 
 // NewPool creates a new worker pool
+// Note: Start() must be called before EnqueueJob() or other operations that use the context
 func NewPool(client *redisclient.Client, numWorkers int, processor JobProcessor) *Pool {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Pool{
 		client:     client,
 		numWorkers: numWorkers,
 		processor:  processor,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 }
 
 // Start starts the worker pool
 func (p *Pool) Start(parentCtx context.Context) {
+	// Cancel existing context and create new one from parent
+	if p.cancel != nil {
+		p.cancel()
+	}
 	p.ctx, p.cancel = context.WithCancel(parentCtx)
 
 	for i := 0; i < p.numWorkers; i++ {
@@ -90,12 +101,12 @@ func (p *Pool) worker(id int) {
 					select {
 					case <-p.ctx.Done():
 						return
-					case <-time.After(1 * time.Second):
+					case <-time.After(workerBackoffDuration):
 						// Wait before checking for jobs again
 					}
 				} else {
 					log.Printf("Worker %d error processing job: %v", id, err)
-					time.Sleep(1 * time.Second)
+					time.Sleep(workerBackoffDuration)
 				}
 			}
 		}
@@ -104,9 +115,9 @@ func (p *Pool) worker(id int) {
 
 // processNextJob attempts to pop and process the next job from the queue
 func (p *Pool) processNextJob(workerID int) error {
-	// Pop job from queue (FIFO - using LPop on a list that's pushed with LPush)
-	// This ensures jobs are processed in the order they were enqueued.
-	jobData, err := p.client.LPop(p.ctx, "multizone:job_queue")
+	// Pop job from queue in FIFO order.
+	// When jobs are enqueued with LPush, using RPop ensures the earliest enqueued jobs are processed first.
+	jobData, err := p.client.RPop(p.ctx, "multizone:job_queue")
 	if err != nil {
 		return err
 	}
@@ -114,23 +125,39 @@ func (p *Pool) processNextJob(workerID int) error {
 	var job models.Job
 	if err := json.Unmarshal([]byte(jobData), &job); err != nil {
 		log.Printf("Worker %d failed to unmarshal job: %v", workerID, err)
-		return err
+		
+		// Send malformed job data to a dead letter queue so it can be inspected later
+		if dlqErr := p.client.LPush(p.ctx, "multizone:dead_letter_queue", jobData); dlqErr != nil {
+			log.Printf("Worker %d failed to push job to dead letter queue: %v (original unmarshal error: %v)", workerID, dlqErr, err)
+		}
+		
+		// Do not propagate the error, as the malformed job has already been removed from the main queue
+		return nil
 	}
 
 	log.Printf("Worker %d processing job %s (type: %s)", workerID, job.ID, job.Type)
 
 	// Try to acquire distributed lock for this job
 	lockKey := fmt.Sprintf("multizone:job_lock:%s", job.ID)
-	acquired, err := p.acquireLock(lockKey, workerID)
+	lockValue := fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
+	acquired, err := p.acquireLock(lockKey, lockValue)
 	if err != nil {
 		log.Printf("Worker %d failed to acquire lock for job %s: %v", workerID, job.ID, err)
+		// Re-enqueue the job since we couldn't process it
+		if requeueErr := p.EnqueueJob(job); requeueErr != nil {
+			log.Printf("Worker %d failed to re-enqueue job %s: %v", workerID, job.ID, requeueErr)
+		}
 		return err
 	}
 	if !acquired {
 		log.Printf("Worker %d could not acquire lock for job %s (already processing)", workerID, job.ID)
+		// Re-enqueue the job since another worker is processing it
+		if requeueErr := p.EnqueueJob(job); requeueErr != nil {
+			log.Printf("Worker %d failed to re-enqueue job %s: %v", workerID, job.ID, requeueErr)
+		}
 		return nil
 	}
-	defer p.releaseLock(lockKey)
+	defer p.releaseLock(lockKey, lockValue)
 
 	// Create job status
 	status := models.JobStatus{
@@ -192,8 +219,7 @@ func (p *Pool) processNextJob(workerID int) error {
 }
 
 // acquireLock attempts to acquire a distributed lock
-func (p *Pool) acquireLock(lockKey string, workerID int) (bool, error) {
-	lockValue := fmt.Sprintf("worker_%d_%d", workerID, time.Now().Unix())
+func (p *Pool) acquireLock(lockKey string, lockValue string) (bool, error) {
 	acquired, err := p.client.SetNX(p.ctx, lockKey, lockValue, defaultLockTimeoutSeconds)
 	if err != nil {
 		return false, err
@@ -201,12 +227,26 @@ func (p *Pool) acquireLock(lockKey string, workerID int) (bool, error) {
 	return acquired, nil
 }
 
-// releaseLock releases a distributed lock.
-// We rely on the lock's TTL for automatic release and do not explicitly delete it.
-// This avoids the race condition where a lock expires and is reacquired by another
-// worker before the original worker attempts to delete it.
-func (p *Pool) releaseLock(lockKey string) error {
-	// Lock will expire automatically via TTL
+// releaseLock releases a distributed lock by verifying ownership and deleting it.
+// This allows quick job reprocessing without waiting for TTL expiration.
+func (p *Pool) releaseLock(lockKey string, expectedValue string) error {
+	// Get the current lock value
+	currentValue, err := p.client.GetString(p.ctx, lockKey)
+	if err != nil {
+		// Lock might have already expired or been deleted
+		if err == redis.Nil {
+			return nil
+		}
+		return err
+	}
+	
+	// Only delete if we own the lock
+	if currentValue == expectedValue {
+		return p.client.Del(p.ctx, lockKey)
+	}
+	
+	// Lock was acquired by another worker (shouldn't happen, but log it)
+	log.Printf("Lock ownership mismatch for %s: expected %s, got %s", lockKey, expectedValue, currentValue)
 	return nil
 }
 

@@ -92,9 +92,10 @@ func (c *Client) Ping(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
 }
 
-// SetNX sets a value only if the key does not exist (for distributed locking)
-func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expiration int) (bool, error) {
-	return c.rdb.SetNX(ctx, key, value, time.Duration(expiration)*time.Second).Result()
+// SetNX sets a value only if the key does not exist (for distributed locking).
+// expirationSeconds specifies the key TTL in seconds.
+func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expirationSeconds int) (bool, error) {
+	return c.rdb.SetNX(ctx, key, value, time.Duration(expirationSeconds)*time.Second).Result()
 }
 
 // GetString retrieves a string value and returns an error if the key doesn't exist
