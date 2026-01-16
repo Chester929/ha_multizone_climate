@@ -2,9 +2,18 @@
 
 This directory contains the frontend Lovelace cards for the Multizone Climate integration.
 
-## Building
+## Pre-built Assets
 
-To build the frontend assets:
+The `dist/` directory contains pre-built JavaScript bundles ready for use:
+- `multizone-climate-card.js` - Zone climate display card
+- `main-climate-card.js` - Main climate information card
+- `dashboard-panel.js` - All zones overview panel
+
+These are automatically included with the integration. No manual installation required.
+
+## Building from Source
+
+If you want to rebuild the frontend assets:
 
 ```bash
 cd frontend
