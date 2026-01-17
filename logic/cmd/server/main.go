@@ -63,10 +63,9 @@ func main() {
 		log.Println("Home Assistant integration is disabled (set HA_ENABLED=true and HA_TOKEN to enable)")
 	}
 
-	// Initialize worker pool
-	// Passing nil for processor as a placeholder - in a full implementation,
-	// this would be a struct implementing the JobProcessor interface
-	workerPool := worker.NewPool(redisClient, 5, nil)
+	// Initialize worker pool with processor
+	processor := worker.NewProcessor(redisClient, haIntegration)
+	workerPool := worker.NewPool(redisClient, 5, processor)
 	workerPool.Start(ctx)
 	log.Println("Worker pool started")
 
