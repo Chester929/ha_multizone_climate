@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
 	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
@@ -322,6 +323,20 @@ func (p *Processor) loadZoneByKey(ctx context.Context, key string) (*models.Zone
 	}
 	if val, ok := data["is_fallback_valve"]; ok {
 		zone.IsFallbackValve = val == "true" || val == "1"
+	}
+
+	// Parse timestamp fields
+	if val, ok := data["last_actuated"]; ok && val != "" {
+		if timestamp, err := strconv.ParseInt(val, 10, 64); err == nil {
+			t := time.Unix(timestamp, 0)
+			zone.LastActuated = &t
+		}
+	}
+	if val, ok := data["valve_lock_expiration"]; ok && val != "" {
+		if timestamp, err := strconv.ParseInt(val, 10, 64); err == nil {
+			t := time.Unix(timestamp, 0)
+			zone.ValveLockExpiration = &t
+		}
 	}
 
 	return zone, nil
