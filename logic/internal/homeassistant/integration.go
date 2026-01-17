@@ -246,7 +246,8 @@ func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, sta
 	i.entityCache.RUnlock()
 
 	if !exists {
-		// Entity not in cache, might be newly added
+		// Entity not in cache, might be newly added - log for troubleshooting
+		log.Printf("Debug: Temperature sensor %s not found in entity cache", entityID)
 		return nil
 	}
 
@@ -273,7 +274,8 @@ func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state str
 	i.entityCache.RUnlock()
 
 	if !exists {
-		// Entity not in cache, might be newly added
+		// Entity not in cache, might be newly added - log for troubleshooting
+		log.Printf("Debug: Valve switch %s not found in entity cache", entityID)
 		return nil
 	}
 

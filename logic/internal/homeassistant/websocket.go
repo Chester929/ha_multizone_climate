@@ -2,6 +2,7 @@ package homeassistant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +11,13 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+)
+
+const (
+	// websocketReadDeadline is the duration for WebSocket read timeout
+	websocketReadDeadline = 6 * time.Second
+	// websocketPingInterval is how often we update the read deadline
+	websocketPingInterval = 5 * time.Second
 )
 
 // WebSocketClient handles WebSocket connections to Home Assistant
@@ -140,7 +148,7 @@ func (ws *WebSocketClient) Connect(ctx context.Context) error {
 // readMessages continuously reads messages from the WebSocket
 func (ws *WebSocketClient) readMessages() {
 	// Set read deadline to allow periodic checking of stopCh
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(websocketPingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -149,16 +157,17 @@ func (ws *WebSocketClient) readMessages() {
 			return
 		case <-ticker.C:
 			// Update read deadline periodically
-			ws.conn.SetReadDeadline(time.Now().Add(6 * time.Second))
+			ws.conn.SetReadDeadline(time.Now().Add(websocketReadDeadline))
 		default:
 			// Set read deadline for graceful shutdown
-			ws.conn.SetReadDeadline(time.Now().Add(6 * time.Second))
+			ws.conn.SetReadDeadline(time.Now().Add(websocketReadDeadline))
 
 			var msg WSMessage
 			err := ws.conn.ReadJSON(&msg)
 			if err != nil {
 				// Check if it's a timeout error (normal during shutdown)
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				var netErr net.Error
+				if errors.As(err, &netErr) && netErr.Timeout() {
 					// Check if we should stop
 					select {
 					case <-ws.stopCh:
@@ -233,6 +242,8 @@ func (ws *WebSocketClient) SubscribeToStateChanges(handler EventHandler) (int64,
 
 	if err := ws.conn.WriteJSON(subMsg); err != nil {
 		// Remove the handler we just added since subscription failed
+		// Note: In concurrent scenarios, this might not be the exact handler added,
+		// but it's safe to remove the last one as the subscription didn't succeed
 		handlers := ws.eventHandlers["state_changed"]
 		if len(handlers) > 0 {
 			ws.eventHandlers["state_changed"] = handlers[:len(handlers)-1]

@@ -14,8 +14,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
-var entityIDPattern = regexp.MustCompile(`^[a-z_]+\.[a-z0-9_]+$`)
+const (
+	// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
+	entityIDPatternString = `^[a-z_]+\.[a-z0-9_]+$`
+)
+
+// entityIDPattern is compiled once at package initialization
+var entityIDPattern = regexp.MustCompile(entityIDPatternString)
 
 // HealthHandler returns the health status of the service
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
