@@ -27,6 +27,12 @@ func NewProcessor(redisClient *redis.Client, haIntegration *homeassistant.Integr
 	}
 }
 
+// setLastActuated sets the LastActuated timestamp for a zone to the current time
+func setLastActuated(zone *models.ZoneState) {
+	now := time.Now()
+	zone.LastActuated = &now
+}
+
 // ProcessCalculateTemp calculates the main thermostat target temperature
 func (p *Processor) ProcessCalculateTemp(ctx context.Context, params map[string]interface{}) (map[string]interface{}, error) {
 	log.Println("Processing temperature calculation job")
@@ -167,8 +173,7 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 
 					// Update zone state and set LastActuated timestamp
 					zone.ValveState = "open"
-					now := time.Now()
-					zone.LastActuated = &now
+					setLastActuated(zone)
 					
 					if err := p.saveZone(ctx, zone); err != nil {
 						log.Printf("Warning: Failed to save zone state: %v", err)
@@ -251,8 +256,7 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 				} else {
 					openedCount++
 					zone.ValveState = "open"
-					now := time.Now()
-					zone.LastActuated = &now
+					setLastActuated(zone)
 					
 					if err := p.saveZone(ctx, zone); err != nil {
 						log.Printf("Failed to persist safety fallback valve state for zone %s: %v", zone.ID, err)
