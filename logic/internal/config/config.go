@@ -11,6 +11,11 @@ type Config struct {
 	RedisPassword string
 	HTTPPort      string
 	LogLevel      string
+	// Home Assistant API configuration
+	HAEnabled   bool
+	HABaseURL   string
+	HAToken     string
+	HAWebsocket bool
 }
 
 // Load loads configuration from environment variables
@@ -21,6 +26,10 @@ func Load() *Config {
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		HTTPPort:      getEnv("HTTP_PORT", "8080"),
 		LogLevel:      getEnv("LOG_LEVEL", "info"),
+		HAEnabled:     getEnv("HA_ENABLED", "false") == "true",
+		HABaseURL:     getEnv("HA_BASE_URL", "http://homeassistant.local:8123"),
+		HAToken:       getEnv("HA_TOKEN", ""),
+		HAWebsocket:   getEnv("HA_WEBSOCKET", "true") == "true",
 	}
 }
 

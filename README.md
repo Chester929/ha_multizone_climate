@@ -9,6 +9,7 @@ This project provides a complete solution for managing multiple heating/cooling 
 
 - **[DIAGRAMS.md](DIAGRAMS.md)**: Comprehensive system diagrams and architecture documentation
 - **[IMPLEMENTATION.md](IMPLEMENTATION.md)**: Detailed implementation guide, API documentation, and deployment instructions
+- **[HA_SERVICE_API.md](HA_SERVICE_API.md)**: Home Assistant Service API Client documentation and usage guide
 - **[DOCKER_BUILDS.md](DOCKER_BUILDS.md)**: Multi-architecture Docker builds documentation and usage guide
 - **PDF Diagrams**: Automatically generated from DIAGRAMS.md - available in [GitHub Actions artifacts](../../actions/workflows/generate-diagrams-pdf.yml)
 
