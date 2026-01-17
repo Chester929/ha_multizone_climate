@@ -18,9 +18,11 @@ type ZoneState struct {
 	TargetChangeThreshold   float64   `json:"target_change_threshold"`
 	OpeningOffset           float64   `json:"opening_offset"`
 	ClosingOffset           float64   `json:"closing_offset"`
-	IsFallbackValve         bool      `json:"is_fallback_valve"`
-	Priority                int       `json:"priority"`
-	LastUpdated             time.Time `json:"last_updated"`
+	IsFallbackValve         bool       `json:"is_fallback_valve"`
+	Priority                int        `json:"priority"`
+	LastUpdated             time.Time  `json:"last_updated"`
+	LastActuated            *time.Time `json:"last_actuated,omitempty"`
+	ValveLockExpiration     *time.Time `json:"valve_lock_expiration,omitempty"`
 }
 
 // MainClimateState represents the main HVAC thermostat state
