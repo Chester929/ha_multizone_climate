@@ -211,6 +211,17 @@ func TestCheckMinimumValvesByPriority(t *testing.T) {
 			expectedCount:  2,
 			highestPriority: true,
 		},
+		{
+			name: "Skip already-open fallback valves",
+			zones: []models.ZoneState{
+				{ID: "zone1", Enabled: true, ValveState: "open", IsFallbackValve: true, Priority: 5},
+				{ID: "zone2", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 3},
+				{ID: "zone3", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 1},
+			},
+			minValvesOpen:  2,
+			expectedCount:  1,
+			highestPriority: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -225,9 +236,10 @@ func TestCheckMinimumValvesByPriority(t *testing.T) {
 				// Find the zone with the selected ID
 				for _, z := range tt.zones {
 					if z.ID == valves[0] {
-						// This should be the highest priority fallback valve
+						// This should be the highest priority among CLOSED fallback valves
 						for _, other := range tt.zones {
-							if other.IsFallbackValve && other.ID != z.ID {
+							// Only compare with other closed fallback valves
+							if other.IsFallbackValve && other.ID != z.ID && other.ValveState != "open" {
 								if other.Priority > z.Priority {
 									t.Errorf("Selected zone has priority %d, but zone %s has higher priority %d",
 										z.Priority, other.ID, other.Priority)

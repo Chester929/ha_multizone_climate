@@ -78,12 +78,13 @@ func CheckMinimumValvesByPriority(zones []models.ZoneState, minValvesOpen int) [
 	openCount := 0
 	fallbackValves := []models.ZoneState{}
 
-	// Count currently open valves and collect fallback candidates
+	// Count currently open valves and collect closed fallback candidates
 	for _, z := range zones {
 		if z.Enabled && z.ValveState == "open" {
 			openCount++
 		}
-		if z.Enabled && z.IsFallbackValve {
+		// Only collect fallback valves that are currently closed
+		if z.Enabled && z.IsFallbackValve && z.ValveState != "open" {
 			fallbackValves = append(fallbackValves, z)
 		}
 	}

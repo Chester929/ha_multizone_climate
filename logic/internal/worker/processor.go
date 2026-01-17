@@ -111,17 +111,15 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 	// Apply operations to Home Assistant if integration is available
 	appliedCount := 0
 	if p.haIntegration != nil && p.haIntegration.IsEnabled() {
-		for _, op := range executedOps {
-			// Find the zone
-			var zone *models.ZoneState
-			for i := range zones {
-				if zones[i].ID == op.ZoneID {
-					zone = &zones[i]
-					break
-				}
-			}
+		// Build a map for efficient zone lookup by ID
+		zoneByID := make(map[string]*models.ZoneState, len(zones))
+		for i := range zones {
+			zoneByID[zones[i].ID] = &zones[i]
+		}
 
-			if zone == nil || zone.ValveSwitchEntity == "" {
+		for _, op := range executedOps {
+			zone, ok := zoneByID[op.ZoneID]
+			if !ok || zone == nil || zone.ValveSwitchEntity == "" {
 				log.Printf("Warning: Cannot execute operation for zone %s: zone or valve entity not found", op.ZoneID)
 				continue
 			}
@@ -149,17 +147,15 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 		log.Printf("Opening %d fallback valves to meet minimum requirement", len(minValvesToOpen))
 
 		if p.haIntegration != nil && p.haIntegration.IsEnabled() {
-			for _, zoneID := range minValvesToOpen {
-				// Find the zone
-				var zone *models.ZoneState
-				for i := range zones {
-					if zones[i].ID == zoneID {
-						zone = &zones[i]
-						break
-					}
-				}
+			// Build a map for efficient zone lookup by ID
+			zoneByID := make(map[string]*models.ZoneState, len(zones))
+			for i := range zones {
+				zoneByID[zones[i].ID] = &zones[i]
+			}
 
-				if zone == nil || zone.ValveSwitchEntity == "" {
+			for _, zoneID := range minValvesToOpen {
+				zone, ok := zoneByID[zoneID]
+				if !ok || zone == nil || zone.ValveSwitchEntity == "" {
 					continue
 				}
 
@@ -169,8 +165,11 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 					appliedCount++
 					log.Printf("Opened fallback valve for zone %s (priority: %d)", zone.ID, zone.Priority)
 
-					// Save updated zone state
+					// Update zone state and set LastActuated timestamp
 					zone.ValveState = "open"
+					now := time.Now()
+					zone.LastActuated = &now
+					
 					if err := p.saveZone(ctx, zone); err != nil {
 						log.Printf("Warning: Failed to save zone state: %v", err)
 					}
@@ -235,16 +234,15 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 			log.Printf("Attempting to open %d fallback valves", len(minValvesToOpen))
 			openedCount := 0
 
-			for _, zoneID := range minValvesToOpen {
-				var zone *models.ZoneState
-				for i := range zones {
-					if zones[i].ID == zoneID {
-						zone = &zones[i]
-						break
-					}
-				}
+			// Build a map for efficient zone lookup by ID
+			zoneByID := make(map[string]*models.ZoneState, len(zones))
+			for i := range zones {
+				zoneByID[zones[i].ID] = &zones[i]
+			}
 
-				if zone == nil || zone.ValveSwitchEntity == "" {
+			for _, zoneID := range minValvesToOpen {
+				zone, ok := zoneByID[zoneID]
+				if !ok || zone == nil || zone.ValveSwitchEntity == "" {
 					continue
 				}
 
@@ -253,7 +251,12 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 				} else {
 					openedCount++
 					zone.ValveState = "open"
-					p.saveZone(ctx, zone)
+					now := time.Now()
+					zone.LastActuated = &now
+					
+					if err := p.saveZone(ctx, zone); err != nil {
+						log.Printf("Failed to persist safety fallback valve state for zone %s: %v", zone.ID, err)
+					}
 				}
 			}
 
@@ -300,21 +303,40 @@ func (p *Processor) loadZoneByKey(ctx context.Context, key string) (*models.Zone
 	}
 
 	// Parse numeric fields
-	if val, ok := data["current_temperature"]; ok {
-		zone.CurrentTemperature, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["current_temperature"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse current_temperature for zone %s: %v", zone.ID, err)
+		} else {
+			zone.CurrentTemperature = f
+		}
 	}
-	if val, ok := data["target_temperature"]; ok {
-		zone.TargetTemperature, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["target_temperature"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse target_temperature for zone %s: %v", zone.ID, err)
+		} else {
+			zone.TargetTemperature = f
+		}
 	}
-	if val, ok := data["opening_offset"]; ok {
-		zone.OpeningOffset, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["opening_offset"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse opening_offset for zone %s: %v", zone.ID, err)
+		} else {
+			zone.OpeningOffset = f
+		}
 	}
-	if val, ok := data["closing_offset"]; ok {
-		zone.ClosingOffset, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["closing_offset"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse closing_offset for zone %s: %v", zone.ID, err)
+		} else {
+			zone.ClosingOffset = f
+		}
 	}
-	if val, ok := data["priority"]; ok {
-		p, _ := strconv.Atoi(val)
-		zone.Priority = p
+	if val, ok := data["priority"]; ok && val != "" {
+		if p, err := strconv.Atoi(val); err != nil {
+			log.Printf("Warning: Failed to parse priority for zone %s: %v", zone.ID, err)
+		} else {
+			zone.Priority = p
+		}
 	}
 
 	// Parse boolean fields
@@ -330,12 +352,16 @@ func (p *Processor) loadZoneByKey(ctx context.Context, key string) (*models.Zone
 		if timestamp, err := strconv.ParseInt(val, 10, 64); err == nil {
 			t := time.Unix(timestamp, 0)
 			zone.LastActuated = &t
+		} else {
+			log.Printf("Warning: Failed to parse last_actuated for zone %s: %v", zone.ID, err)
 		}
 	}
 	if val, ok := data["valve_lock_expiration"]; ok && val != "" {
 		if timestamp, err := strconv.ParseInt(val, 10, 64); err == nil {
 			t := time.Unix(timestamp, 0)
 			zone.ValveLockExpiration = &t
+		} else {
+			log.Printf("Warning: Failed to parse valve_lock_expiration for zone %s: %v", zone.ID, err)
 		}
 	}
 
@@ -373,32 +399,68 @@ func (p *Processor) loadConfig(ctx context.Context) (*models.GlobalConfig, error
 	}
 
 	// Parse numeric fields with defaults
-	if val, ok := data["main_target_all_zones_satisfied"]; ok {
-		config.MainTargetAllZonesSatisfied, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["main_target_all_zones_satisfied"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse main_target_all_zones_satisfied: %v", err)
+		} else {
+			config.MainTargetAllZonesSatisfied = f
+		}
 	}
-	if val, ok := data["slider_position"]; ok {
-		config.SliderPosition, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["slider_position"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse slider_position: %v", err)
+		} else {
+			config.SliderPosition = f
+		}
 	}
-	if val, ok := data["min_valves_open"]; ok {
-		config.MinValvesOpen, _ = strconv.Atoi(val)
+	if val, ok := data["min_valves_open"]; ok && val != "" {
+		if i, err := strconv.Atoi(val); err != nil {
+			log.Printf("Warning: Failed to parse min_valves_open: %v", err)
+		} else {
+			config.MinValvesOpen = i
+		}
 	}
-	if val, ok := data["main_min_temp"]; ok {
-		config.MainMinTemp, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["main_min_temp"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse main_min_temp: %v", err)
+		} else {
+			config.MainMinTemp = f
+		}
 	}
-	if val, ok := data["main_max_temp"]; ok {
-		config.MainMaxTemp, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["main_max_temp"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse main_max_temp: %v", err)
+		} else {
+			config.MainMaxTemp = f
+		}
 	}
-	if val, ok := data["main_change_threshold"]; ok {
-		config.MainChangeThreshold, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["main_change_threshold"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse main_change_threshold: %v", err)
+		} else {
+			config.MainChangeThreshold = f
+		}
 	}
-	if val, ok := data["valve_actuation_delay"]; ok {
-		config.ValveActuationDelay, _ = strconv.Atoi(val)
+	if val, ok := data["valve_actuation_delay"]; ok && val != "" {
+		if i, err := strconv.Atoi(val); err != nil {
+			log.Printf("Warning: Failed to parse valve_actuation_delay: %v", err)
+		} else {
+			config.ValveActuationDelay = i
+		}
 	}
-	if val, ok := data["coordinator_interval"]; ok {
-		config.CoordinatorInterval, _ = strconv.Atoi(val)
+	if val, ok := data["coordinator_interval"]; ok && val != "" {
+		if i, err := strconv.Atoi(val); err != nil {
+			log.Printf("Warning: Failed to parse coordinator_interval: %v", err)
+		} else {
+			config.CoordinatorInterval = i
+		}
 	}
-	if val, ok := data["satisfaction_eps"]; ok {
-		config.SatisfactionEpsilon, _ = strconv.ParseFloat(val, 64)
+	if val, ok := data["satisfaction_eps"]; ok && val != "" {
+		if f, err := strconv.ParseFloat(val, 64); err != nil {
+			log.Printf("Warning: Failed to parse satisfaction_eps: %v", err)
+		} else {
+			config.SatisfactionEpsilon = f
+		}
 	}
 
 	// Parse boolean fields
