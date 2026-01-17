@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
@@ -12,6 +13,9 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/gorilla/mux"
 )
+
+// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
+var entityIDPattern = regexp.MustCompile(`^[a-z_]+\.[a-z0-9_]+$`)
 
 // HealthHandler returns the health status of the service
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +193,7 @@ func HAStatusHandler(integration *homeassistant.Integration) http.HandlerFunc {
 // HATestConnectionHandler tests the Home Assistant connection
 func HATestConnectionHandler(integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
+		ctx := r.Context()
 
 		client := integration.GetClient()
 		err := client.Ping(ctx)
@@ -224,7 +228,7 @@ func HASyncStatesHandler(integration *homeassistant.Integration) http.HandlerFun
 			return
 		}
 
-		ctx := context.Background()
+		ctx := r.Context()
 		err := integration.SyncAllStates(ctx)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -267,7 +271,18 @@ func HASetValveHandler(integration *homeassistant.Integration) http.HandlerFunc 
 			return
 		}
 
-		ctx := context.Background()
+		// Validate entity_id format
+		if !entityIDPattern.MatchString(req.EntityID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  "invalid entity_id format, expected format: domain.entity_name",
+			})
+			return
+		}
+
+		ctx := r.Context()
 		err := integration.SetValveState(ctx, req.EntityID, req.Open)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -311,7 +326,29 @@ func HASetMainTempHandler(integration *homeassistant.Integration) http.HandlerFu
 			return
 		}
 
-		ctx := context.Background()
+		// Validate entity_id format
+		if !entityIDPattern.MatchString(req.EntityID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  "invalid entity_id format, expected format: domain.entity_name",
+			})
+			return
+		}
+
+		// Validate temperature bounds (reasonable range for HVAC systems)
+		if req.Temperature < 5.0 || req.Temperature > 35.0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  "temperature must be between 5°C and 35°C",
+			})
+			return
+		}
+
+		ctx := r.Context()
 		err := integration.SetMainTemperature(ctx, req.EntityID, req.Temperature)
 
 		w.Header().Set("Content-Type", "application/json")

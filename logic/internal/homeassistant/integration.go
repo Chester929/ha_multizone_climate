@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
@@ -18,17 +19,30 @@ type Integration struct {
 	redisClient      *redis.Client
 	enabled          bool
 	websocketEnabled bool
+	// Entity ID to zone key mapping cache for O(1) lookups
+	entityCache struct {
+		sync.RWMutex
+		tempSensorToZone map[string]string // temperature_sensor_entity_id -> zone_key
+		valveToZone      map[string]string // valve_switch_entity_id -> zone_key
+		mainClimateID    string            // main_climate_entity_id
+	}
 }
 
 // NewIntegration creates a new Home Assistant integration
 func NewIntegration(baseURL, token string, redisClient *redis.Client, enableWebSocket bool) *Integration {
-	return &Integration{
+	i := &Integration{
 		client:           NewClient(baseURL, token),
 		wsClient:         NewWebSocketClient(baseURL, token),
 		redisClient:      redisClient,
 		enabled:          false,
 		websocketEnabled: enableWebSocket,
 	}
+
+	// Initialize entity cache maps
+	i.entityCache.tempSensorToZone = make(map[string]string)
+	i.entityCache.valveToZone = make(map[string]string)
+
+	return i
 }
 
 // Start initializes the Home Assistant integration
@@ -46,6 +60,11 @@ func (i *Integration) Start() error {
 	}
 
 	log.Println("Home Assistant API connection successful")
+
+	// Build entity cache for fast lookups
+	if err := i.buildEntityCache(ctx); err != nil {
+		log.Printf("Warning: Failed to build entity cache: %v", err)
+	}
 
 	// Start WebSocket if enabled
 	if i.websocketEnabled {
@@ -78,6 +97,57 @@ func (i *Integration) startWebSocket() error {
 	log.Println("WebSocket connection established and subscribed to state changes")
 
 	return nil
+}
+
+// buildEntityCache builds the entity ID to zone key mapping cache
+func (i *Integration) buildEntityCache(ctx context.Context) error {
+	i.entityCache.Lock()
+	defer i.entityCache.Unlock()
+
+	// Clear existing cache
+	i.entityCache.tempSensorToZone = make(map[string]string)
+	i.entityCache.valveToZone = make(map[string]string)
+	i.entityCache.mainClimateID = ""
+
+	// Get all zones
+	zoneKeys, err := i.redisClient.Keys(ctx, "multizone:zone:*")
+	if err != nil {
+		return fmt.Errorf("failed to get zone keys: %w", err)
+	}
+
+	// Build cache from zone data
+	for _, key := range zoneKeys {
+		zoneData, err := i.redisClient.HGetAll(ctx, key)
+		if err != nil {
+			continue
+		}
+
+		if tempSensor, ok := zoneData["temperature_sensor_entity_id"]; ok && tempSensor != "" {
+			i.entityCache.tempSensorToZone[tempSensor] = key
+		}
+
+		if valve, ok := zoneData["valve_switch_entity_id"]; ok && valve != "" {
+			i.entityCache.valveToZone[valve] = key
+		}
+	}
+
+	// Get main climate entity ID
+	configData, err := i.redisClient.HGetAll(ctx, "multizone:config")
+	if err == nil {
+		if mainID, ok := configData["main_climate_entity_id"]; ok {
+			i.entityCache.mainClimateID = mainID
+		}
+	}
+
+	log.Printf("Entity cache built: %d temperature sensors, %d valves",
+		len(i.entityCache.tempSensorToZone), len(i.entityCache.valveToZone))
+
+	return nil
+}
+
+// RefreshEntityCache refreshes the entity cache (call after zone configuration changes)
+func (i *Integration) RefreshEntityCache(ctx context.Context) error {
+	return i.buildEntityCache(ctx)
 }
 
 // handleStateChange processes state change events from Home Assistant
@@ -145,42 +215,24 @@ func (i *Integration) isTemperatureSensor(entityID string, attributes map[string
 	return false
 }
 
-// isValveSwitch checks if an entity is a valve switch
+// isValveSwitch checks if an entity is a valve switch using the cache
 func (i *Integration) isValveSwitch(entityID string) bool {
-	// Check all zones to see if this entity is configured as a valve
-	ctx := context.Background()
-	zoneKeys, err := i.redisClient.Keys(ctx, "multizone:zone:*")
-	if err != nil {
-		return false
-	}
+	i.entityCache.RLock()
+	defer i.entityCache.RUnlock()
 
-	for _, key := range zoneKeys {
-		zoneData, err := i.redisClient.HGetAll(ctx, key)
-		if err != nil {
-			continue
-		}
-
-		if valveEntity, ok := zoneData["valve_switch_entity_id"]; ok && valveEntity == entityID {
-			return true
-		}
-	}
-
-	return false
+	_, exists := i.entityCache.valveToZone[entityID]
+	return exists
 }
 
-// isMainClimate checks if an entity is the main climate entity
+// isMainClimate checks if an entity is the main climate entity using the cache
 func (i *Integration) isMainClimate(entityID string) bool {
-	ctx := context.Background()
-	configData, err := i.redisClient.HGetAll(ctx, "multizone:config")
-	if err != nil {
-		return false
-	}
+	i.entityCache.RLock()
+	defer i.entityCache.RUnlock()
 
-	mainEntityID, ok := configData["main_climate_entity_id"]
-	return ok && mainEntityID == entityID
+	return i.entityCache.mainClimateID == entityID
 }
 
-// updateTemperatureSensor updates temperature sensor data in Redis
+// updateTemperatureSensor updates temperature sensor data in Redis using cache
 func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, state string, attributes map[string]interface{}) error {
 	// Parse temperature value
 	temp, err := strconv.ParseFloat(state, 64)
@@ -188,74 +240,55 @@ func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, sta
 		return fmt.Errorf("invalid temperature value: %s", state)
 	}
 
-	// Find which zone uses this sensor
-	zoneKeys, err := i.redisClient.Keys(ctx, "multizone:zone:*")
-	if err != nil {
+	// Use cache for O(1) lookup
+	i.entityCache.RLock()
+	zoneKey, exists := i.entityCache.tempSensorToZone[entityID]
+	i.entityCache.RUnlock()
+
+	if !exists {
+		// Entity not in cache, might be newly added
+		return nil
+	}
+
+	// Update the zone's current temperature
+	if err := i.redisClient.HSet(ctx, zoneKey, "current_temperature", temp); err != nil {
 		return err
 	}
 
-	for _, key := range zoneKeys {
-		zoneData, err := i.redisClient.HGetAll(ctx, key)
-		if err != nil {
-			continue
-		}
+	log.Printf("Updated zone temperature: %s -> %.2f°C", zoneKey, temp)
 
-		sensorEntity, ok := zoneData["temperature_sensor_entity_id"]
-		if !ok || sensorEntity != entityID {
-			continue
-		}
-
-		// Update the zone's current temperature
-		if err := i.redisClient.HSet(ctx, key, "current_temperature", temp); err != nil {
-			return err
-		}
-
-		log.Printf("Updated zone temperature: %s -> %.2f°C", key, temp)
-
-		// Trigger recalculation job
-		if err := i.triggerRecalculation(ctx); err != nil {
-			log.Printf("Error triggering recalculation: %v", err)
-		}
-
-		break
+	// Trigger recalculation job
+	if err := i.triggerRecalculation(ctx); err != nil {
+		log.Printf("Error triggering recalculation: %v", err)
 	}
 
 	return nil
 }
 
-// updateValveSwitch updates valve switch state in Redis
+// updateValveSwitch updates valve switch state in Redis using cache
 func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state string) error {
-	// Find which zone uses this valve
-	zoneKeys, err := i.redisClient.Keys(ctx, "multizone:zone:*")
-	if err != nil {
+	// Use cache for O(1) lookup
+	i.entityCache.RLock()
+	zoneKey, exists := i.entityCache.valveToZone[entityID]
+	i.entityCache.RUnlock()
+
+	if !exists {
+		// Entity not in cache, might be newly added
+		return nil
+	}
+
+	// Map HA state to valve state
+	valveState := "closed"
+	if state == "on" {
+		valveState = "open"
+	}
+
+	// Update the zone's valve state
+	if err := i.redisClient.HSet(ctx, zoneKey, "valve_state", valveState); err != nil {
 		return err
 	}
 
-	for _, key := range zoneKeys {
-		zoneData, err := i.redisClient.HGetAll(ctx, key)
-		if err != nil {
-			continue
-		}
-
-		valveEntity, ok := zoneData["valve_switch_entity_id"]
-		if !ok || valveEntity != entityID {
-			continue
-		}
-
-		// Map HA state to valve state
-		valveState := "closed"
-		if state == "on" {
-			valveState = "open"
-		}
-
-		// Update the zone's valve state
-		if err := i.redisClient.HSet(ctx, key, "valve_state", valveState); err != nil {
-			return err
-		}
-
-		log.Printf("Updated valve state: %s -> %s", key, valveState)
-		break
-	}
+	log.Printf("Updated valve state: %s -> %s", zoneKey, valveState)
 
 	return nil
 }

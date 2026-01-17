@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ type WebSocketClient struct {
 	eventHandlers map[string][]EventHandler // Changed to slice to support multiple handlers
 	running       bool
 	stopCh        chan struct{}
+	closeOnce     sync.Once // Ensures stopCh is only closed once
 }
 
 // Subscription represents a WebSocket subscription
@@ -137,14 +139,34 @@ func (ws *WebSocketClient) Connect(ctx context.Context) error {
 
 // readMessages continuously reads messages from the WebSocket
 func (ws *WebSocketClient) readMessages() {
+	// Set read deadline to allow periodic checking of stopCh
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ws.stopCh:
 			return
+		case <-ticker.C:
+			// Update read deadline periodically
+			ws.conn.SetReadDeadline(time.Now().Add(6 * time.Second))
 		default:
+			// Set read deadline for graceful shutdown
+			ws.conn.SetReadDeadline(time.Now().Add(6 * time.Second))
+
 			var msg WSMessage
 			err := ws.conn.ReadJSON(&msg)
 			if err != nil {
+				// Check if it's a timeout error (normal during shutdown)
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Check if we should stop
+					select {
+					case <-ws.stopCh:
+						return
+					default:
+						continue
+					}
+				}
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 					log.Printf("WebSocket read error: %v", err)
 				}
@@ -185,31 +207,45 @@ func (ws *WebSocketClient) SubscribeToStateChanges(handler EventHandler) (int64,
 		return 0, fmt.Errorf("websocket not connected")
 	}
 
-	id := ws.nextID
-	ws.nextID++
-
 	// Add handler to the list of handlers for this event type
 	ws.eventHandlers["state_changed"] = append(ws.eventHandlers["state_changed"], handler)
 
-	// Send subscription message (only once per event type)
-	if len(ws.subscriptions) == 0 || !ws.hasSubscription("state_changed") {
-		subMsg := map[string]interface{}{
-			"id":         id,
-			"type":       "subscribe_events",
-			"event_type": "state_changed",
+	// If we're already subscribed to state_changed, return the existing subscription ID
+	if ws.hasSubscription("state_changed") {
+		// Find and return the existing subscription ID for this event type
+		for id, sub := range ws.subscriptions {
+			if sub != nil && sub.EventType == "state_changed" {
+				log.Printf("Added additional handler to existing state_changed subscription (ID: %d)", id)
+				return id, nil
+			}
 		}
-
-		if err := ws.conn.WriteJSON(subMsg); err != nil {
-			return 0, fmt.Errorf("failed to subscribe: %w", err)
-		}
-
-		ws.subscriptions[id] = &Subscription{
-			ID:        id,
-			EventType: "state_changed",
-		}
-
-		log.Printf("Subscribed to state_changed events with ID: %d", id)
 	}
+
+	// First subscription for state_changed: create a new subscription
+	id := ws.nextID
+	ws.nextID++
+
+	subMsg := map[string]interface{}{
+		"id":         id,
+		"type":       "subscribe_events",
+		"event_type": "state_changed",
+	}
+
+	if err := ws.conn.WriteJSON(subMsg); err != nil {
+		// Remove the handler we just added since subscription failed
+		handlers := ws.eventHandlers["state_changed"]
+		if len(handlers) > 0 {
+			ws.eventHandlers["state_changed"] = handlers[:len(handlers)-1]
+		}
+		return 0, fmt.Errorf("failed to subscribe: %w", err)
+	}
+
+	ws.subscriptions[id] = &Subscription{
+		ID:        id,
+		EventType: "state_changed",
+	}
+
+	log.Printf("Subscribed to state_changed events with ID: %d", id)
 
 	return id, nil
 }
@@ -233,31 +269,45 @@ func (ws *WebSocketClient) SubscribeToEvents(eventType string, handler EventHand
 		return 0, fmt.Errorf("websocket not connected")
 	}
 
-	id := ws.nextID
-	ws.nextID++
-
 	// Add handler to the list of handlers for this event type
 	ws.eventHandlers[eventType] = append(ws.eventHandlers[eventType], handler)
 
-	// Send subscription message (only once per event type)
-	if !ws.hasSubscription(eventType) {
-		subMsg := map[string]interface{}{
-			"id":         id,
-			"type":       "subscribe_events",
-			"event_type": eventType,
+	// If we're already subscribed to this event type, return the existing subscription ID
+	if ws.hasSubscription(eventType) {
+		// Find and return the existing subscription ID for this event type
+		for id, sub := range ws.subscriptions {
+			if sub != nil && sub.EventType == eventType {
+				log.Printf("Added additional handler to existing %s subscription (ID: %d)", eventType, id)
+				return id, nil
+			}
 		}
-
-		if err := ws.conn.WriteJSON(subMsg); err != nil {
-			return 0, fmt.Errorf("failed to subscribe: %w", err)
-		}
-
-		ws.subscriptions[id] = &Subscription{
-			ID:        id,
-			EventType: eventType,
-		}
-
-		log.Printf("Subscribed to %s events with ID: %d", eventType, id)
 	}
+
+	// First subscription for this event type: create a new subscription
+	id := ws.nextID
+	ws.nextID++
+
+	subMsg := map[string]interface{}{
+		"id":         id,
+		"type":       "subscribe_events",
+		"event_type": eventType,
+	}
+
+	if err := ws.conn.WriteJSON(subMsg); err != nil {
+		// Remove the handler we just added since subscription failed
+		handlers := ws.eventHandlers[eventType]
+		if len(handlers) > 0 {
+			ws.eventHandlers[eventType] = handlers[:len(handlers)-1]
+		}
+		return 0, fmt.Errorf("failed to subscribe: %w", err)
+	}
+
+	ws.subscriptions[id] = &Subscription{
+		ID:        id,
+		EventType: eventType,
+	}
+
+	log.Printf("Subscribed to %s events with ID: %d", eventType, id)
 
 	return id, nil
 }
@@ -308,8 +358,11 @@ func (ws *WebSocketClient) Close() error {
 
 	// Set running to false first to prevent race condition
 	ws.running = false
-	// Then close the stop channel to signal goroutines
-	close(ws.stopCh)
+
+	// Use sync.Once to ensure stopCh is only closed once
+	ws.closeOnce.Do(func() {
+		close(ws.stopCh)
+	})
 
 	if ws.conn != nil {
 		return ws.conn.Close()
