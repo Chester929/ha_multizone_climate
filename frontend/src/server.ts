@@ -321,9 +321,9 @@ async function recordHistoricalData() {
         satisfaction: zoneData.satisfaction || null,
       });
       
-      // Keep last 24 hours of data (1440 entries at 1 per minute)
+      // Keep last 168 hours of data (10080 entries at 1 per minute)
       await redisClient.lPush(`multizone:history:zone:${zoneId}`, historyEntry);
-      await redisClient.lTrim(`multizone:history:zone:${zoneId}`, 0, 1439);
+      await redisClient.lTrim(`multizone:history:zone:${zoneId}`, 0, 10079);
     }
     
     // Record system-wide stats
@@ -334,7 +334,7 @@ async function recordHistoricalData() {
     });
     
     await redisClient.lPush('multizone:history:system', systemEntry);
-    await redisClient.lTrim('multizone:history:system', 0, 1439);
+    await redisClient.lTrim('multizone:history:system', 0, 10079); // Keep last 168 hours of data (10080 entries at 1 per minute)
   } catch (error) {
     console.error('Error recording historical data:', error);
   }
@@ -380,8 +380,42 @@ async function cleanup() {
   if (historicalDataInterval) {
     clearInterval(historicalDataInterval);
   }
-  await redisClient.quit();
-  await subscriber.quit();
+  
+  // Close WebSocket server gracefully
+  if (wss) {
+    await new Promise<void>((resolve) => {
+      wss.close(() => {
+        console.log('WebSocket server closed');
+        resolve();
+      });
+    });
+  }
+  
+  // Close HTTP server gracefully
+  if (httpServer) {
+    await new Promise<void>((resolve) => {
+      httpServer.close(() => {
+        console.log('HTTP server closed');
+        resolve();
+      });
+    });
+  }
+  
+  // Close Redis connections
+  try {
+    await redisClient.quit();
+    console.log('Redis client closed');
+  } catch (error) {
+    console.error('Error closing Redis client:', error);
+  }
+  
+  try {
+    await subscriber.quit();
+    console.log('Redis subscriber closed');
+  } catch (error) {
+    console.error('Error closing Redis subscriber:', error);
+  }
+  
   process.exit(0);
 }
 

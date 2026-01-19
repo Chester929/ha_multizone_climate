@@ -46,7 +46,6 @@ describe('useWebSocket Hook', () => {
 
   beforeEach(() => {
     MockWebSocket.resetInstances();
-    jest.clearAllTimers();
   });
 
   it('connects to WebSocket on mount', async () => {

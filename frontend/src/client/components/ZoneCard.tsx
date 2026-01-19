@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zone } from '../types';
 import { TemperatureChart } from './TemperatureChart';
 
@@ -12,6 +12,11 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [editedZone, setEditedZone] = useState(zone);
+
+  // Sync editedZone when zone prop changes (e.g., from WebSocket updates)
+  useEffect(() => {
+    setEditedZone(zone);
+  }, [zone]);
 
   const handleSave = () => {
     onUpdate(editedZone);
