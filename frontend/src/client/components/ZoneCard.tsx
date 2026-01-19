@@ -12,10 +12,12 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [editedZone, setEditedZone] = useState(zone);
+  const [sliderValue, setSliderValue] = useState(zone.target_temperature || '20');
 
   // Sync editedZone when zone prop changes (e.g., from WebSocket updates)
   useEffect(() => {
     setEditedZone(zone);
+    setSliderValue(zone.target_temperature || '20');
   }, [zone]);
 
   const handleSave = () => {
@@ -40,6 +42,19 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const handleDelete = () => {
     if (confirm(`Are you sure you want to delete zone "${zone.name || zone.id}"?`)) {
       onDelete(zone.id);
+    }
+  };
+
+  // Handle slider value changes - only update if value actually changed
+  const handleSliderRelease = () => {
+    // Ensure string comparison by converting both values
+    const currentTemp = String(zone.target_temperature || '20');
+    const newTemp = String(sliderValue);
+    
+    if (newTemp !== currentTemp) {
+      const updated = { ...editedZone, target_temperature: sliderValue };
+      setEditedZone(updated);
+      onUpdate(updated);
     }
   };
 
@@ -98,6 +113,32 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
             <div className="detail-value">{zone.target_temperature || 'N/A'}°C</div>
           )}
         </div>
+        {!isEditing && (
+          <div className="zone-detail zone-detail-full">
+            <div className="detail-label">
+              Adjust Temperature: {sliderValue}°C
+            </div>
+            <div className="temperature-slider-container">
+              <span className="slider-label">10°C</span>
+              <input
+                type="range"
+                min="10"
+                max="30"
+                step="0.5"
+                value={sliderValue}
+                onChange={(e) => {
+                  setSliderValue(e.target.value);
+                }}
+                onMouseUp={handleSliderRelease}
+                onTouchEnd={handleSliderRelease}
+                onKeyUp={handleSliderRelease}
+                className="temperature-slider"
+                aria-label="Adjust target temperature"
+              />
+              <span className="slider-label">30°C</span>
+            </div>
+          </div>
+        )}
         <div className="zone-detail">
           <div className="detail-label">Satisfaction</div>
           <div className="detail-value">{zone.satisfaction || 'Unknown'}</div>

@@ -3,6 +3,7 @@ import { Zone, SystemStatus } from '../types';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { ZoneCard } from './ZoneCard';
 import { ConfigManager } from './ConfigManager';
+import { IntegrationConfig } from './IntegrationConfig';
 import './App.css';
 
 interface ZoneResponse {
@@ -20,7 +21,7 @@ export function App() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'zones' | 'config'>('zones');
+  const [activeTab, setActiveTab] = useState<'zones' | 'config' | 'integrations'>('zones');
   const [showAddZone, setShowAddZone] = useState(false);
   const { connected, lastMessage } = useWebSocket('/ws');
 
@@ -184,6 +185,12 @@ export function App() {
         >
           Configuration
         </button>
+        <button
+          className={`nav-button ${activeTab === 'integrations' ? 'active' : ''}`}
+          onClick={() => setActiveTab('integrations')}
+        >
+          Integrations
+        </button>
       </nav>
 
       <main className="app-main">
@@ -211,7 +218,7 @@ export function App() {
                 </div>
                 <div className="form-group">
                   <label>Target Temperature (°C)</label>
-                  <input type="number" name="target_temperature" step="0.5" required />
+                  <input type="number" name="target_temperature" step="0.5" defaultValue="20" required />
                 </div>
                 <div className="form-group">
                   <label>Priority</label>
@@ -243,6 +250,7 @@ export function App() {
         )}
 
         {activeTab === 'config' && <ConfigManager />}
+        {activeTab === 'integrations' && <IntegrationConfig />}
       </main>
 
       <footer className="app-footer">

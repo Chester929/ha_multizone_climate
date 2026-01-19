@@ -131,4 +131,34 @@ describe('App Component', () => {
       expect(screen.getByText(/System Configuration/i)).toBeInTheDocument();
     });
   });
+
+  it('switches to integrations tab and renders IntegrationConfig', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'healthy', redis: 'connected' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No zones configured yet/i)).toBeInTheDocument();
+    });
+
+    const integrationsTab = screen.getByText(/Integrations/i);
+    integrationsTab.click();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Home Assistant Integration/i)).toBeInTheDocument();
+      expect(screen.getByText(/MQTT Integration/i)).toBeInTheDocument();
+    });
+  });
 });
