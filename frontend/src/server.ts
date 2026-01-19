@@ -50,7 +50,7 @@ function parseRedisPort(portStr: string | undefined): number {
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, 'client')));
 
 // Redis client
 const redisPort = parseRedisPort(process.env.REDIS_PORT);
@@ -315,7 +315,7 @@ app.get('/api/history/system', async (req, res) => {
 
 // Serve index.html for all other routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/index.html'));
+  res.sendFile(path.join(__dirname, 'client', 'index.html'));
 });
 
 // Background task to record historical data

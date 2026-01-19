@@ -88,6 +88,36 @@ else
     fail_test "Frontend service is not responding"
 fi
 
+# Test 3a: Frontend Serves index.html
+echo ""
+echo "Test 3a: Frontend Serves index.html"
+response=$(curl -s "$FRONTEND_URL/" -w "\n%{http_code}")
+http_code=$(echo "$response" | tail -n 1)
+body=$(echo "$response" | head -n -1)
+
+if [ "$http_code" = "200" ]; then
+    if echo "$body" | grep -q "Multizone Climate Control"; then
+        pass_test "Frontend serves index.html successfully"
+    else
+        fail_test "Frontend returned 200 but index.html content is missing"
+    fi
+else
+    fail_test "Frontend failed to serve index.html (HTTP $http_code)"
+fi
+
+# Test 3b: Frontend Serves Static Assets
+echo ""
+echo "Test 3b: Frontend Static Asset Path Test"
+# Try to access a non-existent route (should still serve index.html for SPA routing)
+response=$(curl -s "$FRONTEND_URL/some-route" -w "\n%{http_code}")
+http_code=$(echo "$response" | tail -n 1)
+
+if [ "$http_code" = "200" ]; then
+    pass_test "Frontend catch-all route serves index.html"
+else
+    fail_test "Frontend catch-all route failed (HTTP $http_code)"
+fi
+
 # Test 4: Redis Connection
 echo ""
 echo "Test 4: Redis Connection"
