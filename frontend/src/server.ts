@@ -169,16 +169,19 @@ app.get('/api/integrations', async (req, res) => {
   }
 });
 
+// Allowed configuration keys for integration settings
+const INTEGRATION_CONFIG_KEYS = [
+  'ha_enabled', 'ha_base_url', 'ha_token', 'ha_websocket',
+  'mqtt_enabled', 'mqtt_broker', 'mqtt_port', 'mqtt_username', 'mqtt_password'
+];
+
 app.put('/api/integrations', async (req, res) => {
   try {
     const settings = req.body;
     
     // Validate settings structure
-    const allowedKeys = ['ha_enabled', 'ha_base_url', 'ha_token', 'ha_websocket', 
-                        'mqtt_enabled', 'mqtt_broker', 'mqtt_port', 'mqtt_username', 'mqtt_password'];
-    
     for (const key of Object.keys(settings)) {
-      if (!allowedKeys.includes(key)) {
+      if (!INTEGRATION_CONFIG_KEYS.includes(key)) {
         return res.status(400).json({ error: `Invalid setting key: ${key}` });
       }
       

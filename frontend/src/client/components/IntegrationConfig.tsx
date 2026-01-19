@@ -39,6 +39,14 @@ export function IntegrationConfig() {
     fetchSettings();
   }, [fetchSettings]);
 
+  // Auto-clear success messages after 3 seconds
+  useEffect(() => {
+    if (testResult && testResult.type === 'success') {
+      const timeoutId = setTimeout(() => setTestResult(null), 3000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [testResult]);
+
   const handleSave = async () => {
     try {
       const response = await fetch('/api/integrations', {
@@ -53,7 +61,6 @@ export function IntegrationConfig() {
         setSettings(editedSettings);
         setEditing(false);
         setTestResult({ type: 'success', message: 'Integration settings saved successfully!' });
-        setTimeout(() => setTestResult(null), 3000);
       } else {
         setTestResult({ type: 'error', message: 'Failed to save integration settings' });
       }

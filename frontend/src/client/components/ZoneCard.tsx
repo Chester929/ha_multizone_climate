@@ -45,6 +45,19 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
     }
   };
 
+  // Handle slider value changes - only update if value actually changed
+  const handleSliderRelease = () => {
+    // Ensure string comparison by converting both values
+    const currentTemp = String(zone.target_temperature || '20');
+    const newTemp = String(sliderValue);
+    
+    if (newTemp !== currentTemp) {
+      const updated = { ...editedZone, target_temperature: sliderValue };
+      setEditedZone(updated);
+      onUpdate(updated);
+    }
+  };
+
   return (
     <div className="zone-card">
       <div className="zone-header">
@@ -116,22 +129,8 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
                 onChange={(e) => {
                   setSliderValue(e.target.value);
                 }}
-                onMouseUp={() => {
-                  // Only update if the value actually changed
-                  if (sliderValue !== zone.target_temperature) {
-                    const updated = { ...editedZone, target_temperature: sliderValue };
-                    setEditedZone(updated);
-                    onUpdate(updated);
-                  }
-                }}
-                onTouchEnd={() => {
-                  // Only update if the value actually changed
-                  if (sliderValue !== zone.target_temperature) {
-                    const updated = { ...editedZone, target_temperature: sliderValue };
-                    setEditedZone(updated);
-                    onUpdate(updated);
-                  }
-                }}
+                onMouseUp={handleSliderRelease}
+                onTouchEnd={handleSliderRelease}
                 className="temperature-slider"
               />
               <span className="slider-label">30°C</span>
