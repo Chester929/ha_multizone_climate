@@ -20,8 +20,6 @@ export function App() {
 
   useEffect(() => {
     if (lastMessage) {
-      console.log('WebSocket message:', lastMessage);
-      
       // Refresh zones on updates
       if (lastMessage.type.includes('zone')) {
         fetchZones();
