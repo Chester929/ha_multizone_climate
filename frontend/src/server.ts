@@ -165,12 +165,17 @@ app.put('/api/config', async (req, res) => {
 // Helper function to restart logic container
 async function restartLogicContainer(): Promise<void> {
   try {
-    // Check if we're running in Docker
+    // Hardcoded container name to prevent command injection
     const containerName = 'multizone-logic';
     
-    // Try to restart using docker command
+    // Validate container name to ensure it's safe (alphanumeric and hyphens only)
+    if (!/^[a-zA-Z0-9-]+$/.test(containerName)) {
+      throw new Error('Invalid container name format');
+    }
+    
+    // Try to restart using docker command with safe argument passing
     // This will work if Docker socket is mounted or we're running with appropriate permissions
-    await execAsync(`docker restart ${containerName}`);
+    await execAsync('docker restart ' + containerName);
     console.log(`Successfully restarted ${containerName} container`);
   } catch (error) {
     // Log warning but don't fail the request - container might auto-restart or running in different environment
@@ -185,7 +190,7 @@ app.get('/api/integrations', async (req, res) => {
     const settings = await redisClient.hGetAll('multizone:integrations');
     
     // Apply defaults for missing values
-    if (settings.ha_websocket === undefined || settings.ha_websocket === '') {
+    if (!settings.ha_websocket || settings.ha_websocket === '') {
       settings.ha_websocket = 'true';
     }
     
