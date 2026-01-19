@@ -13,6 +13,7 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/api"
 	"github.com/chester929/ha_multizone_climate/logic/internal/config"
 	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/chester929/ha_multizone_climate/logic/internal/worker"
 	"github.com/gorilla/mux"
@@ -23,23 +24,27 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
-	log.Printf("Loaded configuration: Redis=%s:%s, LogLevel=%s", cfg.RedisHost, cfg.RedisPort, cfg.LogLevel)
+	
+	// Initialize logger with configured log level
+	logger.Init(cfg.LogLevel)
+	
+	logger.Info("Loaded configuration: Redis=%s:%s, LogLevel=%s", cfg.RedisHost, cfg.RedisPort, cfg.LogLevel)
 
 	// Initialize Redis client
 	ctx := context.Background()
 	redisClient, err := redis.NewClient(ctx, cfg)
 	if err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		logger.Fatal("Failed to connect to Redis: %v", err)
 	}
 	defer redisClient.Close()
-	log.Println("Connected to Redis successfully")
+	logger.Info("Connected to Redis successfully")
 
 	// Load integration settings from Redis to override environment variables
 	integrationSettings, err := redisClient.HGetAll(ctx, "multizone:integrations")
 	if err != nil {
-		log.Printf("Warning: Failed to load integration settings from Redis: %v", err)
+		logger.Warn("Failed to load integration settings from Redis: %v", err)
 	} else if len(integrationSettings) > 0 {
-		log.Println("Loading Home Assistant integration settings from Redis...")
+		logger.Info("Loading Home Assistant integration settings from Redis...")
 		
 		// Override HA settings from Redis if available
 		if haEnabled, ok := integrationSettings["ha_enabled"]; ok && haEnabled == "true" {
@@ -57,18 +62,18 @@ func main() {
 				cfg.HAWebsocket = haWebsocket == "true"
 			}
 			
-			log.Printf("Loaded HA settings from Redis: Enabled=%v, BaseURL=%s, Websocket=%v", 
+			logger.Info("Loaded HA settings from Redis: Enabled=%v, BaseURL=%s, Websocket=%v", 
 				cfg.HAEnabled, cfg.HABaseURL, cfg.HAWebsocket)
 		} else {
 			cfg.HAEnabled = false
-			log.Println("Home Assistant integration disabled in Redis settings")
+			logger.Info("Home Assistant integration disabled in Redis settings")
 		}
 	}
 
 	// Initialize Home Assistant integration if enabled
 	var haIntegration *homeassistant.Integration
 	if cfg.HAEnabled && cfg.HAToken != "" {
-		log.Println("Initializing Home Assistant integration...")
+		logger.Info("Initializing Home Assistant integration...")
 		haIntegration = homeassistant.NewIntegration(
 			cfg.HABaseURL,
 			cfg.HAToken,
@@ -77,28 +82,28 @@ func main() {
 		)
 
 		if err := haIntegration.Start(); err != nil {
-			log.Printf("Warning: Failed to start Home Assistant integration: %v", err)
-			log.Println("Continuing without Home Assistant integration...")
+			logger.Warn("Failed to start Home Assistant integration: %v", err)
+			logger.Info("Continuing without Home Assistant integration...")
 			haIntegration = nil
 		} else {
-			log.Println("Home Assistant integration started successfully")
+			logger.Info("Home Assistant integration started successfully")
 
 			// Perform initial state sync
 			if err := haIntegration.SyncAllStates(ctx); err != nil {
-				log.Printf("Warning: Initial state sync failed: %v", err)
+				logger.Warn("Initial state sync failed: %v", err)
 			} else {
-				log.Println("Initial state synchronization completed")
+				logger.Info("Initial state synchronization completed")
 			}
 		}
 	} else {
-		log.Println("Home Assistant integration is disabled (set HA_ENABLED=true and HA_TOKEN to enable)")
+		logger.Info("Home Assistant integration is disabled (set HA_ENABLED=true and HA_TOKEN to enable)")
 	}
 
 	// Initialize worker pool with processor
 	processor := worker.NewProcessor(redisClient, haIntegration)
 	workerPool := worker.NewPool(redisClient, 5, processor)
 	workerPool.Start(ctx)
-	log.Println("Worker pool started")
+	logger.Info("Worker pool started")
 
 	// Create HTTP router
 	router := mux.NewRouter()
@@ -123,7 +128,9 @@ func main() {
 		router.HandleFunc("/api/ha/sync", api.HASyncStatesHandler(haIntegration)).Methods("POST")
 		router.HandleFunc("/api/ha/valve", api.HASetValveHandler(haIntegration)).Methods("POST")
 		router.HandleFunc("/api/ha/temperature", api.HASetMainTempHandler(haIntegration)).Methods("POST")
-		log.Println("Home Assistant API endpoints registered")
+		logger.Info("Home Assistant API endpoints registered")
+	} else {
+		logger.Debug("Home Assistant API endpoints not registered (integration disabled)")
 	}
 
 	// Create HTTP server
@@ -138,9 +145,9 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("HTTP server listening on %s", addr)
+		logger.Info("HTTP server listening on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", err)
+			logger.Fatal("HTTP server error: %v", err)
 		}
 	}()
 
@@ -148,14 +155,14 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 
 	// Graceful shutdown with timeout
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+		logger.Error("Server forced to shutdown: %v", err)
 	}
 
 	workerPool.Stop()
@@ -163,9 +170,9 @@ func main() {
 	// Stop Home Assistant integration if running
 	if haIntegration != nil {
 		if err := haIntegration.Stop(); err != nil {
-			log.Printf("Error stopping Home Assistant integration: %v", err)
+			logger.Error("Error stopping Home Assistant integration: %v", err)
 		}
 	}
 
-	log.Println("Server exited")
+	logger.Info("Server exited")
 }

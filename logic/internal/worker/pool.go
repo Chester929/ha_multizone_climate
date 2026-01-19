@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	redisclient "github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/go-redis/redis/v8"
@@ -80,26 +80,26 @@ func (p *Pool) Start(parentCtx context.Context) {
 		go p.worker(i)
 	}
 
-	log.Printf("Started %d workers", p.numWorkers)
+	logger.Debug("Started %d workers", p.numWorkers)
 }
 
 // Stop stops the worker pool
 func (p *Pool) Stop() {
-	log.Println("Stopping worker pool...")
+	logger.Info("Stopping worker pool...")
 	p.cancel()
 	p.wg.Wait()
-	log.Println("Worker pool stopped")
+	logger.Info("Worker pool stopped")
 }
 
 // worker is the main worker goroutine
 func (p *Pool) worker(id int) {
 	defer p.wg.Done()
-	log.Printf("Worker %d started", id)
+	logger.Debug("Worker %d started", id)
 
 	for {
 		select {
 		case <-p.ctx.Done():
-			log.Printf("Worker %d stopped", id)
+			logger.Debug("Worker %d stopped", id)
 			return
 		default:
 			// Try to acquire and process a job
@@ -113,7 +113,7 @@ func (p *Pool) worker(id int) {
 						// Wait before checking for jobs again
 					}
 				} else {
-					log.Printf("Worker %d error processing job: %v", id, err)
+					logger.Debug("Worker %d error processing job: %v", id, err)
 					time.Sleep(workerBackoffDuration)
 				}
 			}
@@ -134,36 +134,36 @@ func (p *Pool) processNextJob(workerID int) error {
 
 	var job models.Job
 	if err := json.Unmarshal([]byte(jobData), &job); err != nil {
-		log.Printf("Worker %d failed to unmarshal job: %v", workerID, err)
+		logger.Debug("Worker %d failed to unmarshal job: %v", workerID, err)
 
 		// Send malformed job data to a dead letter queue so it can be inspected later
 		if dlqErr := p.client.LPush(p.ctx, deadLetterQueueKey, jobData); dlqErr != nil {
-			log.Printf("Worker %d failed to push job to dead letter queue: %v (original unmarshal error: %v)", workerID, dlqErr, err)
+			logger.Debug("Worker %d failed to push job to dead letter queue: %v (original unmarshal error: %v)", workerID, dlqErr, err)
 		}
 
 		// Do not propagate the error, as the malformed job has already been removed from the main queue
 		return nil
 	}
 
-	log.Printf("Worker %d processing job %s (type: %s)", workerID, job.ID, job.Type)
+	logger.Debug("Worker %d processing job %s (type: %s)", workerID, job.ID, job.Type)
 
 	// Try to acquire distributed lock for this job
 	lockKey := jobLockKeyPrefix + job.ID
 	lockValue := p.generateLockValue(workerID)
 	acquired, err := p.acquireLock(lockKey, lockValue)
 	if err != nil {
-		log.Printf("Worker %d failed to acquire lock for job %s: %v", workerID, job.ID, err)
+		logger.Debug("Worker %d failed to acquire lock for job %s: %v", workerID, job.ID, err)
 		// Re-enqueue the job since we couldn't process it
 		if requeueErr := p.EnqueueJob(job); requeueErr != nil {
-			log.Printf("Worker %d failed to re-enqueue job %s: %v", workerID, job.ID, requeueErr)
+			logger.Debug("Worker %d failed to re-enqueue job %s: %v", workerID, job.ID, requeueErr)
 		}
 		return err
 	}
 	if !acquired {
-		log.Printf("Worker %d could not acquire lock for job %s (already processing)", workerID, job.ID)
+		logger.Debug("Worker %d could not acquire lock for job %s (already processing)", workerID, job.ID)
 		// Re-enqueue the job since another worker is processing it
 		if requeueErr := p.EnqueueJob(job); requeueErr != nil {
-			log.Printf("Worker %d failed to re-enqueue job %s: %v", workerID, job.ID, requeueErr)
+			logger.Debug("Worker %d failed to re-enqueue job %s: %v", workerID, job.ID, requeueErr)
 		}
 		return nil
 	}
@@ -179,7 +179,7 @@ func (p *Pool) processNextJob(workerID int) error {
 
 	// Save initial status
 	if err := p.saveJobStatus(status); err != nil {
-		log.Printf("Worker %d failed to save initial status for job %s: %v", workerID, job.ID, err)
+		logger.Debug("Worker %d failed to save initial status for job %s: %v", workerID, job.ID, err)
 	}
 
 	// Process the job based on type
@@ -188,7 +188,7 @@ func (p *Pool) processNextJob(workerID int) error {
 
 	if p.processor == nil {
 		// If no processor is configured, log and mark as completed
-		log.Printf("Worker %d: No processor configured, job %s marked as completed", workerID, job.ID)
+		logger.Debug("Worker %d: No processor configured, job %s marked as completed", workerID, job.ID)
 		result = map[string]interface{}{"message": "No processor configured"}
 		processingErr = nil
 	} else {
@@ -213,16 +213,16 @@ func (p *Pool) processNextJob(workerID int) error {
 	if processingErr != nil {
 		status.Status = "failed"
 		status.Error = processingErr.Error()
-		log.Printf("Worker %d failed to process job %s: %v", workerID, job.ID, processingErr)
+		logger.Debug("Worker %d failed to process job %s: %v", workerID, job.ID, processingErr)
 	} else {
 		status.Status = "completed"
 		status.Result = result
-		log.Printf("Worker %d completed job %s in %dms", workerID, job.ID, status.DurationMs)
+		logger.Debug("Worker %d completed job %s in %dms", workerID, job.ID, status.DurationMs)
 	}
 
 	// Save final status
 	if err := p.saveJobStatus(status); err != nil {
-		log.Printf("Worker %d failed to save final status for job %s: %v", workerID, job.ID, err)
+		logger.Debug("Worker %d failed to save final status for job %s: %v", workerID, job.ID, err)
 	}
 
 	return nil
@@ -256,7 +256,7 @@ func (p *Pool) releaseLock(lockKey string, expectedValue string) error {
 	}
 
 	// Lock was acquired by another worker (shouldn't happen, but log it)
-	log.Printf("Lock ownership mismatch for %s: expected %s, got %s", lockKey, expectedValue, currentValue)
+	logger.Debug("Lock ownership mismatch for %s: expected %s, got %s", lockKey, expectedValue, currentValue)
 	return nil
 }
 

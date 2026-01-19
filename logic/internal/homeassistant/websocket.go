@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/gorilla/websocket"
 )
 
@@ -87,7 +87,7 @@ func (ws *WebSocketClient) Connect(ctx context.Context) error {
 	}
 	wsURL += "/api/websocket"
 
-	log.Printf("Connecting to WebSocket: %s", wsURL)
+	logger.Debug("Connecting to WebSocket: %s", wsURL)
 
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
@@ -134,7 +134,7 @@ func (ws *WebSocketClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("authentication failed: %s", authResult.Type)
 	}
 
-	log.Println("WebSocket authenticated successfully")
+	logger.Info("WebSocket authenticated successfully")
 
 	ws.running = true
 	ws.nextID = 1
@@ -177,7 +177,7 @@ func (ws *WebSocketClient) readMessages() {
 					}
 				}
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					log.Printf("WebSocket read error: %v", err)
+					logger.Debug("WebSocket read error: %v", err)
 				}
 				ws.mu.Lock()
 				ws.running = false
@@ -224,7 +224,7 @@ func (ws *WebSocketClient) SubscribeToStateChanges(handler EventHandler) (int64,
 		// Find and return the existing subscription ID for this event type
 		for id, sub := range ws.subscriptions {
 			if sub != nil && sub.EventType == "state_changed" {
-				log.Printf("Added additional handler to existing state_changed subscription (ID: %d)", id)
+				logger.Debug("Added additional handler to existing state_changed subscription (ID: %d)", id)
 				return id, nil
 			}
 		}
@@ -256,7 +256,7 @@ func (ws *WebSocketClient) SubscribeToStateChanges(handler EventHandler) (int64,
 		EventType: "state_changed",
 	}
 
-	log.Printf("Subscribed to state_changed events with ID: %d", id)
+	logger.Debug("Subscribed to state_changed events with ID: %d", id)
 
 	return id, nil
 }
@@ -288,7 +288,7 @@ func (ws *WebSocketClient) SubscribeToEvents(eventType string, handler EventHand
 		// Find and return the existing subscription ID for this event type
 		for id, sub := range ws.subscriptions {
 			if sub != nil && sub.EventType == eventType {
-				log.Printf("Added additional handler to existing %s subscription (ID: %d)", eventType, id)
+				logger.Debug("Added additional handler to existing %s subscription (ID: %d)", eventType, id)
 				return id, nil
 			}
 		}
@@ -318,7 +318,7 @@ func (ws *WebSocketClient) SubscribeToEvents(eventType string, handler EventHand
 		EventType: eventType,
 	}
 
-	log.Printf("Subscribed to %s events with ID: %d", eventType, id)
+	logger.Debug("Subscribed to %s events with ID: %d", eventType, id)
 
 	return id, nil
 }
@@ -353,7 +353,7 @@ func (ws *WebSocketClient) Unsubscribe(subscriptionID int64) error {
 	delete(ws.subscriptions, subscriptionID)
 	// Note: We don't delete event handlers as other subscriptions may still use them
 
-	log.Printf("Unsubscribed from subscription ID: %d", subscriptionID)
+	logger.Debug("Unsubscribed from subscription ID: %d", subscriptionID)
 
 	return nil
 }

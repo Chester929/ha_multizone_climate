@@ -9,6 +9,7 @@ import (
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
 	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/gorilla/mux"
@@ -198,6 +199,7 @@ func HAStatusHandler(integration *homeassistant.Integration) http.HandlerFunc {
 // HATestConnectionHandler tests the Home Assistant connection
 func HATestConnectionHandler(integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Debug("Received HA test connection request from %s", r.RemoteAddr)
 		ctx := r.Context()
 
 		client := integration.GetClient()
@@ -206,6 +208,7 @@ func HATestConnectionHandler(integration *homeassistant.Integration) http.Handle
 		w.Header().Set("Content-Type", "application/json")
 
 		if err != nil {
+			logger.Error("HA test connection failed: %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"connected": false,
@@ -214,6 +217,7 @@ func HATestConnectionHandler(integration *homeassistant.Integration) http.Handle
 			return
 		}
 
+		logger.Info("HA test connection successful")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"connected": true,
 			"message":   "Home Assistant connection successful",
