@@ -1,7 +1,8 @@
 const mqtt = require('mqtt');
 const { createClient } = require('redis');
+const logger = require('./logger');
 
-console.log('Starting MQTT Middleware...');
+logger.info('Starting MQTT Middleware...');
 
 // Configuration from environment
 const config = {
@@ -31,7 +32,7 @@ const redisClient = createClient({
   database: config.redis.database,
 });
 
-redisClient.on('error', (err) => console.error('Redis Client Error:', err));
+redisClient.on('error', (err) => logger.error('Redis Client Error:', err));
 
 // MQTT client
 const mqttClient = mqtt.connect(`mqtt://${config.mqtt.broker}:${config.mqtt.port}`, {
@@ -43,15 +44,15 @@ const mqttClient = mqtt.connect(`mqtt://${config.mqtt.broker}:${config.mqtt.port
 });
 
 mqttClient.on('connect', () => {
-  console.log('Connected to MQTT broker');
+  logger.info('Connected to MQTT broker');
   
   // Subscribe to command topics
   mqttClient.subscribe(`${config.topicPrefix}/climate/+/set`, (err) => {
-    if (err) console.error('Subscribe error:', err);
+    if (err) logger.error('Subscribe error:', err);
   });
   
   mqttClient.subscribe(`${config.topicPrefix}/climate/+/target_temperature/set`, (err) => {
-    if (err) console.error('Subscribe error:', err);
+    if (err) logger.error('Subscribe error:', err);
   });
   
   // Publish online status
@@ -59,7 +60,7 @@ mqttClient.on('connect', () => {
 });
 
 mqttClient.on('message', async (topic, message) => {
-  console.log(`Received MQTT message on ${topic}:`, message.toString());
+  logger.debug(`Received MQTT message on ${topic}: ${message.toString()}`);
   
   try {
     // Parse topic to extract zone ID
@@ -70,24 +71,24 @@ mqttClient.on('message', async (topic, message) => {
       // Update target temperature in Redis
       const temperature = parseFloat(message.toString());
       await redisClient.hSet(`multizone:zone:${zoneId}`, 'target_temperature', temperature);
-      console.log(`Updated zone ${zoneId} target temperature to ${temperature}`);
+      logger.debug(`Updated zone ${zoneId} target temperature to ${temperature}`);
     } else if (topic.endsWith('/set')) {
       // Update mode or other settings
       const data = JSON.parse(message.toString());
       await redisClient.hSet(`multizone:zone:${zoneId}`, data);
-      console.log(`Updated zone ${zoneId} settings`);
+      logger.debug(`Updated zone ${zoneId} settings`);
     }
   } catch (error) {
-    console.error('Error processing MQTT message:', error);
+    logger.error('Error processing MQTT message:', error);
   }
 });
 
 mqttClient.on('error', (err) => {
-  console.error('MQTT Client Error:', err);
+  logger.error('MQTT Client Error:', err);
 });
 
 mqttClient.on('close', () => {
-  console.log('MQTT connection closed');
+  logger.info('MQTT connection closed');
 });
 
 // Redis Pub/Sub for state changes
@@ -97,7 +98,7 @@ async function subscribeToRedisChanges() {
   
   // Subscribe to zone state changes
   await subscriber.pSubscribe('__keyspace@0__:multizone:zone:*', (message, channel) => {
-    console.log(`Redis key change: ${channel}`);
+    logger.debug(`Redis key change: ${channel}`);
     
     // Extract zone ID from channel
     const keyMatch = channel.match(/multizone:zone:(\w+)/);
@@ -107,7 +108,7 @@ async function subscribeToRedisChanges() {
     }
   });
   
-  console.log('Subscribed to Redis keyspace notifications');
+  logger.info('Subscribed to Redis keyspace notifications');
 }
 
 async function publishZoneState(zoneId) {
@@ -129,9 +130,9 @@ async function publishZoneState(zoneId) {
       enabled: zoneData.enabled === 'true',
     }), { retain: true });
     
-    console.log(`Published state for zone ${zoneId}`);
+    logger.debug(`Published state for zone ${zoneId}`);
   } catch (error) {
-    console.error(`Error publishing zone state for ${zoneId}:`, error);
+    logger.error(`Error publishing zone state for ${zoneId}:`, error);
   }
 }
 
@@ -170,10 +171,10 @@ async function publishDiscovery() {
       };
       
       mqttClient.publish(discoveryTopic, JSON.stringify(discoveryPayload), { retain: true });
-      console.log(`Published discovery for zone ${zoneId}`);
+      logger.debug(`Published discovery for zone ${zoneId}`);
     }
   } catch (error) {
-    console.error('Error publishing discovery:', error);
+    logger.error('Error publishing discovery:', error);
   }
 }
 
@@ -181,7 +182,7 @@ async function publishDiscovery() {
 async function start() {
   try {
     await redisClient.connect();
-    console.log('Connected to Redis');
+    logger.info('Connected to Redis');
     
     // Wait for MQTT connection
     await new Promise((resolve) => {
@@ -205,14 +206,14 @@ async function start() {
     
     if (mqttClient.connected) {
       await publishDiscovery();
-      console.log('MQTT Discovery published successfully');
+      logger.info('MQTT Discovery published successfully');
     } else {
-      console.warn('MQTT not connected, discovery will be published on next connection');
+      logger.warn('MQTT not connected, discovery will be published on next connection');
     }
     
-    console.log('MQTT Middleware running');
+    logger.info('MQTT Middleware running');
   } catch (error) {
-    console.error('Failed to start middleware:', error);
+    logger.error('Failed to start middleware:', error);
     process.exit(1);
   }
 }
@@ -221,7 +222,7 @@ start();
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('Shutting down...');
+  logger.info('Shutting down...');
   mqttClient.end();
   redisClient.quit();
   process.exit(0);

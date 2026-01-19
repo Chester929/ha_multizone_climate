@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 )
 
@@ -59,11 +59,11 @@ func (i *Integration) Start() error {
 		return fmt.Errorf("failed to connect to Home Assistant: %w", err)
 	}
 
-	log.Println("Home Assistant API connection successful")
+	logger.Info("Home Assistant API connection successful")
 
 	// Build entity cache for fast lookups
 	if err := i.buildEntityCache(ctx); err != nil {
-		log.Printf("Warning: Failed to build entity cache: %v", err)
+		logger.Warn("Failed to build entity cache: %v", err)
 	}
 
 	// Start WebSocket if enabled
@@ -74,7 +74,7 @@ func (i *Integration) Start() error {
 	}
 
 	i.enabled = true
-	log.Println("Home Assistant integration started")
+	logger.Info("Home Assistant integration started")
 
 	return nil
 }
@@ -94,7 +94,7 @@ func (i *Integration) startWebSocket() error {
 		return fmt.Errorf("failed to subscribe to state changes: %w", err)
 	}
 
-	log.Println("WebSocket connection established and subscribed to state changes")
+	logger.Info("WebSocket connection established and subscribed to state changes")
 
 	return nil
 }
@@ -139,7 +139,7 @@ func (i *Integration) buildEntityCache(ctx context.Context) error {
 		}
 	}
 
-	log.Printf("Entity cache built: %d temperature sensors, %d valves",
+	logger.Info("Entity cache built: %d temperature sensors, %d valves",
 		len(i.entityCache.tempSensorToZone), len(i.entityCache.valveToZone))
 
 	return nil
@@ -174,7 +174,7 @@ func (i *Integration) handleStateChange(event *Event) {
 
 	attributes, _ := newStateData["attributes"].(map[string]interface{})
 
-	log.Printf("State changed: %s -> %s", entityID, state)
+	logger.Debug("State changed: %s -> %s", entityID, state)
 
 	// Update Redis based on entity type
 	ctx := context.Background()
@@ -182,21 +182,21 @@ func (i *Integration) handleStateChange(event *Event) {
 	// Check if this is a temperature sensor
 	if i.isTemperatureSensor(entityID, attributes) {
 		if err := i.updateTemperatureSensor(ctx, entityID, state, attributes); err != nil {
-			log.Printf("Error updating temperature sensor: %v", err)
+			logger.Error("Error updating temperature sensor: %v", err)
 		}
 	}
 
 	// Check if this is a valve switch
 	if i.isValveSwitch(entityID) {
 		if err := i.updateValveSwitch(ctx, entityID, state); err != nil {
-			log.Printf("Error updating valve switch: %v", err)
+			logger.Error("Error updating valve switch: %v", err)
 		}
 	}
 
 	// Check if this is the main climate entity
 	if i.isMainClimate(entityID) {
 		if err := i.updateMainClimate(ctx, entityID, state, attributes); err != nil {
-			log.Printf("Error updating main climate: %v", err)
+			logger.Error("Error updating main climate: %v", err)
 		}
 	}
 }
@@ -247,7 +247,7 @@ func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, sta
 
 	if !exists {
 		// Entity not in cache, might be newly added - log for troubleshooting
-		log.Printf("Debug: Temperature sensor %s not found in entity cache", entityID)
+		logger.Debug("Temperature sensor %s not found in entity cache", entityID)
 		return nil
 	}
 
@@ -256,11 +256,11 @@ func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, sta
 		return err
 	}
 
-	log.Printf("Updated zone temperature: %s -> %.2f°C", zoneKey, temp)
+	logger.Debug("Updated zone temperature: %s -> %.2f°C", zoneKey, temp)
 
 	// Trigger recalculation job
 	if err := i.triggerRecalculation(ctx); err != nil {
-		log.Printf("Error triggering recalculation: %v", err)
+		logger.Error("Error triggering recalculation: %v", err)
 	}
 
 	return nil
@@ -275,7 +275,7 @@ func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state str
 
 	if !exists {
 		// Entity not in cache, might be newly added - log for troubleshooting
-		log.Printf("Debug: Valve switch %s not found in entity cache", entityID)
+		logger.Debug("Valve switch %s not found in entity cache", entityID)
 		return nil
 	}
 
@@ -290,7 +290,7 @@ func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state str
 		return err
 	}
 
-	log.Printf("Updated valve state: %s -> %s", zoneKey, valveState)
+	logger.Debug("Updated valve state: %s -> %s", zoneKey, valveState)
 
 	return nil
 }
@@ -318,7 +318,7 @@ func (i *Integration) updateMainClimate(ctx context.Context, entityID, state str
 		return err
 	}
 
-	log.Printf("Updated main climate: %s", entityID)
+	logger.Debug("Updated main climate: %s", entityID)
 
 	return nil
 }
@@ -351,7 +351,7 @@ func (i *Integration) SyncAllStates(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("Syncing states for %d zones", len(zoneKeys))
+	logger.Info("Syncing states for %d zones", len(zoneKeys))
 
 	// Sync each zone's sensors
 	for _, key := range zoneKeys {
@@ -363,14 +363,14 @@ func (i *Integration) SyncAllStates(ctx context.Context) error {
 		// Sync temperature sensor
 		if sensorEntity, ok := zoneData["temperature_sensor_entity_id"]; ok && sensorEntity != "" {
 			if err := i.syncTemperatureSensor(ctx, key, sensorEntity); err != nil {
-				log.Printf("Error syncing temperature sensor %s: %v", sensorEntity, err)
+				logger.Error("Error syncing temperature sensor %s: %v", sensorEntity, err)
 			}
 		}
 
 		// Sync valve switch
 		if valveEntity, ok := zoneData["valve_switch_entity_id"]; ok && valveEntity != "" {
 			if err := i.syncValveSwitch(ctx, key, valveEntity); err != nil {
-				log.Printf("Error syncing valve switch %s: %v", valveEntity, err)
+				logger.Error("Error syncing valve switch %s: %v", valveEntity, err)
 			}
 		}
 	}
@@ -380,12 +380,12 @@ func (i *Integration) SyncAllStates(ctx context.Context) error {
 	if err == nil {
 		if mainEntity, ok := configData["main_climate_entity_id"]; ok && mainEntity != "" {
 			if err := i.syncMainClimate(ctx, mainEntity); err != nil {
-				log.Printf("Error syncing main climate %s: %v", mainEntity, err)
+				logger.Error("Error syncing main climate %s: %v", mainEntity, err)
 			}
 		}
 	}
 
-	log.Println("State synchronization complete")
+	logger.Info("State synchronization complete")
 
 	return nil
 }
@@ -475,13 +475,13 @@ func (i *Integration) Stop() error {
 
 	if i.websocketEnabled && i.wsClient.IsConnected() {
 		if err := i.wsClient.Close(); err != nil {
-			log.Printf("Error closing websocket: %v", err)
+			logger.Error("Error closing websocket: %v", err)
 		}
 	}
 
 	i.enabled = false
 
-	log.Println("Home Assistant integration stopped")
+	logger.Info("Home Assistant integration stopped")
 
 	return nil
 }

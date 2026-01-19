@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
+	
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 )
 
 // Client represents a Home Assistant API client
@@ -151,7 +152,7 @@ func (c *Client) CallService(ctx context.Context, call *ServiceCall) error {
 		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	log.Printf("Service call successful: %s.%s", call.Domain, call.Service)
+	logger.Debug("Service call successful: %s.%s", call.Domain, call.Service)
 	return nil
 }
 

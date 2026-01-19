@@ -178,7 +178,7 @@ multizone:zone:bedroom:
 - `REDIS_HOST`: Redis server hostname (default: redis)
 - `REDIS_PORT`: Redis server port (default: 6379)
 - `REDIS_PASSWORD`: Redis password (optional)
-- `LOG_LEVEL`: Logging level (debug, info, warning, error)
+- `LOG_LEVEL`: Logging level (debug, info, warn, error) (default: info)
 - `HTTP_PORT`: HTTP server port (default: 8080)
 
 **Frontend Container:**
@@ -192,6 +192,7 @@ multizone:zone:bedroom:
 - `REDIS_HOST`: Redis server hostname
 - `REDIS_PORT`: Redis server port
 - `REDIS_PASSWORD`: Redis password (optional)
+- `LOG_LEVEL`: Logging level (debug, info, warn, error)
 - `MQTT_BROKER`: MQTT broker hostname
 - `MQTT_PORT`: MQTT broker port (default: 1883)
 - `MQTT_USERNAME`: MQTT username (optional)
@@ -350,6 +351,89 @@ docker-compose logs mqtt-middleware
 # Verify MQTT broker connection
 mosquitto_sub -h homeassistant.local -t 'multizone/#' -v
 ```
+
+### Logging and Debugging
+
+The system supports structured logging with multiple log levels for better debugging and monitoring.
+
+**Log Levels:**
+- `DEBUG`: Detailed diagnostic information, including all operations and state changes
+- `INFO`: General informational messages about system operation (default)
+- `WARN`: Warning messages for non-critical issues
+- `ERROR`: Error messages for failures that need attention
+
+**Setting Log Level:**
+
+Via environment variable (recommended):
+```bash
+# Set in .env file
+LOG_LEVEL=debug
+
+# Or set when starting containers
+LOG_LEVEL=debug docker-compose up
+```
+
+Via docker-compose override:
+```yaml
+# docker-compose.override.yml
+services:
+  logic:
+    environment:
+      - LOG_LEVEL=debug
+  mqtt-middleware:
+    environment:
+      - LOG_LEVEL=debug
+```
+
+**Viewing Logs:**
+
+```bash
+# View all logs
+docker-compose logs -f
+
+# View specific container logs with timestamps
+docker-compose logs -f --timestamps logic
+
+# View only error and warning logs (when LOG_LEVEL=warn or LOG_LEVEL=error)
+LOG_LEVEL=error docker-compose up
+
+# View debug logs for troubleshooting
+LOG_LEVEL=debug docker-compose logs -f logic
+```
+
+**Log Output Examples:**
+
+```
+# INFO level (default)
+2026/01/19 17:38:18 [INFO] Loaded configuration: Redis=localhost:6379
+2026/01/19 17:38:18 [INFO] Home Assistant integration started successfully
+
+# DEBUG level (verbose)
+2026/01/19 17:38:18 [DEBUG] State changed: sensor.living_room_temp -> 21.5
+2026/01/19 17:38:18 [DEBUG] Updated zone temperature: multizone:zone:living_room -> 21.50°C
+2026/01/19 17:38:18 [DEBUG] Service call successful: switch.turn_on
+
+# WARN level (warnings)
+2026/01/19 17:38:18 [WARN] Failed to load integration settings from Redis: connection timeout
+
+# ERROR level (errors only)
+2026/01/19 17:38:18 [ERROR] Failed to connect to Redis: connection refused
+```
+
+**When to Use Each Log Level:**
+
+- `DEBUG`: Use during development or when investigating specific issues. Shows all operations including state changes, API calls, and internal operations.
+- `INFO`: Use in production for normal operation. Shows important events like startup, configuration changes, and connection status.
+- `WARN`: Use to see warnings about non-critical issues that might need attention.
+- `ERROR`: Use to see only critical errors that require immediate attention.
+
+**Color-Coded Output:**
+
+When running in a terminal, logs are color-coded for better visibility:
+- DEBUG: Cyan
+- INFO: Green  
+- WARN: Yellow
+- ERROR: Red
 
 ## Development
 
