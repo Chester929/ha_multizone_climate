@@ -80,7 +80,7 @@ export function App() {
         body: JSON.stringify({
           ...zone,
           enabled: zone.enabled.toString(),
-          priority: zone.priority !== undefined && zone.priority !== null ? zone.priority.toString() : undefined,
+          priority: zone.priority?.toString(),
         }),
       });
 

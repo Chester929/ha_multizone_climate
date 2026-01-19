@@ -248,7 +248,7 @@ app.get('/api/history/zones/:id', async (req, res) => {
       return res.status(400).json({ error: 'Hours parameter must be between 1 and 168' });
     }
     
-    const limit = Math.min(hours * 60, 1440); // Max 24 hours, 1 per minute
+    const limit = Math.min(hours * 60, 168 * 60); // Max 168 hours, 1 per minute
     
     const history = await redisClient.lRange(`multizone:history:zone:${zoneId}`, 0, limit - 1);
     const parsed = history.map(h => JSON.parse(h));
@@ -269,7 +269,7 @@ app.get('/api/history/system', async (req, res) => {
       return res.status(400).json({ error: 'Hours parameter must be between 1 and 168' });
     }
     
-    const limit = Math.min(hours * 60, 1440);
+    const limit = Math.min(hours * 60, 168 * 60); // Max 168 hours, 1 per minute
     
     const history = await redisClient.lRange('multizone:history:system', 0, limit - 1);
     const parsed = history.map(h => JSON.parse(h));
