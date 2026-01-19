@@ -60,7 +60,7 @@ mqttClient.on('connect', () => {
 });
 
 mqttClient.on('message', async (topic, message) => {
-  console.log(`Received MQTT message on ${topic}:`, message.toString());
+  logger.debug(`Received MQTT message on ${topic}: ${message.toString()}`);
   
   try {
     // Parse topic to extract zone ID
@@ -71,12 +71,12 @@ mqttClient.on('message', async (topic, message) => {
       // Update target temperature in Redis
       const temperature = parseFloat(message.toString());
       await redisClient.hSet(`multizone:zone:${zoneId}`, 'target_temperature', temperature);
-      console.log(`Updated zone ${zoneId} target temperature to ${temperature}`);
+      logger.debug(`Updated zone ${zoneId} target temperature to ${temperature}`);
     } else if (topic.endsWith('/set')) {
       // Update mode or other settings
       const data = JSON.parse(message.toString());
       await redisClient.hSet(`multizone:zone:${zoneId}`, data);
-      console.log(`Updated zone ${zoneId} settings`);
+      logger.debug(`Updated zone ${zoneId} settings`);
     }
   } catch (error) {
     logger.error('Error processing MQTT message:', error);
@@ -98,7 +98,7 @@ async function subscribeToRedisChanges() {
   
   // Subscribe to zone state changes
   await subscriber.pSubscribe('__keyspace@0__:multizone:zone:*', (message, channel) => {
-    console.log(`Redis key change: ${channel}`);
+    logger.debug(`Redis key change: ${channel}`);
     
     // Extract zone ID from channel
     const keyMatch = channel.match(/multizone:zone:(\w+)/);
@@ -130,9 +130,9 @@ async function publishZoneState(zoneId) {
       enabled: zoneData.enabled === 'true',
     }), { retain: true });
     
-    console.log(`Published state for zone ${zoneId}`);
+    logger.debug(`Published state for zone ${zoneId}`);
   } catch (error) {
-    console.error(`Error publishing zone state for ${zoneId}:`, error);
+    logger.error(`Error publishing zone state for ${zoneId}:`, error);
   }
 }
 
@@ -171,7 +171,7 @@ async function publishDiscovery() {
       };
       
       mqttClient.publish(discoveryTopic, JSON.stringify(discoveryPayload), { retain: true });
-      console.log(`Published discovery for zone ${zoneId}`);
+      logger.debug(`Published discovery for zone ${zoneId}`);
     }
   } catch (error) {
     logger.error('Error publishing discovery:', error);

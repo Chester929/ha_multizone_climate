@@ -182,21 +182,21 @@ func (i *Integration) handleStateChange(event *Event) {
 	// Check if this is a temperature sensor
 	if i.isTemperatureSensor(entityID, attributes) {
 		if err := i.updateTemperatureSensor(ctx, entityID, state, attributes); err != nil {
-			logger.Error("updating temperature sensor: %v", err)
+			logger.Error("Error updating temperature sensor: %v", err)
 		}
 	}
 
 	// Check if this is a valve switch
 	if i.isValveSwitch(entityID) {
 		if err := i.updateValveSwitch(ctx, entityID, state); err != nil {
-			logger.Error("updating valve switch: %v", err)
+			logger.Error("Error updating valve switch: %v", err)
 		}
 	}
 
 	// Check if this is the main climate entity
 	if i.isMainClimate(entityID) {
 		if err := i.updateMainClimate(ctx, entityID, state, attributes); err != nil {
-			logger.Error("updating main climate: %v", err)
+			logger.Error("Error updating main climate: %v", err)
 		}
 	}
 }
@@ -247,7 +247,7 @@ func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, sta
 
 	if !exists {
 		// Entity not in cache, might be newly added - log for troubleshooting
-		logger.Debug(" Temperature sensor %s not found in entity cache", entityID)
+		logger.Debug("Temperature sensor %s not found in entity cache", entityID)
 		return nil
 	}
 
@@ -275,7 +275,7 @@ func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state str
 
 	if !exists {
 		// Entity not in cache, might be newly added - log for troubleshooting
-		logger.Debug(" Valve switch %s not found in entity cache", entityID)
+		logger.Debug("Valve switch %s not found in entity cache", entityID)
 		return nil
 	}
 
