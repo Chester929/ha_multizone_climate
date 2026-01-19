@@ -4,10 +4,6 @@ import { createClient } from 'redis';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
 
 interface ZoneData {
   id?: string;
@@ -27,6 +23,7 @@ interface BroadcastData {
 
 const app = express();
 const PORT = process.env.WEB_PORT || 8099;
+const LOGIC_API_URL = process.env.LOGIC_API_URL || 'http://logic:8080';
 const httpServer = createServer(app);
 
 // Validate and parse Redis port
@@ -113,6 +110,37 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Proxy for Home Assistant API endpoints to logic container
+app.all('/api/ha/*', async (req, res) => {
+  try {
+    const path = req.path;
+    const url = `${LOGIC_API_URL}${path}`;
+    
+    const fetchOptions: RequestInit = {
+      method: req.method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+    
+    // Forward body for POST/PUT requests
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+    
+    const response = await fetch(url, fetchOptions);
+    const data = await response.json();
+    
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Error proxying to logic container:', error);
+    res.status(503).json({ 
+      error: 'Logic container unavailable',
+      message: 'Unable to connect to logic container. Please ensure it is running and HA integration is enabled.'
+    });
+  }
+});
+
 // API endpoints
 app.get('/api/zones', async (req, res) => {
   try {
@@ -161,28 +189,6 @@ app.put('/api/config', async (req, res) => {
     res.status(500).json({ error: 'Failed to update configuration' });
   }
 });
-
-// Helper function to restart logic container
-async function restartLogicContainer(): Promise<void> {
-  try {
-    // Hardcoded container name to prevent command injection
-    const containerName = 'multizone-logic';
-    
-    // Validate container name to ensure it's safe (alphanumeric and hyphens only)
-    if (!/^[a-zA-Z0-9-]+$/.test(containerName)) {
-      throw new Error('Invalid container name format');
-    }
-    
-    // Try to restart using docker command with safe argument passing
-    // This will work if Docker socket is mounted or we're running with appropriate permissions
-    await execAsync('docker restart ' + containerName);
-    console.log(`Successfully restarted ${containerName} container`);
-  } catch (error) {
-    // Log warning but don't fail the request - container might auto-restart or running in different environment
-    console.warn('Could not restart logic container:', error);
-    console.warn('Container may need manual restart or will restart automatically depending on configuration');
-  }
-}
 
 // Integration settings endpoints
 app.get('/api/integrations', async (req, res) => {
@@ -280,18 +286,14 @@ app.put('/api/integrations', async (req, res) => {
     await redisClient.hSet('multizone:integrations', mergedSettings);
     await broadcastUpdate('integrations', mergedSettings);
     
-    // Check if HA-related settings changed - if so, restart logic container
+    // Check if HA-related settings changed
     const haSettingsChanged = settings.ha_enabled !== undefined || 
                               settings.ha_base_url !== undefined || 
                               settings.ha_token !== undefined || 
                               settings.ha_websocket !== undefined;
     
     if (haSettingsChanged) {
-      console.log('HA integration settings changed, restarting logic container...');
-      // Restart asynchronously - don't wait for completion
-      restartLogicContainer().catch(err => {
-        console.error('Error during async container restart:', err);
-      });
+      console.log('HA integration settings changed. Please restart the logic container for changes to take effect.');
     }
     
     res.json({ status: 'updated' });
