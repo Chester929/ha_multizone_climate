@@ -197,14 +197,14 @@ export function IntegrationConfig() {
               <label>WebSocket Enabled</label>
               {editing ? (
                 <select
-                  value={editedSettings.ha_websocket || 'true'}
+                  value={editedSettings.ha_websocket !== undefined ? editedSettings.ha_websocket : 'true'}
                   onChange={(e) => setEditedSettings({ ...editedSettings, ha_websocket: e.target.value })}
                 >
                   <option value="true">Yes</option>
                   <option value="false">No</option>
                 </select>
               ) : (
-                <span>{settings.ha_websocket === 'true' ? 'Yes' : 'No'}</span>
+                <span>{settings.ha_websocket === 'false' ? 'No' : 'Yes'}</span>
               )}
             </div>
 
