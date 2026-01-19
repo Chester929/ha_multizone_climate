@@ -123,15 +123,23 @@ app.all('/api/ha/*', async (req, res) => {
       },
     };
     
-    // Forward body for POST/PUT requests
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
+    // Forward body for POST/PUT/PATCH requests
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
       fetchOptions.body = JSON.stringify(req.body);
     }
     
     const response = await fetch(url, fetchOptions);
-    const data = await response.json();
     
-    res.status(response.status).json(data);
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } else {
+      // For non-JSON responses, return as text
+      const text = await response.text();
+      res.status(response.status).send(text);
+    }
   } catch (error) {
     console.error('Error proxying to logic container:', error);
     res.status(503).json({ 
@@ -286,11 +294,11 @@ app.put('/api/integrations', async (req, res) => {
     await redisClient.hSet('multizone:integrations', mergedSettings);
     await broadcastUpdate('integrations', mergedSettings);
     
-    // Check if HA-related settings changed
-    const haSettingsChanged = settings.ha_enabled !== undefined || 
-                              settings.ha_base_url !== undefined || 
-                              settings.ha_token !== undefined || 
-                              settings.ha_websocket !== undefined;
+    // Check if HA-related settings changed (check if properties exist in the request)
+    const haSettingsChanged = 'ha_enabled' in settings || 
+                              'ha_base_url' in settings || 
+                              'ha_token' in settings || 
+                              'ha_websocket' in settings;
     
     if (haSettingsChanged) {
       console.log('HA integration settings changed. Please restart the logic container for changes to take effect.');
