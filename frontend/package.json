@@ -3,7 +3,6 @@
   "version": "2.0.0",
   "description": "Multizone Climate Frontend",
   "main": "dist/server.js",
-  "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "tsx watch src/server.ts",

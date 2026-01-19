@@ -29,8 +29,8 @@ export interface SystemStatus {
   time: string;
 }
 
-export interface WebSocketMessage {
+export interface WebSocketMessage<T = unknown> {
   type: string;
-  data: any;
+  data: T;
   timestamp: string;
 }

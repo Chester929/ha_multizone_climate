@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { WebSocketMessage } from '../types';
 
 export function useWebSocket(url: string) {
@@ -7,7 +7,7 @@ export function useWebSocket(url: string) {
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout>();
 
-  const connect = () => {
+  const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}${url}`;
     
@@ -38,7 +38,7 @@ export function useWebSocket(url: string) {
     ws.current.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
-  };
+  }, [url]);
 
   useEffect(() => {
     connect();
@@ -51,7 +51,7 @@ export function useWebSocket(url: string) {
         ws.current.close();
       }
     };
-  }, [url]);
+  }, [connect]);
 
   return { connected, lastMessage };
 }

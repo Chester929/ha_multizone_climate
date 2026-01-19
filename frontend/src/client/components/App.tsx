@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Zone, SystemStatus } from '../types';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { ZoneCard } from './ZoneCard';
 import { ConfigManager } from './ConfigManager';
 import './App.css';
+
+interface ZoneResponse {
+  id?: string;
+  name?: string;
+  enabled?: string | boolean;
+  current_temperature?: string;
+  target_temperature?: string;
+  satisfaction?: string;
+  valve_state?: string;
+  priority?: number;
+}
 
 export function App() {
   const [zones, setZones] = useState<Zone[]>([]);
@@ -13,10 +24,42 @@ export function App() {
   const [showAddZone, setShowAddZone] = useState(false);
   const { connected, lastMessage } = useWebSocket('/ws');
 
+  const fetchZones = useCallback(async () => {
+    try {
+      const response = await fetch('/api/zones');
+      const data: ZoneResponse[] = await response.json();
+      const parsedZones: Zone[] = data.map((z) => ({
+        id: z.id || '',
+        name: z.name || '',
+        enabled: z.enabled === 'true' || z.enabled === true,
+        current_temperature: z.current_temperature,
+        target_temperature: z.target_temperature,
+        satisfaction: z.satisfaction,
+        valve_state: z.valve_state,
+        priority: z.priority,
+      }));
+      setZones(parsedZones);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching zones:', error);
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/health');
+      const data = await response.json();
+      setStatus(data);
+    } catch (error) {
+      console.error('Error fetching status:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchZones();
     fetchStatus();
-  }, []);
+  }, [fetchZones, fetchStatus]);
 
   useEffect(() => {
     if (lastMessage) {
@@ -25,33 +68,7 @@ export function App() {
         fetchZones();
       }
     }
-  }, [lastMessage]);
-
-  const fetchZones = async () => {
-    try {
-      const response = await fetch('/api/zones');
-      const data = await response.json();
-      const parsedZones = data.map((z: any) => ({
-        ...z,
-        enabled: z.enabled === 'true' || z.enabled === true,
-      }));
-      setZones(parsedZones);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching zones:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchStatus = async () => {
-    try {
-      const response = await fetch('/health');
-      const data = await response.json();
-      setStatus(data);
-    } catch (error) {
-      console.error('Error fetching status:', error);
-    }
-  };
+  }, [lastMessage, fetchZones]);
 
   const handleUpdateZone = async (zone: Zone) => {
     try {

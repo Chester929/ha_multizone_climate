@@ -1,5 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Config } from '../types';
+
+function isValidConfig(data: unknown): data is Config {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+  
+  // Check if all values are strings or undefined
+  for (const value of Object.values(data)) {
+    if (value !== undefined && typeof value !== 'string') {
+      return false;
+    }
+  }
+  
+  return true;
+}
 
 export function ConfigManager() {
   const [config, setConfig] = useState<Config>({});
@@ -7,11 +22,7 @@ export function ConfigManager() {
   const [editing, setEditing] = useState(false);
   const [editedConfig, setEditedConfig] = useState<Config>({});
 
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       const response = await fetch('/api/config');
       const data = await response.json();
@@ -22,7 +33,11 @@ export function ConfigManager() {
       console.error('Error fetching config:', error);
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const handleSave = async () => {
     try {
@@ -65,10 +80,17 @@ export function ConfigManager() {
     reader.onload = (e) => {
       try {
         const imported = JSON.parse(e.target?.result as string);
+        
+        // Validate the imported configuration
+        if (!isValidConfig(imported)) {
+          alert('Invalid configuration file: Configuration must contain only string values');
+          return;
+        }
+        
         setEditedConfig(imported);
         setEditing(true);
       } catch (error) {
-        alert('Invalid configuration file');
+        alert('Invalid configuration file: Unable to parse JSON');
       }
     };
     reader.readAsText(file);

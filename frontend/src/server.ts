@@ -2,8 +2,24 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from 'redis';
 import path from 'path';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+
+interface ZoneData {
+  id?: string;
+  name?: string;
+  enabled?: string;
+  current_temperature?: string;
+  target_temperature?: string;
+  satisfaction?: string;
+  valve_state?: string;
+  priority?: string;
+}
+
+interface BroadcastData {
+  id?: string;
+  [key: string]: unknown;
+}
 
 const app = express();
 const PORT = process.env.WEB_PORT || 8099;
@@ -51,7 +67,7 @@ redisClient.on('error', (err) => console.error('Redis Client Error', err));
 // WebSocket Server
 const wss = new WebSocketServer({ server: httpServer });
 
-const clients = new Set<any>();
+const clients = new Set<WebSocket>();
 
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
@@ -69,10 +85,10 @@ wss.on('connection', (ws) => {
 });
 
 // Broadcast function for real-time updates
-async function broadcastUpdate(type: string, data: any) {
+async function broadcastUpdate(type: string, data: BroadcastData) {
   const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
   clients.forEach((client) => {
-    if (client.readyState === 1) { // OPEN
+    if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   });
@@ -96,13 +112,22 @@ app.get('/health', async (req, res) => {
 // API endpoints
 app.get('/api/zones', async (req, res) => {
   try {
-    const keys = await redisClient.keys('multizone:zone:*');
     const zones = [];
+    let cursor = 0;
     
-    for (const key of keys) {
-      const zoneData = await redisClient.hGetAll(key);
-      zones.push(zoneData);
-    }
+    // Use SCAN instead of KEYS for better performance
+    do {
+      const result = await redisClient.scan(cursor, {
+        MATCH: 'multizone:zone:*',
+        COUNT: 100
+      });
+      cursor = result.cursor;
+      
+      for (const key of result.keys) {
+        const zoneData = await redisClient.hGetAll(key);
+        zones.push(zoneData);
+      }
+    } while (cursor !== 0);
     
     res.json(zones);
   } catch (error) {
@@ -136,10 +161,24 @@ app.put('/api/config', async (req, res) => {
 // Zone management endpoints
 app.post('/api/zones', async (req, res) => {
   try {
-    const zone = req.body;
+    const zone: ZoneData = req.body;
+    
+    // Validate required fields
+    if (!zone.name || zone.name.trim() === '') {
+      return res.status(400).json({ error: 'Zone name is required' });
+    }
+    
     const zoneId = zone.id || `zone-${Date.now()}`;
-    await redisClient.hSet(`multizone:zone:${zoneId}`, zone);
-    await broadcastUpdate('zone-created', { id: zoneId, ...zone });
+    const zoneData: ZoneData = {
+      id: zoneId,
+      name: zone.name,
+      enabled: zone.enabled || 'true',
+      target_temperature: zone.target_temperature,
+      priority: zone.priority || '0',
+    };
+    
+    await redisClient.hSet(`multizone:zone:${zoneId}`, zoneData as Record<string, string>);
+    await broadcastUpdate('zone-created', { id: zoneId, ...zoneData });
     res.json({ status: 'created', id: zoneId });
   } catch (error) {
     console.error('Error creating zone:', error);
@@ -150,8 +189,20 @@ app.post('/api/zones', async (req, res) => {
 app.put('/api/zones/:id', async (req, res) => {
   try {
     const zoneId = req.params.id;
-    const zone = req.body;
-    await redisClient.hSet(`multizone:zone:${zoneId}`, zone);
+    const zone: ZoneData = req.body;
+    
+    // Validate zone ID
+    if (!zoneId || zoneId.trim() === '') {
+      return res.status(400).json({ error: 'Zone ID is required' });
+    }
+    
+    // Check if zone exists
+    const exists = await redisClient.exists(`multizone:zone:${zoneId}`);
+    if (!exists) {
+      return res.status(404).json({ error: 'Zone not found' });
+    }
+    
+    await redisClient.hSet(`multizone:zone:${zoneId}`, zone as Record<string, string>);
     await broadcastUpdate('zone-updated', { id: zoneId, ...zone });
     res.json({ status: 'updated' });
   } catch (error) {
@@ -212,10 +263,22 @@ app.get('*', (req, res) => {
 // Background task to record historical data
 async function recordHistoricalData() {
   try {
-    const keys = await redisClient.keys('multizone:zone:*');
+    const zones: string[] = [];
+    let cursor = 0;
+    
+    // Use SCAN instead of KEYS for better performance
+    do {
+      const result = await redisClient.scan(cursor, {
+        MATCH: 'multizone:zone:*',
+        COUNT: 100
+      });
+      cursor = result.cursor;
+      zones.push(...result.keys);
+    } while (cursor !== 0);
+    
     const timestamp = new Date().toISOString();
     
-    for (const key of keys) {
+    for (const key of zones) {
       const zoneData = await redisClient.hGetAll(key);
       const zoneId = key.replace('multizone:zone:', '');
       const historyEntry = JSON.stringify({
@@ -234,8 +297,8 @@ async function recordHistoricalData() {
     // Record system-wide stats
     const systemEntry = JSON.stringify({
       timestamp,
-      total_zones: keys.length,
-      active_zones: keys.length, // Could filter by enabled zones
+      total_zones: zones.length,
+      active_zones: zones.length, // Could filter by enabled zones
     });
     
     await redisClient.lPush('multizone:history:system', systemEntry);
@@ -244,6 +307,8 @@ async function recordHistoricalData() {
     console.error('Error recording historical data:', error);
   }
 }
+
+let historicalDataInterval: NodeJS.Timeout | null = null;
 
 // Start server
 async function start() {
@@ -265,7 +330,7 @@ async function start() {
     });
     
     // Start recording historical data every minute
-    setInterval(recordHistoricalData, 60000);
+    historicalDataInterval = setInterval(recordHistoricalData, 60000);
     
     httpServer.listen(PORT, () => {
       console.log(`Frontend server listening on port ${PORT}`);
@@ -276,5 +341,19 @@ async function start() {
     process.exit(1);
   }
 }
+
+// Cleanup function
+async function cleanup() {
+  console.log('Shutting down server...');
+  if (historicalDataInterval) {
+    clearInterval(historicalDataInterval);
+  }
+  await redisClient.quit();
+  await subscriber.quit();
+  process.exit(0);
+}
+
+process.on('SIGTERM', cleanup);
+process.on('SIGINT', cleanup);
 
 start();
