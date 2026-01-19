@@ -158,6 +158,30 @@ app.put('/api/config', async (req, res) => {
   }
 });
 
+// Integration settings endpoints
+app.get('/api/integrations', async (req, res) => {
+  try {
+    const settings = await redisClient.hGetAll('multizone:integrations');
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching integration settings:', error);
+    res.status(500).json({ error: 'Failed to fetch integration settings' });
+  }
+});
+
+app.put('/api/integrations', async (req, res) => {
+  try {
+    const settings = req.body;
+    await redisClient.hSet('multizone:integrations', settings);
+    await broadcastUpdate('integrations', settings);
+    res.json({ status: 'updated' });
+  } catch (error) {
+    console.error('Error updating integration settings:', error);
+    res.status(500).json({ error: 'Failed to update integration settings' });
+  }
+});
+
+
 // Zone management endpoints
 app.post('/api/zones', async (req, res) => {
   try {
@@ -179,7 +203,10 @@ app.post('/api/zones', async (req, res) => {
       id: zoneId,
       name: zone.name,
       enabled: zone.enabled || 'true',
-      target_temperature: zone.target_temperature,
+      target_temperature: zone.target_temperature || '20',
+      current_temperature: zone.current_temperature || 'N/A',
+      satisfaction: zone.satisfaction || 'unknown',
+      valve_state: zone.valve_state || 'closed',
       priority: zone.priority || '0',
     };
     

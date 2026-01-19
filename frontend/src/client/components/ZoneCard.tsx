@@ -98,6 +98,31 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
             <div className="detail-value">{zone.target_temperature || 'N/A'}°C</div>
           )}
         </div>
+        {!isEditing && (
+          <div className="zone-detail zone-detail-full">
+            <div className="detail-label">
+              Adjust Temperature: {editedZone.target_temperature || '20'}°C
+            </div>
+            <div className="temperature-slider-container">
+              <span className="slider-label">10°C</span>
+              <input
+                type="range"
+                min="10"
+                max="30"
+                step="0.5"
+                value={editedZone.target_temperature || '20'}
+                onChange={(e) => {
+                  const updated = { ...editedZone, target_temperature: e.target.value };
+                  setEditedZone(updated);
+                }}
+                onMouseUp={() => onUpdate(editedZone)}
+                onTouchEnd={() => onUpdate(editedZone)}
+                className="temperature-slider"
+              />
+              <span className="slider-label">30°C</span>
+            </div>
+          </div>
+        )}
         <div className="zone-detail">
           <div className="detail-label">Satisfaction</div>
           <div className="detail-value">{zone.satisfaction || 'Unknown'}</div>
