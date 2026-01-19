@@ -34,6 +34,37 @@ func main() {
 	defer redisClient.Close()
 	log.Println("Connected to Redis successfully")
 
+	// Load integration settings from Redis to override environment variables
+	integrationSettings, err := redisClient.HGetAll(ctx, "multizone:integrations")
+	if err != nil {
+		log.Printf("Warning: Failed to load integration settings from Redis: %v", err)
+	} else if len(integrationSettings) > 0 {
+		log.Println("Loading Home Assistant integration settings from Redis...")
+		
+		// Override HA settings from Redis if available
+		if haEnabled, ok := integrationSettings["ha_enabled"]; ok && haEnabled == "true" {
+			cfg.HAEnabled = true
+			
+			if haBaseURL, ok := integrationSettings["ha_base_url"]; ok && haBaseURL != "" {
+				cfg.HABaseURL = haBaseURL
+			}
+			
+			if haToken, ok := integrationSettings["ha_token"]; ok && haToken != "" {
+				cfg.HAToken = haToken
+			}
+			
+			if haWebsocket, ok := integrationSettings["ha_websocket"]; ok {
+				cfg.HAWebsocket = haWebsocket == "true"
+			}
+			
+			log.Printf("Loaded HA settings from Redis: Enabled=%v, BaseURL=%s, Websocket=%v", 
+				cfg.HAEnabled, cfg.HABaseURL, cfg.HAWebsocket)
+		} else {
+			cfg.HAEnabled = false
+			log.Println("Home Assistant integration disabled in Redis settings")
+		}
+	}
+
 	// Initialize Home Assistant integration if enabled
 	var haIntegration *homeassistant.Integration
 	if cfg.HAEnabled && cfg.HAToken != "" {

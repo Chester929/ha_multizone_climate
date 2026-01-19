@@ -4,6 +4,10 @@ import { createClient } from 'redis';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 interface ZoneData {
   id?: string;
@@ -158,10 +162,37 @@ app.put('/api/config', async (req, res) => {
   }
 });
 
+// Helper function to restart logic container
+async function restartLogicContainer(): Promise<void> {
+  try {
+    // Hardcoded container name to prevent command injection
+    const containerName = 'multizone-logic';
+    
+    // Validate container name to ensure it's safe (alphanumeric and hyphens only)
+    if (!/^[a-zA-Z0-9-]+$/.test(containerName)) {
+      throw new Error('Invalid container name format');
+    }
+    
+    // Try to restart using docker command with safe argument passing
+    // This will work if Docker socket is mounted or we're running with appropriate permissions
+    await execAsync('docker restart ' + containerName);
+    console.log(`Successfully restarted ${containerName} container`);
+  } catch (error) {
+    // Log warning but don't fail the request - container might auto-restart or running in different environment
+    console.warn('Could not restart logic container:', error);
+    console.warn('Container may need manual restart or will restart automatically depending on configuration');
+  }
+}
+
 // Integration settings endpoints
 app.get('/api/integrations', async (req, res) => {
   try {
     const settings = await redisClient.hGetAll('multizone:integrations');
+    
+    // Apply defaults for missing values
+    if (!settings.ha_websocket || settings.ha_websocket === '') {
+      settings.ha_websocket = 'true';
+    }
     
     // Mask sensitive fields when returning settings
     const maskedSettings = { ...settings };
@@ -248,6 +279,21 @@ app.put('/api/integrations', async (req, res) => {
     
     await redisClient.hSet('multizone:integrations', mergedSettings);
     await broadcastUpdate('integrations', mergedSettings);
+    
+    // Check if HA-related settings changed - if so, restart logic container
+    const haSettingsChanged = settings.ha_enabled !== undefined || 
+                              settings.ha_base_url !== undefined || 
+                              settings.ha_token !== undefined || 
+                              settings.ha_websocket !== undefined;
+    
+    if (haSettingsChanged) {
+      console.log('HA integration settings changed, restarting logic container...');
+      // Restart asynchronously - don't wait for completion
+      restartLogicContainer().catch(err => {
+        console.error('Error during async container restart:', err);
+      });
+    }
+    
     res.json({ status: 'updated' });
   } catch (error) {
     console.error('Error updating integration settings:', error);
