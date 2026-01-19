@@ -49,12 +49,21 @@ export function IntegrationConfig() {
 
   const handleSave = async () => {
     try {
+      // Remove masked values before saving - only send if changed
+      const settingsToSave = { ...editedSettings };
+      if (settingsToSave.ha_token === '••••••••') {
+        delete settingsToSave.ha_token; // Don't send masked value
+      }
+      if (settingsToSave.mqtt_password === '••••••••') {
+        delete settingsToSave.mqtt_password; // Don't send masked value
+      }
+      
       const response = await fetch('/api/integrations', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editedSettings),
+        body: JSON.stringify(settingsToSave),
       });
 
       if (response.ok) {
@@ -65,12 +74,15 @@ export function IntegrationConfig() {
         let errorMessage = 'Failed to save integration settings';
         try {
           const errorData = await response.json();
-          if (errorData) {
-            if (typeof (errorData as any).message === 'string' && (errorData as any).message.trim()) {
-              errorMessage = (errorData as any).message;
-            } else if (typeof (errorData as any).error === 'string' && (errorData as any).error.trim()) {
-              errorMessage = (errorData as any).error;
-            }
+          const message =
+            typeof errorData.message === 'string' ? errorData.message.trim() : '';
+          const error =
+            typeof errorData.error === 'string' ? errorData.error.trim() : '';
+
+          if (message) {
+            errorMessage = message;
+          } else if (error) {
+            errorMessage = error;
           }
         } catch (parseError) {
           // Ignore JSON parse errors and fall back to the generic message

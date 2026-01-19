@@ -133,6 +133,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
                 onTouchEnd={handleSliderRelease}
                 onKeyUp={handleSliderRelease}
                 className="temperature-slider"
+                aria-label="Adjust target temperature"
               />
               <span className="slider-label">30°C</span>
             </div>

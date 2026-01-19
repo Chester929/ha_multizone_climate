@@ -162,7 +162,17 @@ app.put('/api/config', async (req, res) => {
 app.get('/api/integrations', async (req, res) => {
   try {
     const settings = await redisClient.hGetAll('multizone:integrations');
-    res.json(settings);
+    
+    // Mask sensitive fields when returning settings
+    const maskedSettings = { ...settings };
+    if (maskedSettings.ha_token && maskedSettings.ha_token.trim() !== '') {
+      maskedSettings.ha_token = '••••••••';
+    }
+    if (maskedSettings.mqtt_password && maskedSettings.mqtt_password.trim() !== '') {
+      maskedSettings.mqtt_password = '••••••••';
+    }
+    
+    res.json(maskedSettings);
   } catch (error) {
     console.error('Error fetching integration settings:', error);
     res.status(500).json({ error: 'Failed to fetch integration settings' });
@@ -179,6 +189,12 @@ app.put('/api/integrations', async (req, res) => {
   try {
     const settings = req.body;
     
+    // Get existing settings to merge with update (for partial updates when masked fields are omitted)
+    const existingSettings = await redisClient.hGetAll('multizone:integrations');
+    
+    // Merge new settings with existing (new settings take precedence)
+    const mergedSettings = { ...existingSettings, ...settings };
+    
     // Validate settings structure
     for (const key of Object.keys(settings)) {
       if (!INTEGRATION_CONFIG_KEYS.includes(key)) {
@@ -192,22 +208,27 @@ app.put('/api/integrations', async (req, res) => {
     }
     
     // Validate HA settings if enabled
-    if (settings.ha_enabled === 'true') {
-      if (!settings.ha_base_url || settings.ha_base_url.trim() === '') {
+    if (mergedSettings.ha_enabled === 'true') {
+      if (!mergedSettings.ha_base_url || mergedSettings.ha_base_url.trim() === '') {
         return res.status(400).json({ error: 'HA base URL is required when HA is enabled' });
       }
-      if (!settings.ha_token || settings.ha_token.trim() === '') {
+      if (!mergedSettings.ha_token || mergedSettings.ha_token.trim() === '') {
         return res.status(400).json({ error: 'HA access token is required when HA is enabled' });
       }
+    } else {
+      // Clear HA settings when disabled to avoid confusion
+      delete mergedSettings.ha_base_url;
+      delete mergedSettings.ha_token;
+      delete mergedSettings.ha_websocket;
     }
     
     // Validate MQTT settings if enabled
-    if (settings.mqtt_enabled === 'true') {
-      if (!settings.mqtt_broker || settings.mqtt_broker.trim() === '') {
+    if (mergedSettings.mqtt_enabled === 'true') {
+      if (!mergedSettings.mqtt_broker || mergedSettings.mqtt_broker.trim() === '') {
         return res.status(400).json({ error: 'MQTT broker is required when MQTT is enabled' });
       }
       // Ensure MQTT port is set; default to 1883 if omitted
-      let mqttPort = (settings.mqtt_port || '').trim();
+      let mqttPort = (mergedSettings.mqtt_port || '').trim();
       if (mqttPort === '') {
         mqttPort = '1883';
       }
@@ -216,11 +237,17 @@ app.put('/api/integrations', async (req, res) => {
         return res.status(400).json({ error: 'MQTT port must be between 1 and 65535' });
       }
       // Persist the normalized port value back to settings
-      settings.mqtt_port = mqttPort;
+      mergedSettings.mqtt_port = mqttPort;
+    } else {
+      // Clear MQTT settings when disabled to avoid confusion
+      delete mergedSettings.mqtt_broker;
+      delete mergedSettings.mqtt_port;
+      delete mergedSettings.mqtt_username;
+      delete mergedSettings.mqtt_password;
     }
     
-    await redisClient.hSet('multizone:integrations', settings);
-    await broadcastUpdate('integrations', settings);
+    await redisClient.hSet('multizone:integrations', mergedSettings);
+    await broadcastUpdate('integrations', mergedSettings);
     res.json({ status: 'updated' });
   } catch (error) {
     console.error('Error updating integration settings:', error);
