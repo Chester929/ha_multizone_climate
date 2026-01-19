@@ -65,8 +65,29 @@ export function IntegrationConfig() {
 
   const handleTestHA = async () => {
     setTestResult(null);
+    
+    // Validate that settings are configured
+    if (!editedSettings.ha_base_url || !editedSettings.ha_token) {
+      setTestResult({ type: 'error', message: 'Please configure and save HA settings before testing.' });
+      return;
+    }
+    
+    if (editing) {
+      setTestResult({ type: 'error', message: 'Please save settings before testing the connection.' });
+      return;
+    }
+    
     try {
       const response = await fetch('/api/ha/test');
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          setTestResult({ type: 'error', message: 'Test endpoint not available. This feature requires the logic container to be configured with HA integration enabled.' });
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.connected) {
@@ -75,7 +96,7 @@ export function IntegrationConfig() {
         setTestResult({ type: 'error', message: `Connection failed: ${data.error || 'Unknown error'}` });
       }
     } catch (error) {
-      setTestResult({ type: 'error', message: 'Failed to test connection. Make sure settings are saved first.' });
+      setTestResult({ type: 'error', message: 'Test connection feature requires the logic container to be running with HA integration enabled.' });
     }
   };
 

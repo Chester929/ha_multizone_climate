@@ -12,10 +12,12 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [editedZone, setEditedZone] = useState(zone);
+  const [sliderValue, setSliderValue] = useState(zone.target_temperature || '20');
 
   // Sync editedZone when zone prop changes (e.g., from WebSocket updates)
   useEffect(() => {
     setEditedZone(zone);
+    setSliderValue(zone.target_temperature || '20');
   }, [zone]);
 
   const handleSave = () => {
@@ -101,7 +103,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
         {!isEditing && (
           <div className="zone-detail zone-detail-full">
             <div className="detail-label">
-              Adjust Temperature: {editedZone.target_temperature || '20'}°C
+              Adjust Temperature: {sliderValue}°C
             </div>
             <div className="temperature-slider-container">
               <span className="slider-label">10°C</span>
@@ -110,13 +112,26 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
                 min="10"
                 max="30"
                 step="0.5"
-                value={editedZone.target_temperature || '20'}
+                value={sliderValue}
                 onChange={(e) => {
-                  const updated = { ...editedZone, target_temperature: e.target.value };
-                  setEditedZone(updated);
+                  setSliderValue(e.target.value);
                 }}
-                onMouseUp={() => onUpdate(editedZone)}
-                onTouchEnd={() => onUpdate(editedZone)}
+                onMouseUp={() => {
+                  // Only update if the value actually changed
+                  if (sliderValue !== zone.target_temperature) {
+                    const updated = { ...editedZone, target_temperature: sliderValue };
+                    setEditedZone(updated);
+                    onUpdate(updated);
+                  }
+                }}
+                onTouchEnd={() => {
+                  // Only update if the value actually changed
+                  if (sliderValue !== zone.target_temperature) {
+                    const updated = { ...editedZone, target_temperature: sliderValue };
+                    setEditedZone(updated);
+                    onUpdate(updated);
+                  }
+                }}
                 className="temperature-slider"
               />
               <span className="slider-label">30°C</span>

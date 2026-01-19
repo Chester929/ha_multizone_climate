@@ -172,6 +172,45 @@ app.get('/api/integrations', async (req, res) => {
 app.put('/api/integrations', async (req, res) => {
   try {
     const settings = req.body;
+    
+    // Validate settings structure
+    const allowedKeys = ['ha_enabled', 'ha_base_url', 'ha_token', 'ha_websocket', 
+                        'mqtt_enabled', 'mqtt_broker', 'mqtt_port', 'mqtt_username', 'mqtt_password'];
+    
+    for (const key of Object.keys(settings)) {
+      if (!allowedKeys.includes(key)) {
+        return res.status(400).json({ error: `Invalid setting key: ${key}` });
+      }
+      
+      // All values must be strings
+      if (typeof settings[key] !== 'string') {
+        return res.status(400).json({ error: `Setting ${key} must be a string` });
+      }
+    }
+    
+    // Validate HA settings if enabled
+    if (settings.ha_enabled === 'true') {
+      if (!settings.ha_base_url || settings.ha_base_url.trim() === '') {
+        return res.status(400).json({ error: 'HA base URL is required when HA is enabled' });
+      }
+      if (!settings.ha_token || settings.ha_token.trim() === '') {
+        return res.status(400).json({ error: 'HA access token is required when HA is enabled' });
+      }
+    }
+    
+    // Validate MQTT settings if enabled
+    if (settings.mqtt_enabled === 'true') {
+      if (!settings.mqtt_broker || settings.mqtt_broker.trim() === '') {
+        return res.status(400).json({ error: 'MQTT broker is required when MQTT is enabled' });
+      }
+      if (settings.mqtt_port) {
+        const port = parseInt(settings.mqtt_port, 10);
+        if (isNaN(port) || port < 1 || port > 65535) {
+          return res.status(400).json({ error: 'MQTT port must be between 1 and 65535' });
+        }
+      }
+    }
+    
     await redisClient.hSet('multizone:integrations', settings);
     await broadcastUpdate('integrations', settings);
     res.json({ status: 'updated' });
