@@ -6,6 +6,7 @@ export function useWebSocket(url: string) {
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout>();
+  const reconnectAttempts = useRef(0);
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -15,6 +16,7 @@ export function useWebSocket(url: string) {
 
     ws.current.onopen = () => {
       setConnected(true);
+      reconnectAttempts.current = 0; // Reset on successful connection
     };
 
     ws.current.onmessage = (event) => {
@@ -29,10 +31,13 @@ export function useWebSocket(url: string) {
     ws.current.onclose = () => {
       setConnected(false);
       
-      // Attempt to reconnect after 3 seconds
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+      reconnectAttempts.current++;
+      
       reconnectTimeout.current = setTimeout(() => {
         connect();
-      }, 3000);
+      }, delay);
     };
 
     ws.current.onerror = (error) => {

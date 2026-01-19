@@ -11,24 +11,61 @@ const ALLOWED_CONFIG_KEYS = [
   'update_interval',
 ];
 
+// Helper to check if a string represents a finite numeric value
+function isNumericString(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return false;
+  }
+  const num = Number(trimmed);
+  return Number.isFinite(num);
+}
+
 function isValidConfig(data: unknown): data is Config {
   if (typeof data !== 'object' || data === null) {
     return false;
   }
   
-  const keys = Object.keys(data);
+  const entries = Object.entries(data as Record<string, unknown>);
   
-  // Check if all keys are in the whitelist
-  for (const key of keys) {
+  // Check if all keys are in the whitelist and values are meaningful
+  for (const [key, value] of entries) {
     if (!ALLOWED_CONFIG_KEYS.includes(key)) {
       return false;
     }
-  }
-  
-  // Check if all values are strings or undefined
-  for (const value of Object.values(data)) {
-    if (value !== undefined && typeof value !== 'string') {
+    
+    // Allow undefined values to represent "not set"
+    if (value === undefined) {
+      continue;
+    }
+    
+    if (typeof value !== 'string') {
       return false;
+    }
+    
+    const strValue = value.trim();
+    
+    // Validate based on key type
+    switch (key) {
+      case 'main_target_temperature':
+      case 'hysteresis':
+      case 'min_temperature':
+      case 'max_temperature':
+      case 'update_interval':
+        // These configuration values must be numeric strings
+        if (!isNumericString(strValue)) {
+          return false;
+        }
+        break;
+      case 'mode':
+        // Mode must be a non-empty string
+        if (strValue.length === 0) {
+          return false;
+        }
+        break;
+      default:
+        // Should not be reachable due to the whitelist check
+        break;
     }
   }
   

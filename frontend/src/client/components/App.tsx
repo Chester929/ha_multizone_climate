@@ -97,7 +97,9 @@ export function App() {
   };
 
   const handleDeleteZone = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this zone?')) {
+    // Validate zone ID exists
+    if (!id || id.trim() === '') {
+      alert('Invalid zone ID');
       return;
     }
 
@@ -108,6 +110,7 @@ export function App() {
 
       if (response.ok) {
         fetchZones();
+        fetchStatus();
       } else {
         alert('Failed to delete zone');
       }

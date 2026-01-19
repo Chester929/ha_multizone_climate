@@ -169,6 +169,12 @@ app.post('/api/zones', async (req, res) => {
     }
     
     const zoneId = zone.id || `zone-${Date.now()}`;
+    
+    // Validate zone ID format (alphanumeric, hyphens, underscores only)
+    if (!/^[a-zA-Z0-9_-]+$/.test(zoneId)) {
+      return res.status(400).json({ error: 'Zone ID must contain only alphanumeric characters, hyphens, and underscores' });
+    }
+    
     const zoneData: ZoneData = {
       id: zoneId,
       name: zone.name,
@@ -191,14 +197,29 @@ app.put('/api/zones/:id', async (req, res) => {
     const zoneId = req.params.id;
     const zone: ZoneData = req.body;
     
-    // Validate zone ID
-    if (!zoneId || zoneId.trim() === '') {
-      return res.status(400).json({ error: 'Zone ID is required' });
+    // Validate zone ID format
+    if (!zoneId || zoneId.trim() === '' || !/^[a-zA-Z0-9_-]+$/.test(zoneId)) {
+      return res.status(400).json({ error: 'Invalid zone ID format' });
     }
     
     // Validate zone name if provided
     if (zone.name !== undefined && zone.name.trim() === '') {
       return res.status(400).json({ error: 'Zone name cannot be empty' });
+    }
+    
+    // Validate numeric fields if provided
+    if (zone.target_temperature !== undefined) {
+      const temp = parseFloat(zone.target_temperature);
+      if (isNaN(temp) || temp < -50 || temp > 100) {
+        return res.status(400).json({ error: 'Target temperature must be between -50 and 100' });
+      }
+    }
+    
+    if (zone.priority !== undefined) {
+      const priority = parseInt(zone.priority, 10);
+      if (isNaN(priority) || priority < 0 || priority > 100) {
+        return res.status(400).json({ error: 'Priority must be between 0 and 100' });
+      }
     }
     
     // Check if zone exists
@@ -219,6 +240,11 @@ app.put('/api/zones/:id', async (req, res) => {
 app.delete('/api/zones/:id', async (req, res) => {
   try {
     const zoneId = req.params.id;
+    
+    // Validate zone ID format
+    if (!zoneId || zoneId.trim() === '' || !/^[a-zA-Z0-9_-]+$/.test(zoneId)) {
+      return res.status(400).json({ error: 'Invalid zone ID format' });
+    }
     
     // Check if zone exists
     const exists = await redisClient.exists(`multizone:zone:${zoneId}`);
@@ -241,6 +267,12 @@ app.delete('/api/zones/:id', async (req, res) => {
 app.get('/api/history/zones/:id', async (req, res) => {
   try {
     const zoneId = req.params.id;
+    
+    // Validate zone ID format
+    if (!zoneId || zoneId.trim() === '' || !/^[a-zA-Z0-9_-]+$/.test(zoneId)) {
+      return res.status(400).json({ error: 'Invalid zone ID format' });
+    }
+    
     const hours = parseInt(req.query.hours as string, 10) || 24;
     
     // Validate hours parameter (max 168 hours = 1 week)

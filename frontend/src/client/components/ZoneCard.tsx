@@ -19,6 +19,15 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   }, [zone]);
 
   const handleSave = () => {
+    // Validate target_temperature before saving
+    if (editedZone.target_temperature !== undefined && editedZone.target_temperature !== null) {
+      const temp = parseFloat(editedZone.target_temperature as string);
+      if (isNaN(temp) || editedZone.target_temperature.toString().trim() === '') {
+        alert('Please enter a valid numeric target temperature before saving.');
+        return;
+      }
+    }
+    
     onUpdate(editedZone);
     setIsEditing(false);
   };
@@ -26,6 +35,12 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const handleCancel = () => {
     setEditedZone(zone);
     setIsEditing(false);
+  };
+  
+  const handleDelete = () => {
+    if (confirm(`Are you sure you want to delete zone "${zone.name || zone.id}"?`)) {
+      onDelete(zone.id);
+    }
   };
 
   return (
@@ -116,7 +131,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
             <button onClick={() => setShowChart(!showChart)} className="btn btn-secondary">
               {showChart ? 'Hide Chart' : 'Show Chart'}
             </button>
-            <button onClick={() => onDelete(zone.id)} className="btn btn-danger">Delete</button>
+            <button onClick={handleDelete} className="btn btn-danger">Delete</button>
           </>
         )}
       </div>
