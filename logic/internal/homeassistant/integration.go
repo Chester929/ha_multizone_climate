@@ -260,7 +260,7 @@ func (i *Integration) updateTemperatureSensor(ctx context.Context, entityID, sta
 
 	// Trigger recalculation job
 	if err := i.triggerRecalculation(ctx); err != nil {
-		logger.Error("triggering recalculation: %v", err)
+		logger.Error("Error triggering recalculation: %v", err)
 	}
 
 	return nil
@@ -363,14 +363,14 @@ func (i *Integration) SyncAllStates(ctx context.Context) error {
 		// Sync temperature sensor
 		if sensorEntity, ok := zoneData["temperature_sensor_entity_id"]; ok && sensorEntity != "" {
 			if err := i.syncTemperatureSensor(ctx, key, sensorEntity); err != nil {
-				logger.Error("syncing temperature sensor %s: %v", sensorEntity, err)
+				logger.Error("Error syncing temperature sensor %s: %v", sensorEntity, err)
 			}
 		}
 
 		// Sync valve switch
 		if valveEntity, ok := zoneData["valve_switch_entity_id"]; ok && valveEntity != "" {
 			if err := i.syncValveSwitch(ctx, key, valveEntity); err != nil {
-				logger.Error("syncing valve switch %s: %v", valveEntity, err)
+				logger.Error("Error syncing valve switch %s: %v", valveEntity, err)
 			}
 		}
 	}
@@ -380,7 +380,7 @@ func (i *Integration) SyncAllStates(ctx context.Context) error {
 	if err == nil {
 		if mainEntity, ok := configData["main_climate_entity_id"]; ok && mainEntity != "" {
 			if err := i.syncMainClimate(ctx, mainEntity); err != nil {
-				logger.Error("syncing main climate %s: %v", mainEntity, err)
+				logger.Error("Error syncing main climate %s: %v", mainEntity, err)
 			}
 		}
 	}
@@ -475,7 +475,7 @@ func (i *Integration) Stop() error {
 
 	if i.websocketEnabled && i.wsClient.IsConnected() {
 		if err := i.wsClient.Close(); err != nil {
-			logger.Error("closing websocket: %v", err)
+			logger.Error("Error closing websocket: %v", err)
 		}
 	}
 

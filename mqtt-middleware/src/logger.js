@@ -50,11 +50,21 @@ class Logger {
       prefix = `[${levelName}]`;
     }
 
-    const formattedMessage = args.length > 0 
-      ? message.replace(/%s/g, () => args.shift())
-      : message;
+    // Format message with arguments in a safe way
+    let formattedMessage = message;
+    let remainingArgs = [...args]; // Create a copy to avoid mutation
+    let argIndex = 0;
+    
+    if (args.length > 0) {
+      formattedMessage = message.replace(/%s/g, () => {
+        if (argIndex < args.length) {
+          return remainingArgs.shift();
+        }
+        return '%s';
+      });
+    }
 
-    console.log(`${timestamp} ${prefix} ${formattedMessage}`, ...args);
+    console.log(`${timestamp} ${prefix} ${formattedMessage}`, ...remainingArgs);
   }
 
   debug(message, ...args) {
