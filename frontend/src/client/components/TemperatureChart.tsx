@@ -69,17 +69,25 @@ export function TemperatureChart({ zoneId, zoneName, hours = 24 }: TemperatureCh
     datasets: [
       {
         label: 'Current Temperature',
-        data: data.map(d => parseFloat(d.current_temperature || '0')),
+        data: data.map(d => {
+          const temp = d.current_temperature ? parseFloat(d.current_temperature) : null;
+          return temp !== null && !isNaN(temp) ? temp : null;
+        }),
         borderColor: 'rgb(255, 99, 132)',
         backgroundColor: 'rgba(255, 99, 132, 0.5)',
         tension: 0.4,
+        spanGaps: true,
       },
       {
         label: 'Target Temperature',
-        data: data.map(d => parseFloat(d.target_temperature || '0')),
+        data: data.map(d => {
+          const temp = d.target_temperature ? parseFloat(d.target_temperature) : null;
+          return temp !== null && !isNaN(temp) ? temp : null;
+        }),
         borderColor: 'rgb(54, 162, 235)',
         backgroundColor: 'rgba(54, 162, 235, 0.5)',
         tension: 0.4,
+        spanGaps: true,
       },
     ],
   };

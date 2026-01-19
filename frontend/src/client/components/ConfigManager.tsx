@@ -1,9 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Config } from '../types';
 
+// Whitelist of allowed configuration keys
+const ALLOWED_CONFIG_KEYS = [
+  'main_target_temperature',
+  'mode',
+  'hysteresis',
+  'min_temperature',
+  'max_temperature',
+  'update_interval',
+];
+
 function isValidConfig(data: unknown): data is Config {
   if (typeof data !== 'object' || data === null) {
     return false;
+  }
+  
+  const keys = Object.keys(data);
+  
+  // Check if all keys are in the whitelist
+  for (const key of keys) {
+    if (!ALLOWED_CONFIG_KEYS.includes(key)) {
+      return false;
+    }
   }
   
   // Check if all values are strings or undefined
@@ -83,7 +102,7 @@ export function ConfigManager() {
         
         // Validate the imported configuration
         if (!isValidConfig(imported)) {
-          alert('Invalid configuration file: Configuration must contain only string values');
+          alert('Invalid configuration file: Must contain only allowed keys with string values. Allowed keys: ' + ALLOWED_CONFIG_KEYS.join(', '));
           return;
         }
         

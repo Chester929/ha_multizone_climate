@@ -46,6 +46,7 @@ describe('useWebSocket Hook', () => {
 
   beforeEach(() => {
     MockWebSocket.resetInstances();
+    jest.clearAllTimers();
   });
 
   it('connects to WebSocket on mount', async () => {
@@ -61,5 +62,78 @@ describe('useWebSocket Hook', () => {
     
     // Initially not connected
     expect(result.current.lastMessage).toBe(null);
+  });
+
+  it('receives and parses WebSocket messages', async () => {
+    const { result } = renderHook(() => useWebSocket('/ws'));
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    // Get the WebSocket instance and trigger a message
+    const ws = MockWebSocket.instances[0];
+    const mockMessage = {
+      type: 'zone-update',
+      data: { id: 'zone-1', temperature: 22.5 },
+      timestamp: new Date().toISOString(),
+    };
+
+    if (ws.onmessage) {
+      ws.onmessage({ data: JSON.stringify(mockMessage) } as any);
+    }
+
+    await waitFor(() => {
+      expect(result.current.lastMessage).toEqual(mockMessage);
+    });
+  });
+
+  it('handles invalid JSON in messages gracefully', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    const { result } = renderHook(() => useWebSocket('/ws'));
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    const ws = MockWebSocket.instances[0];
+    if (ws.onmessage) {
+      ws.onmessage({ data: 'invalid json' } as any);
+    }
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('handles WebSocket errors', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    const { result } = renderHook(() => useWebSocket('/ws'));
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    const ws = MockWebSocket.instances[0];
+    if (ws.onerror) {
+      ws.onerror(new Error('Test error') as any);
+    }
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('cleans up on unmount', async () => {
+    const { result, unmount } = renderHook(() => useWebSocket('/ws'));
+
+    await waitFor(() => {
+      expect(result.current.connected).toBe(true);
+    });
+
+    const ws = MockWebSocket.instances[0];
+    const closeSpy = jest.spyOn(ws, 'close');
+
+    unmount();
+
+    expect(closeSpy).toHaveBeenCalled();
   });
 });

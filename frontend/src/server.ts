@@ -196,6 +196,11 @@ app.put('/api/zones/:id', async (req, res) => {
       return res.status(400).json({ error: 'Zone ID is required' });
     }
     
+    // Validate zone name if provided
+    if (zone.name !== undefined && zone.name.trim() === '') {
+      return res.status(400).json({ error: 'Zone name cannot be empty' });
+    }
+    
     // Check if zone exists
     const exists = await redisClient.exists(`multizone:zone:${zoneId}`);
     if (!exists) {
@@ -214,7 +219,16 @@ app.put('/api/zones/:id', async (req, res) => {
 app.delete('/api/zones/:id', async (req, res) => {
   try {
     const zoneId = req.params.id;
+    
+    // Check if zone exists
+    const exists = await redisClient.exists(`multizone:zone:${zoneId}`);
+    if (!exists) {
+      return res.status(404).json({ error: 'Zone not found' });
+    }
+    
+    // Delete zone and its history
     await redisClient.del(`multizone:zone:${zoneId}`);
+    await redisClient.del(`multizone:history:zone:${zoneId}`);
     await broadcastUpdate('zone-deleted', { id: zoneId });
     res.json({ status: 'deleted' });
   } catch (error) {
@@ -227,7 +241,13 @@ app.delete('/api/zones/:id', async (req, res) => {
 app.get('/api/history/zones/:id', async (req, res) => {
   try {
     const zoneId = req.params.id;
-    const hours = parseInt(req.query.hours as string) || 24;
+    const hours = parseInt(req.query.hours as string, 10) || 24;
+    
+    // Validate hours parameter (max 168 hours = 1 week)
+    if (hours < 1 || hours > 168) {
+      return res.status(400).json({ error: 'Hours parameter must be between 1 and 168' });
+    }
+    
     const limit = Math.min(hours * 60, 1440); // Max 24 hours, 1 per minute
     
     const history = await redisClient.lRange(`multizone:history:zone:${zoneId}`, 0, limit - 1);
@@ -242,7 +262,13 @@ app.get('/api/history/zones/:id', async (req, res) => {
 
 app.get('/api/history/system', async (req, res) => {
   try {
-    const hours = parseInt(req.query.hours as string) || 24;
+    const hours = parseInt(req.query.hours as string, 10) || 24;
+    
+    // Validate hours parameter (max 168 hours = 1 week)
+    if (hours < 1 || hours > 168) {
+      return res.status(400).json({ error: 'Hours parameter must be between 1 and 168' });
+    }
+    
     const limit = Math.min(hours * 60, 1440);
     
     const history = await redisClient.lRange('multizone:history:system', 0, limit - 1);
@@ -281,12 +307,18 @@ async function recordHistoricalData() {
     for (const key of zones) {
       const zoneData = await redisClient.hGetAll(key);
       const zoneId = key.replace('multizone:zone:', '');
+      
+      // Only record if we have valid zone data
+      if (Object.keys(zoneData).length === 0) {
+        continue;
+      }
+      
       const historyEntry = JSON.stringify({
         timestamp,
-        current_temperature: zoneData.current_temperature,
-        target_temperature: zoneData.target_temperature,
-        valve_state: zoneData.valve_state,
-        satisfaction: zoneData.satisfaction,
+        current_temperature: zoneData.current_temperature || null,
+        target_temperature: zoneData.target_temperature || null,
+        valve_state: zoneData.valve_state || null,
+        satisfaction: zoneData.satisfaction || null,
       });
       
       // Keep last 24 hours of data (1440 entries at 1 per minute)

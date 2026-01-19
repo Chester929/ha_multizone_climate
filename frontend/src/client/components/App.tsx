@@ -80,11 +80,13 @@ export function App() {
         body: JSON.stringify({
           ...zone,
           enabled: zone.enabled.toString(),
+          priority: zone.priority !== undefined && zone.priority !== null ? zone.priority.toString() : undefined,
         }),
       });
 
       if (response.ok) {
         fetchZones();
+        fetchStatus();
       } else {
         alert('Failed to update zone');
       }
