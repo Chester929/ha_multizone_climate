@@ -206,12 +206,17 @@ app.put('/api/integrations', async (req, res) => {
       if (!settings.mqtt_broker || settings.mqtt_broker.trim() === '') {
         return res.status(400).json({ error: 'MQTT broker is required when MQTT is enabled' });
       }
-      if (settings.mqtt_port) {
-        const port = parseInt(settings.mqtt_port, 10);
-        if (isNaN(port) || port < 1 || port > 65535) {
-          return res.status(400).json({ error: 'MQTT port must be between 1 and 65535' });
-        }
+      // Ensure MQTT port is set; default to 1883 if omitted
+      let mqttPort = (settings.mqtt_port || '').trim();
+      if (mqttPort === '') {
+        mqttPort = '1883';
       }
+      const port = parseInt(mqttPort, 10);
+      if (isNaN(port) || port < 1 || port > 65535) {
+        return res.status(400).json({ error: 'MQTT port must be between 1 and 65535' });
+      }
+      // Persist the normalized port value back to settings
+      settings.mqtt_port = mqttPort;
     }
     
     await redisClient.hSet('multizone:integrations', settings);

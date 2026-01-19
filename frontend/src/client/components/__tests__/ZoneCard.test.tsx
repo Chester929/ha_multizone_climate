@@ -105,4 +105,92 @@ describe('ZoneCard Component', () => {
 
     expect(screen.getByText('Edit')).toBeInTheDocument();
   });
+
+  it('displays temperature slider with correct range', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const slider = screen.getByRole('slider');
+    expect(slider).toBeInTheDocument();
+    expect(slider).toHaveAttribute('min', '10');
+    expect(slider).toHaveAttribute('max', '30');
+    expect(slider).toHaveAttribute('step', '0.5');
+  });
+
+  it('updates slider value when changed', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const slider = screen.getByRole('slider') as HTMLInputElement;
+    expect(slider.value).toBe('23.0');
+
+    fireEvent.change(slider, { target: { value: '25.0' } });
+    expect(slider.value).toBe('25.0');
+  });
+
+  it('calls onUpdate when slider is released with mouse', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '25.0' } });
+    fireEvent.mouseUp(slider);
+
+    expect(mockOnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_temperature: '25.0',
+      })
+    );
+  });
+
+  it('calls onUpdate when slider is released with touch', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '24.5' } });
+    fireEvent.touchEnd(slider);
+
+    expect(mockOnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_temperature: '24.5',
+      })
+    );
+  });
+
+  it('calls onUpdate when slider is released with keyboard', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '21.0' } });
+    fireEvent.keyUp(slider);
+
+    expect(mockOnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_temperature: '21.0',
+      })
+    );
+  });
+
+  it('does not call onUpdate if slider value unchanged', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const slider = screen.getByRole('slider');
+    // Don't change the value, just release
+    fireEvent.mouseUp(slider);
+
+    expect(mockOnUpdate).not.toHaveBeenCalled();
+  });
+
+  it('displays slider label with current temperature value', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    expect(screen.getByText(/Adjust Temperature: 23.0°C/i)).toBeInTheDocument();
+  });
+
+  it('hides slider when in edit mode', () => {
+    render(<ZoneCard zone={mockZone} onUpdate={mockOnUpdate} onDelete={mockOnDelete} />);
+
+    const editButton = screen.getByText('Edit');
+    fireEvent.click(editButton);
+
+    const slider = screen.queryByRole('slider');
+    expect(slider).not.toBeInTheDocument();
+  });
 });

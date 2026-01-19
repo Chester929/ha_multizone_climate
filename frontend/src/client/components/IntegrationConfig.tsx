@@ -62,7 +62,20 @@ export function IntegrationConfig() {
         setEditing(false);
         setTestResult({ type: 'success', message: 'Integration settings saved successfully!' });
       } else {
-        setTestResult({ type: 'error', message: 'Failed to save integration settings' });
+        let errorMessage = 'Failed to save integration settings';
+        try {
+          const errorData = await response.json();
+          if (errorData) {
+            if (typeof (errorData as any).message === 'string' && (errorData as any).message.trim()) {
+              errorMessage = (errorData as any).message;
+            } else if (typeof (errorData as any).error === 'string' && (errorData as any).error.trim()) {
+              errorMessage = (errorData as any).error;
+            }
+          }
+        } catch (parseError) {
+          // Ignore JSON parse errors and fall back to the generic message
+        }
+        setTestResult({ type: 'error', message: errorMessage });
       }
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -132,6 +145,7 @@ export function IntegrationConfig() {
               checked={haEnabled}
               onChange={(e) => setEditedSettings({ ...editedSettings, ha_enabled: e.target.checked ? 'true' : 'false' })}
               disabled={!editing}
+              aria-label="Enable Home Assistant integration"
             />
             <span className="toggle-slider"></span>
           </label>
@@ -203,6 +217,7 @@ export function IntegrationConfig() {
               checked={mqttEnabled}
               onChange={(e) => setEditedSettings({ ...editedSettings, mqtt_enabled: e.target.checked ? 'true' : 'false' })}
               disabled={!editing}
+              aria-label="Enable MQTT integration"
             />
             <span className="toggle-slider"></span>
           </label>

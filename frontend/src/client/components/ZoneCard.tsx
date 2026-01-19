@@ -131,6 +131,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
                 }}
                 onMouseUp={handleSliderRelease}
                 onTouchEnd={handleSliderRelease}
+                onKeyUp={handleSliderRelease}
                 className="temperature-slider"
               />
               <span className="slider-label">30°C</span>
