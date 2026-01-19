@@ -52,18 +52,20 @@ class Logger {
 
     // Format message with arguments in a safe way
     let formattedMessage = message;
-    let remainingArgs = [...args]; // Create a copy to avoid mutation
+    const formattedArgs = [...args]; // Create a copy to avoid mutation
     let argIndex = 0;
     
-    if (args.length > 0) {
+    if (formattedArgs.length > 0) {
       formattedMessage = message.replace(/%s/g, () => {
-        if (argIndex < args.length) {
-          return remainingArgs.shift();
+        if (argIndex < formattedArgs.length) {
+          return formattedArgs[argIndex++];
         }
         return '%s';
       });
     }
 
+    // Only include remaining args that weren't used in formatting
+    const remainingArgs = formattedArgs.slice(argIndex);
     console.log(`${timestamp} ${prefix} ${formattedMessage}`, ...remainingArgs);
   }
 
