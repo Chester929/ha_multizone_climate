@@ -92,7 +92,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
             <input
               type="number"
               value={editedZone.priority || 0}
-              onChange={(e) => setEditedZone({ ...editedZone, priority: parseInt(e.target.value) })}
+              onChange={(e) => setEditedZone({ ...editedZone, priority: parseInt(e.target.value, 10) || 0 })}
               className="detail-input"
             />
           </div>
