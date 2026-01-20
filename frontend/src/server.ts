@@ -26,6 +26,19 @@ const PORT = process.env.WEB_PORT || 8099;
 const LOGIC_API_URL = process.env.LOGIC_API_URL || 'http://logic:8080';
 const httpServer = createServer(app);
 
+// Hop-by-hop headers that should not be forwarded in proxied requests
+// Based on RFC 7230 Section 6.1
+const HOP_BY_HOP_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
 // Validate and parse Redis port
 function parseRedisPort(portStr: string | undefined): number {
   const defaultPort = 6379;
@@ -118,24 +131,13 @@ app.all('/api/ha/*', async (req, res) => {
     const url = `${LOGIC_API_URL}${path}${queryString ? `?${queryString}` : ''}`;
     
     // Forward relevant headers from the original request, excluding hop-by-hop headers
-    const hopByHopHeaders = new Set([
-      'connection',
-      'keep-alive',
-      'proxy-authenticate',
-      'proxy-authorization',
-      'te',
-      'trailer',
-      'transfer-encoding',
-      'upgrade',
-      'host',
-      'content-length',
-    ]);
-
     const forwardedHeaders: Record<string, string> = {};
     for (const [headerName, headerValue] of Object.entries(req.headers)) {
       if (!headerValue) continue;
       const lowerName = headerName.toLowerCase();
-      if (hopByHopHeaders.has(lowerName)) continue;
+      if (HOP_BY_HOP_HEADERS.has(lowerName)) continue;
+      // Skip host header - fetch API will set it correctly for the target
+      if (lowerName === 'host') continue;
       if (Array.isArray(headerValue)) {
         forwardedHeaders[headerName] = headerValue.join(', ');
       } else {
@@ -143,7 +145,7 @@ app.all('/api/ha/*', async (req, res) => {
       }
     }
 
-    // Preserve existing behavior: always send JSON content type
+    // Set JSON content type for HA endpoints (all HA endpoints use JSON)
     forwardedHeaders['content-type'] = 'application/json';
     
     const fetchOptions: RequestInit = {
@@ -159,19 +161,8 @@ app.all('/api/ha/*', async (req, res) => {
     const response = await fetch(url, fetchOptions);
     
     // Forward response headers from logic container, excluding hop-by-hop headers
-    const responseHopByHopHeaders = new Set([
-      'connection',
-      'keep-alive',
-      'proxy-authenticate',
-      'proxy-authorization',
-      'te',
-      'trailer',
-      'transfer-encoding',
-      'upgrade',
-    ]);
-    
     response.headers.forEach((value, key) => {
-      if (!responseHopByHopHeaders.has(key.toLowerCase())) {
+      if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
