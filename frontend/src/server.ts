@@ -114,13 +114,41 @@ app.get('/health', async (req, res) => {
 app.all('/api/ha/*', async (req, res) => {
   try {
     const path = req.path;
-    const url = `${LOGIC_API_URL}${path}`;
+    const queryString = req.originalUrl.split('?')[1];
+    const url = `${LOGIC_API_URL}${path}${queryString ? `?${queryString}` : ''}`;
+    
+    // Forward relevant headers from the original request, excluding hop-by-hop headers
+    const hopByHopHeaders = new Set([
+      'connection',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'transfer-encoding',
+      'upgrade',
+      'host',
+      'content-length',
+    ]);
+
+    const forwardedHeaders: Record<string, string> = {};
+    for (const [headerName, headerValue] of Object.entries(req.headers)) {
+      if (!headerValue) continue;
+      const lowerName = headerName.toLowerCase();
+      if (hopByHopHeaders.has(lowerName)) continue;
+      if (Array.isArray(headerValue)) {
+        forwardedHeaders[headerName] = headerValue.join(', ');
+      } else {
+        forwardedHeaders[headerName] = String(headerValue);
+      }
+    }
+
+    // Preserve existing behavior: always send JSON content type
+    forwardedHeaders['content-type'] = 'application/json';
     
     const fetchOptions: RequestInit = {
       method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: forwardedHeaders,
     };
     
     // Forward body for POST/PUT/PATCH requests
@@ -129,6 +157,11 @@ app.all('/api/ha/*', async (req, res) => {
     }
     
     const response = await fetch(url, fetchOptions);
+    
+    // Forward response headers from logic container
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
     
     // Check if response is JSON before parsing
     const contentType = response.headers.get('content-type');
@@ -144,7 +177,7 @@ app.all('/api/ha/*', async (req, res) => {
     console.error('Error proxying to logic container:', error);
     res.status(503).json({ 
       error: 'Logic container unavailable',
-      message: 'Unable to connect to logic container. Please ensure it is running and HA integration is enabled.'
+      message: 'Unable to connect to logic container. Please ensure it is running and reachable.'
     });
   }
 });
