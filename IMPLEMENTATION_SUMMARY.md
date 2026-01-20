@@ -58,7 +58,7 @@ This implementation addresses the following issues from the problem statement:
 - Sensitive field masking (tokens, passwords)
 - Validation for HA settings (base URL, token required when enabled)
 - Validation for MQTT settings (broker, port range 1-65535)
-- Automatic cleanup of disabled integration settings
+- Redis HDel used to remove disabled integration settings from persistent storage
 
 #### 4. Data Model Updates (`logic/internal/models/models.go`)
 
@@ -185,7 +185,7 @@ Enhanced `ZoneState` struct with:
 4. **Configuration Clarity**
    - Main climate entity clearly configurable
    - Integration mutual exclusion enforced and explained
-   - Settings automatically cleaned up when disabled
+   - Disabled integration settings are explicitly removed from Redis using HDel
 
 ## Testing
 

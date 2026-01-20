@@ -140,6 +140,9 @@ func GetZoneHandler(client *redis.Client) http.HandlerFunc {
 // CreateZoneHandler creates a new zone
 func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// integration parameter reserved for future HA entity validation
+		_ = integration
+		
 		var zone map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -315,7 +318,11 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 
 		var updates map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
 			return
 		}
 
@@ -976,153 +983,153 @@ func StatisticsPerformanceMetricsHandler(tracker *statistics.Tracker) http.Handl
 
 // GetGlobalConfigHandler returns the global configuration
 func GetGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-ctx := context.Background()
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
 
-config, err := client.HGetAll(ctx, "multizone:config")
-if err != nil {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusInternalServerError)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Failed to fetch configuration",
-})
-return
-}
+		config, err := client.HGetAll(ctx, "multizone:config")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to fetch configuration",
+			})
+			return
+		}
 
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(config)
-}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(config)
+	}
 }
 
 // UpdateGlobalConfigHandler updates the global configuration
 func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-var config map[string]interface{}
-if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Invalid JSON format",
-})
-return
-}
+	return func(w http.ResponseWriter, r *http.Request) {
+		var config map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Invalid JSON format",
+			})
+			return
+		}
 
-ctx := context.Background()
+		ctx := context.Background()
 
-// Validate main climate entity ID if provided
-if mainClimateEntity, ok := config["main_climate_entity_id"].(string); ok && mainClimateEntity != "" {
-if !entityIDPattern.MatchString(mainClimateEntity) {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Invalid main climate entity ID format, expected format: domain.entity_name",
-})
-return
-}
-}
+		// Validate main climate entity ID if provided
+		if mainClimateEntity, ok := config["main_climate_entity_id"].(string); ok && mainClimateEntity != "" {
+			if !entityIDPattern.MatchString(mainClimateEntity) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid main climate entity ID format, expected format: domain.entity_name",
+				})
+				return
+			}
+		}
 
-// Validate numeric configuration values if provided
-if mainTargetAllZonesSatisfied, ok := config["main_target_all_zones_satisfied"].(string); ok {
-temp, err := strconv.ParseFloat(mainTargetAllZonesSatisfied, 64)
-if err != nil || temp < 5 || temp > 35 {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "main_target_all_zones_satisfied must be between 5 and 35",
-})
-return
-}
-}
+		// Validate numeric configuration values if provided
+		if mainTargetAllZonesSatisfied, ok := config["main_target_all_zones_satisfied"].(string); ok {
+			temp, err := strconv.ParseFloat(mainTargetAllZonesSatisfied, 64)
+			if err != nil || temp < 5 || temp > 35 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "main_target_all_zones_satisfied must be between 5 and 35",
+				})
+				return
+			}
+		}
 
-if mainMinTemp, ok := config["main_min_temp"].(string); ok {
-temp, err := strconv.ParseFloat(mainMinTemp, 64)
-if err != nil || temp < 5 || temp > 35 {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "main_min_temp must be between 5 and 35",
-})
-return
-}
-}
+		if mainMinTemp, ok := config["main_min_temp"].(string); ok {
+			temp, err := strconv.ParseFloat(mainMinTemp, 64)
+			if err != nil || temp < 5 || temp > 35 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "main_min_temp must be between 5 and 35",
+				})
+				return
+			}
+		}
 
-if mainMaxTemp, ok := config["main_max_temp"].(string); ok {
-temp, err := strconv.ParseFloat(mainMaxTemp, 64)
-if err != nil || temp < 5 || temp > 90 {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "main_max_temp must be between 5 and 90",
-})
-return
-}
-}
+		if mainMaxTemp, ok := config["main_max_temp"].(string); ok {
+			temp, err := strconv.ParseFloat(mainMaxTemp, 64)
+			if err != nil || temp < 5 || temp > 90 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "main_max_temp must be between 5 and 90",
+				})
+				return
+			}
+		}
 
-// Save configuration to Redis
-if err := client.HSet(ctx, "multizone:config", config); err != nil {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusInternalServerError)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Failed to update configuration",
-})
-return
-}
+		// Save configuration to Redis
+		if err := client.HSet(ctx, "multizone:config", config); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to update configuration",
+			})
+			return
+		}
 
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(map[string]interface{}{
-"status": "updated",
-})
-}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "updated",
+		})
+	}
 }
 
 // GetIntegrationSettingsHandler returns the integration settings
 func GetIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-ctx := context.Background()
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
 
-settings, err := client.HGetAll(ctx, "multizone:integrations")
-if err != nil {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusInternalServerError)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Failed to fetch integration settings",
-})
-return
-}
+		settings, err := client.HGetAll(ctx, "multizone:integrations")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to fetch integration settings",
+			})
+			return
+		}
 
-// Apply defaults for missing values
-if _, ok := settings["ha_websocket"]; !ok || settings["ha_websocket"] == "" {
-settings["ha_websocket"] = "true"
-}
+		// Apply defaults for missing values
+		if _, ok := settings["ha_websocket"]; !ok || settings["ha_websocket"] == "" {
+			settings["ha_websocket"] = "true"
+		}
 
-// Mask sensitive fields
-maskedSettings := make(map[string]interface{})
-for k, v := range settings {
-maskedSettings[k] = v
-}
-if token, ok := maskedSettings["ha_token"].(string); ok && token != "" {
-maskedSettings["ha_token"] = "••••••••"
-}
-if password, ok := maskedSettings["mqtt_password"].(string); ok && password != "" {
-maskedSettings["mqtt_password"] = "••••••••"
-}
+		// Mask sensitive fields
+		maskedSettings := make(map[string]interface{})
+		for k, v := range settings {
+			maskedSettings[k] = v
+		}
+		if token, ok := maskedSettings["ha_token"].(string); ok && token != "" {
+			maskedSettings["ha_token"] = "••••••••"
+		}
+		if password, ok := maskedSettings["mqtt_password"].(string); ok && password != "" {
+			maskedSettings["mqtt_password"] = "••••••••"
+		}
 
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(maskedSettings)
-}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(maskedSettings)
+	}
 }
 
 // UpdateIntegrationSettingsHandler updates the integration settings
 func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-var settings map[string]interface{}
-if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Invalid JSON format",
-})
-return
+	return func(w http.ResponseWriter, r *http.Request) {
+		var settings map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": "Invalid JSON format",
+		})
+		return
 }
 
 ctx := context.Background()

@@ -49,8 +49,8 @@ function isValidConfig(data: unknown): data is Config {
     // Validate based on key type
     switch (key) {
       case 'main_climate_entity_id':
-        // Entity ID must match format: domain.entity_name
-        if (!/^[a-z_]+\.[a-z0-9_]+$/.test(strValue)) {
+        // Allow empty string as "not set"; otherwise entity ID must match format: domain.entity_name
+        if (strValue !== '' && !/^[a-z_]+\.[a-z0-9_]+$/.test(strValue)) {
           return false;
         }
         break;
