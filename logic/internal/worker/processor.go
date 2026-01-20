@@ -163,10 +163,17 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 		}
 	}
 
-	// Track zone statistics
+	// Track zone statistics for zones that had valve state changes
+	zoneByID := make(map[string]*models.ZoneState, len(zones))
 	for i := range zones {
-		if err := p.statsTracker.TrackZoneUpdate(ctx, &zones[i]); err != nil {
-			logger.Warn("Failed to track zone update for %s: %v", zones[i].ID, err)
+		zoneByID[zones[i].ID] = &zones[i]
+	}
+	
+	for _, op := range executedOps {
+		if zone, ok := zoneByID[op.ZoneID]; ok {
+			if err := p.statsTracker.TrackZoneUpdate(ctx, zone); err != nil {
+				logger.Warn("Failed to track zone update for %s: %v", zone.ID, err)
+			}
 		}
 	}
 

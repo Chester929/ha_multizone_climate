@@ -64,7 +64,8 @@ func (s *Storage) StoreTemperatureReading(ctx context.Context, zoneID string, te
 	
 	key := fmt.Sprintf("multizone:stats:temp:%s", zoneID)
 	
-	// Store in sorted set with timestamp as score
+	// Store in hash with timestamp as field key
+	// Note: For large datasets, consider using sorted sets (ZADD) for more efficient time-based queries
 	return s.redisClient.HSet(ctx, key, map[string]interface{}{
 		fmt.Sprintf("%d", timestamp.Unix()): string(data),
 	})
@@ -75,6 +76,8 @@ func (s *Storage) GetTemperatureHistory(ctx context.Context, zoneID string, hour
 	key := fmt.Sprintf("multizone:stats:temp:%s", zoneID)
 	
 	// Get all readings
+	// Note: This loads all data and filters in-memory. For production with large datasets,
+	// consider using sorted sets (ZRANGEBYSCORE) or implementing TTL-based expiration
 	data, err := s.redisClient.HGetAll(ctx, key)
 	if err != nil {
 		return nil, err

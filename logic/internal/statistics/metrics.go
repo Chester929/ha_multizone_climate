@@ -184,10 +184,15 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 			varianceSum += diff * diff
 		}
 		variance := varianceSum / float64(len(temperatures))
-		metrics.TemperatureStdDev = variance
+		
+		// Simple square root approximation using Newton's method
+		// For better accuracy, consider importing "math" package and using math.Sqrt(variance)
 		if variance > 0 {
-			// Simple approximation of sqrt for small values
-			metrics.TemperatureStdDev = variance / 2
+			x := variance
+			for i := 0; i < 10; i++ {
+				x = (x + variance/x) / 2
+			}
+			metrics.TemperatureStdDev = x
 		}
 	}
 	
