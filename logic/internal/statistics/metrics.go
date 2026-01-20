@@ -88,7 +88,7 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 				cycleCount++
 			}
 			// If already open, ignore duplicate open events
-		} else if activity.State == "closed" && lastOpenTime != nil {
+		} else if activity.State == "close" && lastOpenTime != nil {
 			// Calculate runtime for this cycle
 			runtime := activity.Timestamp.Sub(*lastOpenTime).Seconds()
 			totalRuntimeSeconds += runtime
