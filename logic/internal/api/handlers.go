@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -237,12 +238,11 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 
 		// Validate target temperature if provided
 		if targetTemp, ok := zone["target_temperature"].(string); ok && targetTemp != "" {
-			temp, err := strconv.ParseFloat(targetTemp, 64)
-			if err != nil || temp < -50 || temp > 100 {
+			if err := validateTemperature(targetTemp, "Target temperature"); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Target temperature must be between -50 and 100",
+					"error": err.Error(),
 				})
 				return
 			}
@@ -250,12 +250,11 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 
 		// Validate priority if provided
 		if priority, ok := zone["priority"].(string); ok && priority != "" {
-			p, err := strconv.Atoi(priority)
-			if err != nil || p < 0 || p > 100 {
+			if err := validatePriority(priority); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Priority must be between 0 and 100",
+					"error": err.Error(),
 				})
 				return
 			}
@@ -379,12 +378,11 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 
 		// Validate target temperature if provided
 		if targetTemp, ok := updates["target_temperature"].(string); ok && targetTemp != "" {
-			temp, err := strconv.ParseFloat(targetTemp, 64)
-			if err != nil || temp < -50 || temp > 100 {
+			if err := validateTemperature(targetTemp, "Target temperature"); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Target temperature must be between -50 and 100",
+					"error": err.Error(),
 				})
 				return
 			}
@@ -392,12 +390,11 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 
 		// Validate priority if provided
 		if priority, ok := updates["priority"].(string); ok && priority != "" {
-			p, err := strconv.Atoi(priority)
-			if err != nil || p < 0 || p > 100 {
+			if err := validatePriority(priority); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Priority must be between 0 and 100",
+					"error": err.Error(),
 				})
 				return
 			}
@@ -483,6 +480,24 @@ func getStringOrDefault(m map[string]interface{}, key string, defaultValue strin
 		return val
 	}
 	return defaultValue
+}
+
+// Helper function to validate temperature range
+func validateTemperature(tempStr string, fieldName string) error {
+	temp, err := strconv.ParseFloat(tempStr, 64)
+	if err != nil || temp < -50 || temp > 100 {
+		return fmt.Errorf("%s must be between -50 and 100", fieldName)
+	}
+	return nil
+}
+
+// Helper function to validate priority range
+func validatePriority(priorityStr string) error {
+	priority, err := strconv.Atoi(priorityStr)
+	if err != nil || priority < 0 || priority > 100 {
+		return fmt.Errorf("priority must be between 0 and 100")
+	}
+	return nil
 }
 
 // CalculateMainTempHandler triggers main temperature calculation
