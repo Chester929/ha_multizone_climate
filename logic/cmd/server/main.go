@@ -120,8 +120,18 @@ func main() {
 
 	// Zone management endpoints
 	router.HandleFunc("/api/zones", api.ListZonesHandler(redisClient)).Methods("GET")
+	router.HandleFunc("/api/zones", api.CreateZoneHandler(redisClient, haIntegration)).Methods("POST")
 	router.HandleFunc("/api/zones/{id}", api.GetZoneHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/api/zones/{id}", api.UpdateZoneHandler(redisClient)).Methods("PUT")
+	router.HandleFunc("/api/zones/{id}", api.DeleteZoneHandler(redisClient)).Methods("DELETE")
+
+	// Global configuration endpoints
+	router.HandleFunc("/api/config", api.GetGlobalConfigHandler(redisClient)).Methods("GET")
+	router.HandleFunc("/api/config", api.UpdateGlobalConfigHandler(redisClient)).Methods("PUT")
+
+	// Integration settings endpoints
+	router.HandleFunc("/api/integrations", api.GetIntegrationSettingsHandler(redisClient)).Methods("GET")
+	router.HandleFunc("/api/integrations", api.UpdateIntegrationSettingsHandler(redisClient)).Methods("PUT")
 
 	// Temperature calculation endpoints
 	router.HandleFunc("/api/calculate", api.CalculateMainTempHandler(redisClient)).Methods("POST")

@@ -9,6 +9,7 @@ type ZoneState struct {
 	Enabled                 bool      `json:"enabled"`
 	TemperatureSensorEntity string    `json:"temperature_sensor_entity_id"`
 	ValveSwitchEntity       string    `json:"valve_switch_entity_id"`
+	ClimateEntity           string    `json:"climate_entity_id"` // Optional: Link to existing HA climate entity
 	CurrentTemperature      float64   `json:"current_temperature"`
 	TargetTemperature       float64   `json:"target_temperature"`
 	Satisfaction            string    `json:"satisfaction"` // "underheated", "satisfied", "overheated"

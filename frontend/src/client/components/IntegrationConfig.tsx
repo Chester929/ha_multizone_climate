@@ -49,6 +49,18 @@ export function IntegrationConfig() {
 
   const handleSave = async () => {
     try {
+      // Check for mutual exclusion
+      const haEnabled = editedSettings.ha_enabled === 'true';
+      const mqttEnabled = editedSettings.mqtt_enabled === 'true';
+      
+      if (haEnabled && mqttEnabled) {
+        setTestResult({ 
+          type: 'error', 
+          message: 'Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.' 
+        });
+        return;
+      }
+
       // Remove masked values before saving - only send if changed
       const settingsToSave = { ...editedSettings };
       if (settingsToSave.ha_token === '••••••••') {
@@ -138,12 +150,19 @@ export function IntegrationConfig() {
 
   const haEnabled = editedSettings.ha_enabled === 'true';
   const mqttEnabled = editedSettings.mqtt_enabled === 'true';
+  const bothEnabled = haEnabled && mqttEnabled;
 
   return (
     <div className="integration-config">
       {testResult && (
         <div className={`alert ${testResult.type === 'success' ? 'alert-success' : 'alert-error'}`}>
           {testResult.message}
+        </div>
+      )}
+
+      {bothEnabled && (
+        <div className="alert alert-error">
+          ⚠️ Warning: Both Home Assistant and MQTT integrations are enabled. Only one can run at a time. Please disable one before saving.
         </div>
       )}
 

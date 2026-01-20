@@ -125,13 +125,34 @@ export function App() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     
-    const newZone = {
-      id: formData.get('id') as string,
+    const newZone: Record<string, string> = {
       name: formData.get('name') as string,
       enabled: 'true',
       target_temperature: formData.get('target_temperature') as string,
-      priority: formData.get('priority') as string,
+      priority: (formData.get('priority') as string) || '0',
     };
+
+    // Add optional ID if provided
+    const zoneId = formData.get('id') as string;
+    if (zoneId && zoneId.trim() !== '') {
+      newZone.id = zoneId.trim();
+    }
+
+    // Add optional HA entity IDs if provided
+    const tempSensor = formData.get('temperature_sensor_entity_id') as string;
+    if (tempSensor && tempSensor.trim() !== '') {
+      newZone.temperature_sensor_entity_id = tempSensor.trim();
+    }
+
+    const valveSwitch = formData.get('valve_switch_entity_id') as string;
+    if (valveSwitch && valveSwitch.trim() !== '') {
+      newZone.valve_switch_entity_id = valveSwitch.trim();
+    }
+
+    const climateEntity = formData.get('climate_entity_id') as string;
+    if (climateEntity && climateEntity.trim() !== '') {
+      newZone.climate_entity_id = climateEntity.trim();
+    }
 
     try {
       const response = await fetch('/api/zones', {
@@ -147,11 +168,12 @@ export function App() {
         fetchZones();
         event.currentTarget.reset();
       } else {
-        alert('Failed to create zone');
+        const errorData = await response.json();
+        alert(`Failed to create zone: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating zone:', error);
-      alert('Failed to create zone');
+      alert('Failed to create zone: Network error');
     }
   };
 
@@ -210,20 +232,39 @@ export function App() {
               <form onSubmit={handleAddZone} className="add-zone-form">
                 <div className="form-group">
                   <label>Zone ID</label>
-                  <input type="text" name="id" required />
+                  <input type="text" name="id" placeholder="zone-living-room" pattern="[a-zA-Z0-9_-]+" title="Only alphanumeric characters, hyphens, and underscores allowed" />
+                  <small>Optional - will be auto-generated if not provided</small>
                 </div>
                 <div className="form-group">
                   <label>Zone Name</label>
-                  <input type="text" name="name" required />
+                  <input type="text" name="name" required placeholder="Living Room" />
                 </div>
                 <div className="form-group">
                   <label>Target Temperature (°C)</label>
-                  <input type="number" name="target_temperature" step="0.5" defaultValue="20" required />
+                  <input type="number" name="target_temperature" step="0.5" min="-50" max="100" defaultValue="20" required />
                 </div>
                 <div className="form-group">
-                  <label>Priority</label>
-                  <input type="number" name="priority" defaultValue="0" />
+                  <label>Priority (0-100)</label>
+                  <input type="number" name="priority" min="0" max="100" defaultValue="0" />
                 </div>
+                
+                <h4 style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>Home Assistant Integration (Optional)</h4>
+                <div className="form-group">
+                  <label>Temperature Sensor Entity ID</label>
+                  <input type="text" name="temperature_sensor_entity_id" placeholder="sensor.living_room_temperature" pattern="^[a-z_]+\.[a-z0-9_]+$" title="Format: domain.entity_name (e.g., sensor.temperature)" />
+                  <small>Entity ID of the temperature sensor</small>
+                </div>
+                <div className="form-group">
+                  <label>Valve Switch Entity ID</label>
+                  <input type="text" name="valve_switch_entity_id" placeholder="switch.living_room_valve" pattern="^[a-z_]+\.[a-z0-9_]+$" title="Format: domain.entity_name (e.g., switch.valve)" />
+                  <small>Entity ID of the valve control switch</small>
+                </div>
+                <div className="form-group">
+                  <label>Climate Entity ID</label>
+                  <input type="text" name="climate_entity_id" placeholder="climate.living_room" pattern="^[a-z_]+\.[a-z0-9_]+$" title="Format: domain.entity_name (e.g., climate.zone)" />
+                  <small>Optional: Link to existing HA climate entity to sync temperature and valve state</small>
+                </div>
+                
                 <button type="submit" className="btn btn-primary">Create Zone</button>
               </form>
             )}
