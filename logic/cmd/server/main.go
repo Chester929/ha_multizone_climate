@@ -15,6 +15,7 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
+	"github.com/chester929/ha_multizone_climate/logic/internal/statistics"
 	"github.com/chester929/ha_multizone_climate/logic/internal/worker"
 	"github.com/gorilla/mux"
 )
@@ -105,6 +106,10 @@ func main() {
 	workerPool.Start(ctx)
 	logger.Info("Worker pool started")
 
+	// Initialize statistics tracker
+	statsTracker := statistics.NewTracker(redisClient)
+	logger.Info("Statistics tracker initialized")
+
 	// Create HTTP router
 	router := mux.NewRouter()
 
@@ -132,6 +137,15 @@ func main() {
 	} else {
 		logger.Debug("Home Assistant API endpoints not registered (integration disabled)")
 	}
+
+	// Statistics endpoints
+	router.HandleFunc("/api/statistics/zones/{id}/temperature", api.StatisticsTemperatureHistoryHandler(statsTracker)).Methods("GET")
+	router.HandleFunc("/api/statistics/zones/{id}/valve-activity", api.StatisticsValveActivityHandler(statsTracker)).Methods("GET")
+	router.HandleFunc("/api/statistics/zones/{id}/energy", api.StatisticsEnergyMetricsHandler(statsTracker)).Methods("GET")
+	router.HandleFunc("/api/statistics/zones/{id}/comfort", api.StatisticsComfortMetricsHandler(statsTracker)).Methods("GET")
+	router.HandleFunc("/api/statistics/comfort-summary", api.StatisticsAllZonesComfortHandler(statsTracker)).Methods("GET")
+	router.HandleFunc("/api/statistics/performance", api.StatisticsPerformanceMetricsHandler(statsTracker)).Methods("GET")
+	logger.Info("Statistics API endpoints registered")
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%s", cfg.HTTPPort)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
@@ -12,16 +13,27 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
+	"github.com/chester929/ha_multizone_climate/logic/internal/statistics"
 	"github.com/gorilla/mux"
 )
 
 const (
 	// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
 	entityIDPatternString = `^[a-z_]+\.[a-z0-9_]+$`
+	
+	// zoneIDPattern validates zone IDs (alphanumeric with underscores and hyphens)
+	zoneIDPatternString = `^[a-zA-Z0-9_-]+$`
+	
+	// maxStatisticsHours defines the maximum number of hours that can be requested
+	// for statistics queries to prevent abuse and performance issues (30 days)
+	maxStatisticsHours = 720
 )
 
 // entityIDPattern is compiled once at package initialization
 var entityIDPattern = regexp.MustCompile(entityIDPatternString)
+
+// zoneIDPattern is compiled once at package initialization
+var zoneIDPattern = regexp.MustCompile(zoneIDPatternString)
 
 // HealthHandler returns the health status of the service
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -376,5 +388,251 @@ func HASetMainTempHandler(integration *homeassistant.Integration) http.HandlerFu
 			"entity_id":   req.EntityID,
 			"temperature": req.Temperature,
 		})
+	}
+}
+
+// StatisticsTemperatureHistoryHandler returns temperature history for a zone
+func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		zoneID := vars["id"]
+		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
+		// Get hours parameter (default 24 hours, max 720 hours/30 days)
+		hours := 24
+		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
+			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
+				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
+			}
+		}
+		
+		ctx := r.Context()
+		history, err := tracker.GetTemperatureHistory(ctx, zoneID, hours)
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"zone_id": zoneID,
+			"hours":   hours,
+			"count":   len(history),
+			"data":    history,
+		})
+	}
+}
+
+// StatisticsValveActivityHandler returns valve activity history for a zone
+func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		zoneID := vars["id"]
+		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
+		hours := 24
+		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
+			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
+				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
+			}
+		}
+		
+		ctx := r.Context()
+		activity, err := tracker.GetValveActivityHistory(ctx, zoneID, hours)
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"zone_id": zoneID,
+			"hours":   hours,
+			"count":   len(activity),
+			"data":    activity,
+		})
+	}
+}
+
+// StatisticsEnergyMetricsHandler returns energy consumption metrics for a zone
+func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		zoneID := vars["id"]
+		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
+		hours := 24
+		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
+			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
+				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
+			}
+		}
+		
+		ctx := r.Context()
+		metrics, err := tracker.GetEnergyMetrics(ctx, zoneID, hours)
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(metrics)
+	}
+}
+
+// StatisticsComfortMetricsHandler returns comfort metrics for a zone
+func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		zoneID := vars["id"]
+		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
+		hours := 24
+		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
+			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
+				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
+			}
+		}
+		
+		ctx := r.Context()
+		metrics, err := tracker.GetComfortMetrics(ctx, zoneID, hours)
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(metrics)
+	}
+}
+
+// StatisticsAllZonesComfortHandler returns comfort summary for all zones
+func StatisticsAllZonesComfortHandler(tracker *statistics.Tracker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hours := 24
+		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
+			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
+				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
+			}
+		}
+		
+		ctx := r.Context()
+		summary, err := tracker.GetAllZonesComfortSummary(ctx, hours)
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"hours": hours,
+			"zones": summary,
+		})
+	}
+}
+
+// StatisticsPerformanceMetricsHandler returns system performance metrics
+func StatisticsPerformanceMetricsHandler(tracker *statistics.Tracker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hours := 24
+		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
+			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
+				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
+			}
+		}
+		
+		ctx := r.Context()
+		metrics, err := tracker.GetSystemPerformanceMetrics(ctx, hours)
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(metrics)
 	}
 }

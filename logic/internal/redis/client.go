@@ -102,3 +102,8 @@ func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expir
 func (c *Client) GetString(ctx context.Context, key string) (string, error) {
 	return c.rdb.Get(ctx, key).Result()
 }
+
+// HDel deletes one or more hash fields
+func (c *Client) HDel(ctx context.Context, key string, fields ...string) error {
+	return c.rdb.HDel(ctx, key, fields...).Err()
+}

@@ -121,12 +121,14 @@ All code improvements from the initial code review have been completed. See the 
    - Vacation mode
    - Eco mode
 
-6. **Statistics and Metrics**
-   - Temperature history storage
-   - Valve activity tracking
-   - Energy consumption estimates
-   - Comfort metrics
-   - System performance monitoring
+6. **✅ Statistics and Metrics** (logic/internal/statistics/)
+   - ✅ Temperature history storage
+   - ✅ Valve activity tracking
+   - ✅ Energy consumption estimates
+   - ✅ Comfort metrics
+   - ✅ System performance monitoring
+   - ✅ API endpoints for retrieving statistics
+   - Status: Fully implemented and integrated
 
 ### Low Priority
 
