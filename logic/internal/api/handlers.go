@@ -301,7 +301,7 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 }
 
 // UpdateZoneHandler updates a zone
-func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
+func UpdateZoneHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
@@ -383,6 +383,24 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 			}
 		}
 
+		// Track if target temperature is being updated
+		targetTempUpdated := false
+		if _, ok := updates["target_temperature"]; ok {
+			targetTempUpdated = true
+		}
+
+		// Track if entity IDs are being updated (need cache refresh)
+		entityIDsUpdated := false
+		if _, ok := updates["temperature_sensor_entity_id"]; ok {
+			entityIDsUpdated = true
+		}
+		if _, ok := updates["valve_switch_entity_id"]; ok {
+			entityIDsUpdated = true
+		}
+		if _, ok := updates["climate_entity_id"]; ok {
+			entityIDsUpdated = true
+		}
+
 		// Validate target temperature if provided
 		if targetTemp, ok := updates["target_temperature"].(string); ok && targetTemp != "" {
 			if err := validateTemperature(targetTemp, "Target temperature"); err != nil {
@@ -411,6 +429,23 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 		if err := client.HSet(ctx, key, updates); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		// If entity IDs changed, refresh the entity cache
+		if entityIDsUpdated && integration != nil && integration.IsEnabled() {
+			if err := integration.RefreshEntityCache(ctx); err != nil {
+				logger.Error("Failed to refresh entity cache: %v", err)
+			} else {
+				logger.Info("Entity cache refreshed after zone update")
+			}
+		}
+
+		// If target temperature changed, update the zone's climate entity in HA
+		if targetTempUpdated && integration != nil && integration.IsEnabled() {
+			if err := integration.SetZoneClimateTemperature(ctx, key); err != nil {
+				logger.Error("Failed to set zone climate temperature: %v", err)
+				// Don't fail the request if HA update fails
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

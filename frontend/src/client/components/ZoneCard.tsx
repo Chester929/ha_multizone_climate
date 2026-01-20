@@ -148,15 +148,93 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
           <div className="detail-value">{zone.valve_state || 'Unknown'}</div>
         </div>
         {isEditing && (
-          <div className="zone-detail">
-            <div className="detail-label">Priority</div>
-            <input
-              type="number"
-              value={editedZone.priority || 0}
-              onChange={(e) => setEditedZone({ ...editedZone, priority: parseInt(e.target.value, 10) || 0 })}
-              className="detail-input"
-            />
-          </div>
+          <>
+            <div className="zone-detail zone-detail-full">
+              <div className="detail-label">Temperature Sensor Entity ID</div>
+              <input
+                type="text"
+                placeholder="sensor.bedroom_temperature"
+                pattern="^[a-z_]+\.[a-z0-9_]+$"
+                title="Format: domain.entity_name (e.g., sensor.bedroom_temperature)"
+                value={editedZone.temperature_sensor_entity_id || ''}
+                onChange={(e) => setEditedZone({ ...editedZone, temperature_sensor_entity_id: e.target.value })}
+                className="detail-input"
+              />
+            </div>
+            <div className="zone-detail zone-detail-full">
+              <div className="detail-label">Valve Switch Entity ID</div>
+              <input
+                type="text"
+                placeholder="switch.bedroom_valve"
+                pattern="^[a-z_]+\.[a-z0-9_]+$"
+                title="Format: domain.entity_name (e.g., switch.bedroom_valve)"
+                value={editedZone.valve_switch_entity_id || ''}
+                onChange={(e) => setEditedZone({ ...editedZone, valve_switch_entity_id: e.target.value })}
+                className="detail-input"
+              />
+            </div>
+            <div className="zone-detail zone-detail-full">
+              <div className="detail-label">Climate Entity ID (Optional)</div>
+              <input
+                type="text"
+                placeholder="climate.bedroom_thermostat"
+                pattern="^[a-z_]+\.[a-z0-9_]+$"
+                title="Format: domain.entity_name (e.g., climate.bedroom_thermostat)"
+                value={editedZone.climate_entity_id || ''}
+                onChange={(e) => setEditedZone({ ...editedZone, climate_entity_id: e.target.value })}
+                className="detail-input"
+              />
+              <small style={{ fontSize: '0.85em', color: '#666', marginTop: '0.25rem' }}>
+                Link to existing HA climate entity for synchronized control
+              </small>
+            </div>
+            <div className="zone-detail">
+              <div className="detail-label">Priority</div>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={editedZone.priority || 0}
+                onChange={(e) => setEditedZone({ ...editedZone, priority: parseInt(e.target.value, 10) || 0 })}
+                className="detail-input"
+              />
+            </div>
+            <div className="zone-detail">
+              <div className="detail-label">Opening Offset (°C)</div>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                value={editedZone.opening_offset || 0.3}
+                onChange={(e) => setEditedZone({ ...editedZone, opening_offset: parseFloat(e.target.value) || 0.3 })}
+                className="detail-input"
+              />
+            </div>
+            <div className="zone-detail">
+              <div className="detail-label">Closing Offset (°C)</div>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                value={editedZone.closing_offset || 0.3}
+                onChange={(e) => setEditedZone({ ...editedZone, closing_offset: parseFloat(e.target.value) || 0.3 })}
+                className="detail-input"
+              />
+            </div>
+            <div className="zone-detail">
+              <div className="detail-label">Fallback Valve</div>
+              <label className="zone-toggle">
+                <input
+                  type="checkbox"
+                  checked={editedZone.is_fallback_valve || false}
+                  onChange={(e) => setEditedZone({ ...editedZone, is_fallback_valve: e.target.checked })}
+                />
+                <span>Enable as fallback valve</span>
+              </label>
+            </div>
+          </>
         )}
       </div>
 

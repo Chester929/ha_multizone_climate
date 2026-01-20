@@ -2,11 +2,18 @@ export interface Zone {
   id: string;
   name: string;
   enabled: boolean;
+  temperature_sensor_entity_id?: string;
+  valve_switch_entity_id?: string;
+  climate_entity_id?: string;
   current_temperature?: string;
   target_temperature?: string;
   satisfaction?: string;
   valve_state?: string;
   priority?: number;
+  target_change_threshold?: number;
+  opening_offset?: number;
+  closing_offset?: number;
+  is_fallback_valve?: boolean;
 }
 
 export interface Config {

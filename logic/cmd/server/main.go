@@ -122,7 +122,7 @@ func main() {
 	router.HandleFunc("/api/zones", api.ListZonesHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/api/zones", api.CreateZoneHandler(redisClient, haIntegration)).Methods("POST")
 	router.HandleFunc("/api/zones/{id}", api.GetZoneHandler(redisClient)).Methods("GET")
-	router.HandleFunc("/api/zones/{id}", api.UpdateZoneHandler(redisClient)).Methods("PUT")
+	router.HandleFunc("/api/zones/{id}", api.UpdateZoneHandler(redisClient, haIntegration)).Methods("PUT")
 	router.HandleFunc("/api/zones/{id}", api.DeleteZoneHandler(redisClient)).Methods("DELETE")
 
 	// Global configuration endpoints
