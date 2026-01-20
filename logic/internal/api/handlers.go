@@ -1261,33 +1261,33 @@ func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
 		delete(mergedSettings, "mqtt_password")
 	}
 
-		// Save settings to Redis
-		if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
+	// Save settings to Redis
+	if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "Failed to update integration settings",
-})
+			"error": "Failed to update integration settings",
+		})
 		return
-}
+	}
 
-		// Check if HA-related settings changed
-		haSettingsChanged := false
-		for key := range settings {
+	// Check if HA-related settings changed
+	haSettingsChanged := false
+	for key := range settings {
 		if key == "ha_enabled" || key == "ha_base_url" || key == "ha_token" || key == "ha_websocket" {
-		haSettingsChanged = true
-		break
-}
-}
+			haSettingsChanged = true
+			break
+		}
+	}
 
-		if haSettingsChanged {
+	if haSettingsChanged {
 		logger.Info("HA integration settings changed. Please restart the logic container for changes to take effect.")
-}
+	}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "updated",
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "updated",
 		"message": "Integration settings updated successfully",
-})
+	})
 }
 }
