@@ -158,9 +158,22 @@ app.all('/api/ha/*', async (req, res) => {
     
     const response = await fetch(url, fetchOptions);
     
-    // Forward response headers from logic container
+    // Forward response headers from logic container, excluding hop-by-hop headers
+    const responseHopByHopHeaders = new Set([
+      'connection',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'transfer-encoding',
+      'upgrade',
+    ]);
+    
     response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
+      if (!responseHopByHopHeaders.has(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
     });
     
     // Check if response is JSON before parsing
