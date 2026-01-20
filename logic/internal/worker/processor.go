@@ -150,8 +150,8 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 				logger.Debug("Set valve %s to %s for zone %s (priority: %d)",
 					zone.ValveSwitchEntity, op.Operation, zone.ID, zone.Priority)
 
-				// Record valve activity in statistics
-				if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, op.Operation, time.Now()); err != nil {
+				// Record valve activity in statistics, using the canonical zone valve state
+				if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, zone.ValveState, time.Now()); err != nil {
 					logger.Warn("Failed to record valve activity: %v", err)
 				}
 
