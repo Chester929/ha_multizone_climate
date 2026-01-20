@@ -20,6 +20,10 @@ import (
 const (
 	// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
 	entityIDPatternString = `^[a-z_]+\.[a-z0-9_]+$`
+	
+	// maxStatisticsHours defines the maximum number of hours that can be requested
+	// for statistics queries to prevent abuse and performance issues (30 days)
+	maxStatisticsHours = 720
 )
 
 // entityIDPattern is compiled once at package initialization
@@ -387,11 +391,14 @@ func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.Handl
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
 		
-		// Get hours parameter (default 24 hours)
+		// Get hours parameter (default 24 hours, max 720 hours/30 days)
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
 				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
 			}
 		}
 		
@@ -427,6 +434,9 @@ func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFun
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
 				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
 			}
 		}
 		
@@ -462,6 +472,9 @@ func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFun
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
 				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
 			}
 		}
 		
@@ -492,6 +505,9 @@ func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFu
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
 				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
 			}
 		}
 		
@@ -519,6 +535,9 @@ func StatisticsAllZonesComfortHandler(tracker *statistics.Tracker) http.HandlerF
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
 				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
 			}
 		}
 		
@@ -549,6 +568,9 @@ func StatisticsPerformanceMetricsHandler(tracker *statistics.Tracker) http.Handl
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
 				hours = h
+				if hours > maxStatisticsHours {
+					hours = maxStatisticsHours
+				}
 			}
 		}
 		

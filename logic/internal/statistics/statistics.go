@@ -2,6 +2,7 @@ package statistics
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
@@ -83,7 +84,7 @@ func (t *Tracker) GetAllZonesComfortSummary(ctx context.Context, hours int) (map
 	summary := make(map[string]*ComfortMetrics)
 	for _, key := range zoneKeys {
 		// Extract zone ID from key (multizone:zone:zoneID)
-		zoneID := key[16:] // Skip "multizone:zone:" prefix
+		zoneID := strings.TrimPrefix(key, "multizone:zone:")
 		
 		metrics, err := t.GetComfortMetrics(ctx, zoneID, hours)
 		if err != nil {

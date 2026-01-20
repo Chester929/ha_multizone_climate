@@ -2,6 +2,7 @@ package statistics
 
 import (
 	"context"
+	"math"
 	"sort"
 	"time"
 )
@@ -81,8 +82,12 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 	
 	for i, activity := range activities {
 		if activity.State == "open" {
-			lastOpenTime = &activity.Timestamp
-			cycleCount++
+			if lastOpenTime == nil {
+				// New open cycle starts
+				lastOpenTime = &activity.Timestamp
+				cycleCount++
+			}
+			// If already open, ignore duplicate open events
 		} else if activity.State == "closed" && lastOpenTime != nil {
 			// Calculate runtime for this cycle
 			runtime := activity.Timestamp.Sub(*lastOpenTime).Seconds()
@@ -92,8 +97,8 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 		}
 		
 		// If this is the last activity and valve is still open
-		if i == len(activities)-1 && activity.State == "open" {
-			runtime := time.Now().Sub(activity.Timestamp).Seconds()
+		if i == len(activities)-1 && lastOpenTime != nil {
+			runtime := time.Now().Sub(*lastOpenTime).Seconds()
 			totalRuntimeSeconds += runtime
 			openTimes = append(openTimes, runtime/60)
 		}
@@ -184,16 +189,7 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 			varianceSum += diff * diff
 		}
 		variance := varianceSum / float64(len(temperatures))
-		
-		// Simple square root approximation using Newton's method
-		// For better accuracy, consider importing "math" package and using math.Sqrt(variance)
-		if variance > 0 {
-			x := variance
-			for i := 0; i < 10; i++ {
-				x = (x + variance/x) / 2
-			}
-			metrics.TemperatureStdDev = x
-		}
+		metrics.TemperatureStdDev = math.Sqrt(variance)
 	}
 	
 	// Calculate comfort score (0-100)

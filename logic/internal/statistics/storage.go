@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 )
 
@@ -89,6 +90,7 @@ func (s *Storage) GetTemperatureHistory(ctx context.Context, zoneID string, hour
 	for _, value := range data {
 		var reading TemperatureReading
 		if err := json.Unmarshal([]byte(value), &reading); err != nil {
+			logger.Debug("Failed to unmarshal temperature reading: %v", err)
 			continue
 		}
 		
@@ -135,6 +137,7 @@ func (s *Storage) GetValveActivityHistory(ctx context.Context, zoneID string, ho
 	for _, value := range data {
 		var activity ValveActivity
 		if err := json.Unmarshal([]byte(value), &activity); err != nil {
+			logger.Debug("Failed to unmarshal valve activity: %v", err)
 			continue
 		}
 		
@@ -181,6 +184,7 @@ func (s *Storage) GetZoneSatisfactionHistory(ctx context.Context, zoneID string,
 	for _, value := range data {
 		var satisfaction ZoneSatisfaction
 		if err := json.Unmarshal([]byte(value), &satisfaction); err != nil {
+			logger.Debug("Failed to unmarshal zone satisfaction: %v", err)
 			continue
 		}
 		
@@ -227,6 +231,7 @@ func (s *Storage) GetAlgorithmExecutionHistory(ctx context.Context, algorithmTyp
 	for _, value := range data {
 		var execution AlgorithmExecution
 		if err := json.Unmarshal([]byte(value), &execution); err != nil {
+			logger.Debug("Failed to unmarshal algorithm execution: %v", err)
 			continue
 		}
 		
