@@ -20,7 +20,7 @@ The Statistics and Metrics feature tracks and provides historical data about:
 Returns temperature history for a specific zone.
 
 **Query Parameters:**
-- `hours` (optional): Number of hours of history to retrieve (default: 24)
+- `hours` (optional): Number of hours of history to retrieve (default: 24, maximum: 720/30 days)
 
 **Response:**
 ```json
@@ -45,7 +45,7 @@ Returns temperature history for a specific zone.
 Returns valve state change history for a specific zone.
 
 **Query Parameters:**
-- `hours` (optional): Number of hours of history to retrieve (default: 24)
+- `hours` (optional): Number of hours of history to retrieve (default: 24, maximum: 720/30 days)
 
 **Response:**
 ```json
@@ -70,7 +70,7 @@ Returns valve state change history for a specific zone.
 Returns energy consumption metrics for a specific zone.
 
 **Query Parameters:**
-- `hours` (optional): Number of hours for metrics calculation (default: 24)
+- `hours` (optional): Number of hours for metrics calculation (default: 24, maximum: 720/30 days)
 
 **Response:**
 ```json
@@ -92,7 +92,7 @@ Returns energy consumption metrics for a specific zone.
 Returns comfort metrics for a specific zone.
 
 **Query Parameters:**
-- `hours` (optional): Number of hours for metrics calculation (default: 24)
+- `hours` (optional): Number of hours for metrics calculation (default: 24, maximum: 720/30 days)
 
 **Response:**
 ```json
@@ -115,7 +115,7 @@ Returns comfort metrics for a specific zone.
 Returns comfort metrics for all zones.
 
 **Query Parameters:**
-- `hours` (optional): Number of hours for metrics calculation (default: 24)
+- `hours` (optional): Number of hours for metrics calculation (default: 24, maximum: 720/30 days)
 
 **Response:**
 ```json
@@ -145,7 +145,7 @@ Returns comfort metrics for all zones.
 Returns system performance metrics including algorithm execution times.
 
 **Query Parameters:**
-- `hours` (optional): Number of hours for metrics calculation (default: 24)
+- `hours` (optional): Number of hours for metrics calculation (default: 24, maximum: 720/30 days)
 
 **Response:**
 ```json

@@ -65,10 +65,10 @@ func (s *Storage) StoreTemperatureReading(ctx context.Context, zoneID string, te
 	
 	key := fmt.Sprintf("multizone:stats:temp:%s", zoneID)
 	
-	// Store in hash with timestamp as field key
+	// Store in hash with timestamp as field key (using milliseconds to avoid collisions)
 	// Note: For large datasets, consider using sorted sets (ZADD) for more efficient time-based queries
 	return s.redisClient.HSet(ctx, key, map[string]interface{}{
-		fmt.Sprintf("%d", timestamp.Unix()): string(data),
+		fmt.Sprintf("%d", timestamp.UnixMilli()): string(data),
 	})
 }
 
@@ -76,9 +76,11 @@ func (s *Storage) StoreTemperatureReading(ctx context.Context, zoneID string, te
 func (s *Storage) GetTemperatureHistory(ctx context.Context, zoneID string, hours int) ([]TemperatureReading, error) {
 	key := fmt.Sprintf("multizone:stats:temp:%s", zoneID)
 	
-	// Get all readings
-	// Note: This loads all data and filters in-memory. For production with large datasets,
-	// consider using sorted sets (ZRANGEBYSCORE) or implementing TTL-based expiration
+	// Get all readings.
+	// NOTE: This still loads all data and filters in-memory, but now also performs
+	// cleanup of expired entries so that the underlying Redis hash does not grow
+	// indefinitely. For high-volume production usage, consider migrating to sorted
+	// sets (ZRANGEBYSCORE) for more efficient time-range queries.
 	data, err := s.redisClient.HGetAll(ctx, key)
 	if err != nil {
 		return nil, err
@@ -86,8 +88,9 @@ func (s *Storage) GetTemperatureHistory(ctx context.Context, zoneID string, hour
 	
 	cutoffTime := time.Now().Add(-time.Duration(hours) * time.Hour)
 	readings := []TemperatureReading{}
+	var fieldsToDelete []string
 	
-	for _, value := range data {
+	for field, value := range data {
 		var reading TemperatureReading
 		if err := json.Unmarshal([]byte(value), &reading); err != nil {
 			logger.Debug("Failed to unmarshal temperature reading: %v", err)
@@ -96,6 +99,16 @@ func (s *Storage) GetTemperatureHistory(ctx context.Context, zoneID string, hour
 		
 		if reading.Timestamp.After(cutoffTime) {
 			readings = append(readings, reading)
+		} else {
+			// Mark old/expired readings for deletion to prevent unbounded growth.
+			fieldsToDelete = append(fieldsToDelete, field)
+		}
+	}
+	
+	// Best-effort cleanup of expired fields; do not fail the request if this fails.
+	if len(fieldsToDelete) > 0 {
+		if err := s.redisClient.HDel(ctx, key, fieldsToDelete...); err != nil {
+			logger.Debug("Failed to delete expired temperature readings from Redis: %v", err)
 		}
 	}
 	
@@ -118,7 +131,7 @@ func (s *Storage) StoreValveActivity(ctx context.Context, zoneID string, state s
 	key := fmt.Sprintf("multizone:stats:valve:%s", zoneID)
 	
 	return s.redisClient.HSet(ctx, key, map[string]interface{}{
-		fmt.Sprintf("%d", timestamp.Unix()): string(data),
+		fmt.Sprintf("%d", timestamp.UnixMilli()): string(data),
 	})
 }
 
@@ -133,8 +146,9 @@ func (s *Storage) GetValveActivityHistory(ctx context.Context, zoneID string, ho
 	
 	cutoffTime := time.Now().Add(-time.Duration(hours) * time.Hour)
 	activities := []ValveActivity{}
+	var fieldsToDelete []string
 	
-	for _, value := range data {
+	for field, value := range data {
 		var activity ValveActivity
 		if err := json.Unmarshal([]byte(value), &activity); err != nil {
 			logger.Debug("Failed to unmarshal valve activity: %v", err)
@@ -143,6 +157,15 @@ func (s *Storage) GetValveActivityHistory(ctx context.Context, zoneID string, ho
 		
 		if activity.Timestamp.After(cutoffTime) {
 			activities = append(activities, activity)
+		} else {
+			fieldsToDelete = append(fieldsToDelete, field)
+		}
+	}
+	
+	// Best-effort cleanup of expired fields
+	if len(fieldsToDelete) > 0 {
+		if err := s.redisClient.HDel(ctx, key, fieldsToDelete...); err != nil {
+			logger.Debug("Failed to delete expired valve activities from Redis: %v", err)
 		}
 	}
 	
@@ -165,7 +188,7 @@ func (s *Storage) StoreZoneSatisfaction(ctx context.Context, zoneID string, sati
 	key := fmt.Sprintf("multizone:stats:satisfaction:%s", zoneID)
 	
 	return s.redisClient.HSet(ctx, key, map[string]interface{}{
-		fmt.Sprintf("%d", timestamp.Unix()): string(data),
+		fmt.Sprintf("%d", timestamp.UnixMilli()): string(data),
 	})
 }
 
@@ -180,8 +203,9 @@ func (s *Storage) GetZoneSatisfactionHistory(ctx context.Context, zoneID string,
 	
 	cutoffTime := time.Now().Add(-time.Duration(hours) * time.Hour)
 	satisfactions := []ZoneSatisfaction{}
+	var fieldsToDelete []string
 	
-	for _, value := range data {
+	for field, value := range data {
 		var satisfaction ZoneSatisfaction
 		if err := json.Unmarshal([]byte(value), &satisfaction); err != nil {
 			logger.Debug("Failed to unmarshal zone satisfaction: %v", err)
@@ -190,6 +214,15 @@ func (s *Storage) GetZoneSatisfactionHistory(ctx context.Context, zoneID string,
 		
 		if satisfaction.Timestamp.After(cutoffTime) {
 			satisfactions = append(satisfactions, satisfaction)
+		} else {
+			fieldsToDelete = append(fieldsToDelete, field)
+		}
+	}
+	
+	// Best-effort cleanup of expired fields
+	if len(fieldsToDelete) > 0 {
+		if err := s.redisClient.HDel(ctx, key, fieldsToDelete...); err != nil {
+			logger.Debug("Failed to delete expired zone satisfactions from Redis: %v", err)
 		}
 	}
 	
@@ -212,7 +245,7 @@ func (s *Storage) StoreAlgorithmExecution(ctx context.Context, algorithmType str
 	key := fmt.Sprintf("multizone:stats:algorithm:%s", algorithmType)
 	
 	return s.redisClient.HSet(ctx, key, map[string]interface{}{
-		fmt.Sprintf("%d", timestamp.Unix()): string(data),
+		fmt.Sprintf("%d", timestamp.UnixMilli()): string(data),
 	})
 }
 
@@ -227,8 +260,9 @@ func (s *Storage) GetAlgorithmExecutionHistory(ctx context.Context, algorithmTyp
 	
 	cutoffTime := time.Now().Add(-time.Duration(hours) * time.Hour)
 	executions := []AlgorithmExecution{}
+	var fieldsToDelete []string
 	
-	for _, value := range data {
+	for field, value := range data {
 		var execution AlgorithmExecution
 		if err := json.Unmarshal([]byte(value), &execution); err != nil {
 			logger.Debug("Failed to unmarshal algorithm execution: %v", err)
@@ -237,6 +271,15 @@ func (s *Storage) GetAlgorithmExecutionHistory(ctx context.Context, algorithmTyp
 		
 		if execution.Timestamp.After(cutoffTime) {
 			executions = append(executions, execution)
+		} else {
+			fieldsToDelete = append(fieldsToDelete, field)
+		}
+	}
+	
+	// Best-effort cleanup of expired fields
+	if len(fieldsToDelete) > 0 {
+		if err := s.redisClient.HDel(ctx, key, fieldsToDelete...); err != nil {
+			logger.Debug("Failed to delete expired algorithm executions from Redis: %v", err)
 		}
 	}
 	

@@ -21,6 +21,9 @@ const (
 	// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
 	entityIDPatternString = `^[a-z_]+\.[a-z0-9_]+$`
 	
+	// zoneIDPattern validates zone IDs (alphanumeric with underscores and hyphens)
+	zoneIDPatternString = `^[a-zA-Z0-9_-]+$`
+	
 	// maxStatisticsHours defines the maximum number of hours that can be requested
 	// for statistics queries to prevent abuse and performance issues (30 days)
 	maxStatisticsHours = 720
@@ -28,6 +31,9 @@ const (
 
 // entityIDPattern is compiled once at package initialization
 var entityIDPattern = regexp.MustCompile(entityIDPatternString)
+
+// zoneIDPattern is compiled once at package initialization
+var zoneIDPattern = regexp.MustCompile(zoneIDPatternString)
 
 // HealthHandler returns the health status of the service
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -391,6 +397,16 @@ func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.Handl
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
 		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
 		// Get hours parameter (default 24 hours, max 720 hours/30 days)
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
@@ -430,6 +446,16 @@ func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFun
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
 		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
@@ -468,6 +494,16 @@ func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFun
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
 		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
+		
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
@@ -500,6 +536,16 @@ func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFu
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
+		
+		// Validate zone ID to prevent injection attacks
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "invalid zone_id format",
+			})
+			return
+		}
 		
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {

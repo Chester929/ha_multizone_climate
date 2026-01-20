@@ -125,15 +125,15 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 
 	logger.Info("Executed %d valve operations", len(executedOps))
 
+	// Build a map for efficient zone lookup by ID (reused throughout function)
+	zoneByID := make(map[string]*models.ZoneState, len(zones))
+	for i := range zones {
+		zoneByID[zones[i].ID] = &zones[i]
+	}
+
 	// Apply operations to Home Assistant if integration is available
 	appliedCount := 0
 	if p.haIntegration != nil && p.haIntegration.IsEnabled() {
-		// Build a map for efficient zone lookup by ID
-		zoneByID := make(map[string]*models.ZoneState, len(zones))
-		for i := range zones {
-			zoneByID[zones[i].ID] = &zones[i]
-		}
-
 		for _, op := range executedOps {
 			zone, ok := zoneByID[op.ZoneID]
 			if !ok || zone == nil || zone.ValveSwitchEntity == "" {
@@ -164,11 +164,6 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 	}
 
 	// Track zone statistics for zones that had valve state changes
-	zoneByID := make(map[string]*models.ZoneState, len(zones))
-	for i := range zones {
-		zoneByID[zones[i].ID] = &zones[i]
-	}
-	
 	for _, op := range executedOps {
 		if zone, ok := zoneByID[op.ZoneID]; ok {
 			if err := p.statsTracker.TrackZoneUpdate(ctx, zone); err != nil {
@@ -183,12 +178,6 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 		logger.Info("Opening %d fallback valves to meet minimum requirement", len(minValvesToOpen))
 
 		if p.haIntegration != nil && p.haIntegration.IsEnabled() {
-			// Build a map for efficient zone lookup by ID
-			zoneByID := make(map[string]*models.ZoneState, len(zones))
-			for i := range zones {
-				zoneByID[zones[i].ID] = &zones[i]
-			}
-
 			for _, zoneID := range minValvesToOpen {
 				zone, ok := zoneByID[zoneID]
 				if !ok || zone == nil || zone.ValveSwitchEntity == "" {
