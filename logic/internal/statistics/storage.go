@@ -25,7 +25,7 @@ type TemperatureReading struct {
 // ValveActivity represents a valve state change
 type ValveActivity struct {
 	ZoneID    string    `json:"zone_id"`
-	State     string    `json:"state"` // "open" or "closed"
+	State     string    `json:"state"` // "open" or "close"
 	Timestamp time.Time `json:"timestamp"`
 }
 
