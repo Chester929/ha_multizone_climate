@@ -1219,20 +1219,10 @@ func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
 		return
 }
 	} else {
-		// Clear HA settings when disabled
+		// Don't include HA settings in the response when disabled (settings remain in Redis for easy re-enabling)
 		delete(mergedSettings, "ha_base_url")
 		delete(mergedSettings, "ha_token")
 		delete(mergedSettings, "ha_websocket")
-		
-		// Also remove HA settings from Redis
-		if err := client.HDel(ctx, "multizone:integrations", "ha_base_url", "ha_token", "ha_websocket"); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Failed to clear HA integration settings",
-			})
-			return
-		}
 	}
 
 		// Validate MQTT settings if enabled
@@ -1264,21 +1254,11 @@ func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
 		return
 		}
 	} else {
-		// Clear MQTT settings when disabled
+		// Don't include MQTT settings in the response when disabled (settings remain in Redis for easy re-enabling)
 		delete(mergedSettings, "mqtt_broker")
 		delete(mergedSettings, "mqtt_port")
 		delete(mergedSettings, "mqtt_username")
 		delete(mergedSettings, "mqtt_password")
-		
-		// Also remove MQTT settings from Redis
-		if err := client.HDel(ctx, "multizone:integrations", "mqtt_broker", "mqtt_port", "mqtt_username", "mqtt_password"); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Failed to clear MQTT integration settings",
-			})
-			return
-		}
 	}
 
 		// Save settings to Redis
