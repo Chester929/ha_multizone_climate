@@ -379,9 +379,8 @@ func (i *Integration) updateZoneClimate(ctx context.Context, entityID, state str
 
 		// Only update if the temperature changed (to avoid loops)
 		// Use a small threshold to account for floating-point precision
-		threshold := 0.01
-		if fmt.Sprintf("%.1f", targetTemp) != fmt.Sprintf("%.1f", currentTarget) && 
-		   (targetTemp-currentTarget > threshold || currentTarget-targetTemp > threshold) {
+		threshold := 0.1
+		if targetTemp-currentTarget > threshold || currentTarget-targetTemp > threshold {
 			// Update zone target temperature
 			if err := i.redisClient.HSet(ctx, zoneKey, "target_temperature", targetTemp); err != nil {
 				return err
