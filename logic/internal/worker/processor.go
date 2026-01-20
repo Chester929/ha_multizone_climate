@@ -11,12 +11,14 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
+	"github.com/chester929/ha_multizone_climate/logic/internal/statistics"
 )
 
 // Processor implements the JobProcessor interface
 type Processor struct {
 	redisClient   *redis.Client
 	haIntegration *homeassistant.Integration
+	statsTracker  *statistics.Tracker
 }
 
 // NewProcessor creates a new job processor
@@ -24,6 +26,7 @@ func NewProcessor(redisClient *redis.Client, haIntegration *homeassistant.Integr
 	return &Processor{
 		redisClient:   redisClient,
 		haIntegration: haIntegration,
+		statsTracker:  statistics.NewTracker(redisClient),
 	}
 }
 
@@ -36,6 +39,7 @@ func setLastActuated(zone *models.ZoneState) {
 // ProcessCalculateTemp calculates the main thermostat target temperature
 func (p *Processor) ProcessCalculateTemp(ctx context.Context, params map[string]interface{}) (map[string]interface{}, error) {
 	logger.Info("Processing temperature calculation job")
+	startTime := time.Now()
 
 	// Load zones from Redis
 	zones, err := p.loadZones(ctx)
@@ -58,6 +62,12 @@ func (p *Processor) ProcessCalculateTemp(ctx context.Context, params map[string]
 
 	// Calculate new target temperature
 	newTarget, shouldUpdate := algorithm.CalculateMainTargetTemperature(zones, *config, mainClimate.TargetTemperature)
+
+	// Record algorithm execution time
+	executionTime := time.Since(startTime).Milliseconds()
+	if err := p.statsTracker.RecordAlgorithmExecution(ctx, "calculate_temp", executionTime, time.Now()); err != nil {
+		logger.Warn("Failed to record algorithm execution: %v", err)
+	}
 
 	result := map[string]interface{}{
 		"should_update":  shouldUpdate,
@@ -86,6 +96,7 @@ func (p *Processor) ProcessCalculateTemp(ctx context.Context, params map[string]
 // ProcessUpdateValves updates valve states using enhanced valve management
 func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]interface{}) (map[string]interface{}, error) {
 	logger.Info("Processing valve update job")
+	startTime := time.Now()
 
 	// Load zones from Redis
 	zones, err := p.loadZones(ctx)
@@ -139,11 +150,23 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 				logger.Debug("Set valve %s to %s for zone %s (priority: %d)",
 					zone.ValveSwitchEntity, op.Operation, zone.ID, zone.Priority)
 
+				// Record valve activity in statistics
+				if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, op.Operation, time.Now()); err != nil {
+					logger.Warn("Failed to record valve activity: %v", err)
+				}
+
 				// Save updated zone state to Redis
 				if err := p.saveZone(ctx, zone); err != nil {
 					logger.Warn("Failed to save zone state: %v", err)
 				}
 			}
+		}
+	}
+
+	// Track zone statistics
+	for i := range zones {
+		if err := p.statsTracker.TrackZoneUpdate(ctx, &zones[i]); err != nil {
+			logger.Warn("Failed to track zone update for %s: %v", zones[i].ID, err)
 		}
 	}
 
@@ -175,12 +198,23 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 					zone.ValveState = "open"
 					setLastActuated(zone)
 					
+					// Record valve activity
+					if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
+						logger.Warn("Failed to record valve activity: %v", err)
+					}
+					
 					if err := p.saveZone(ctx, zone); err != nil {
 						logger.Warn("Failed to save zone state: %v", err)
 					}
 				}
 			}
 		}
+	}
+
+	// Record algorithm execution time
+	executionTime := time.Since(startTime).Milliseconds()
+	if err := p.statsTracker.RecordAlgorithmExecution(ctx, "update_valves", executionTime, time.Now()); err != nil {
+		logger.Warn("Failed to record algorithm execution: %v", err)
 	}
 
 	return map[string]interface{}{
@@ -195,6 +229,7 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 // ProcessSafetyCheck performs safety checks on the system
 func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]interface{}) (map[string]interface{}, error) {
 	logger.Info("Processing safety check job")
+	startTime := time.Now()
 
 	// Load zones from Redis
 	zones, err := p.loadZones(ctx)
@@ -258,6 +293,11 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 					zone.ValveState = "open"
 					setLastActuated(zone)
 					
+					// Record valve activity
+					if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
+						logger.Warn("Failed to record valve activity: %v", err)
+					}
+					
 					if err := p.saveZone(ctx, zone); err != nil {
 						logger.Error("Failed to persist safety fallback valve state for zone %s: %v", zone.ID, err)
 					}
@@ -266,6 +306,12 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 
 			result["fallback_opened"] = openedCount
 		}
+	}
+
+	// Record algorithm execution time
+	executionTime := time.Since(startTime).Milliseconds()
+	if err := p.statsTracker.RecordAlgorithmExecution(ctx, "safety_check", executionTime, time.Now()); err != nil {
+		logger.Warn("Failed to record algorithm execution: %v", err)
 	}
 
 	return result, nil
