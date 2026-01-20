@@ -14,6 +14,9 @@ interface ZoneData {
   satisfaction?: string;
   valve_state?: string;
   priority?: string;
+  temperature_sensor_entity_id?: string;
+  valve_switch_entity_id?: string;
+  climate_entity_id?: string;
 }
 
 interface BroadcastData {
@@ -289,6 +292,16 @@ app.put('/api/integrations', async (req, res) => {
       }
     }
     
+    // Check if both HA and MQTT are enabled (mutual exclusion)
+    const haEnabled = mergedSettings.ha_enabled === 'true';
+    const mqttEnabled = mergedSettings.mqtt_enabled === 'true';
+    
+    if (haEnabled && mqttEnabled) {
+      return res.status(400).json({ 
+        error: 'Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.' 
+      });
+    }
+    
     // Validate HA settings if enabled
     if (mergedSettings.ha_enabled === 'true') {
       if (!mergedSettings.ha_base_url || mergedSettings.ha_base_url.trim() === '') {
@@ -366,6 +379,35 @@ app.post('/api/zones', async (req, res) => {
       return res.status(400).json({ error: 'Zone ID must contain only alphanumeric characters, hyphens, and underscores' });
     }
     
+    // Validate entity IDs if provided
+    if (zone.temperature_sensor_entity_id && !/^[a-z_]+\.[a-z0-9_]+$/.test(zone.temperature_sensor_entity_id)) {
+      return res.status(400).json({ error: 'Invalid temperature sensor entity ID format, expected format: domain.entity_name' });
+    }
+    
+    if (zone.valve_switch_entity_id && !/^[a-z_]+\.[a-z0-9_]+$/.test(zone.valve_switch_entity_id)) {
+      return res.status(400).json({ error: 'Invalid valve switch entity ID format, expected format: domain.entity_name' });
+    }
+    
+    if (zone.climate_entity_id && !/^[a-z_]+\.[a-z0-9_]+$/.test(zone.climate_entity_id)) {
+      return res.status(400).json({ error: 'Invalid climate entity ID format, expected format: domain.entity_name' });
+    }
+    
+    // Validate target temperature if provided
+    if (zone.target_temperature) {
+      const temp = parseFloat(zone.target_temperature);
+      if (isNaN(temp) || temp < -50 || temp > 100) {
+        return res.status(400).json({ error: 'Target temperature must be between -50 and 100' });
+      }
+    }
+    
+    // Validate priority if provided
+    if (zone.priority) {
+      const priority = parseInt(zone.priority, 10);
+      if (isNaN(priority) || priority < 0 || priority > 100) {
+        return res.status(400).json({ error: 'Priority must be between 0 and 100' });
+      }
+    }
+    
     const zoneData: ZoneData = {
       id: zoneId,
       name: zone.name,
@@ -375,6 +417,9 @@ app.post('/api/zones', async (req, res) => {
       satisfaction: zone.satisfaction || 'unknown',
       valve_state: zone.valve_state || 'closed',
       priority: zone.priority || '0',
+      temperature_sensor_entity_id: zone.temperature_sensor_entity_id || '',
+      valve_switch_entity_id: zone.valve_switch_entity_id || '',
+      climate_entity_id: zone.climate_entity_id || '',
     };
     
     await redisClient.hSet(`multizone:zone:${zoneId}`, zoneData as Record<string, string>);
