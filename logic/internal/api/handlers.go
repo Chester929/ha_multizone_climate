@@ -21,10 +21,10 @@ import (
 const (
 	// entityIDPattern validates Home Assistant entity IDs (domain.entity_name)
 	entityIDPatternString = `^[a-z_]+\.[a-z0-9_]+$`
-	
+
 	// zoneIDPattern validates zone IDs (alphanumeric with underscores and hyphens)
 	zoneIDPatternString = `^[a-zA-Z0-9_-]+$`
-	
+
 	// maxStatisticsHours defines the maximum number of hours that can be requested
 	// for statistics queries to prevent abuse and performance issues (30 days)
 	maxStatisticsHours = 720
@@ -142,7 +142,7 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 	return func(w http.ResponseWriter, r *http.Request) {
 		// integration parameter reserved for future HA entity validation
 		_ = integration
-		
+
 		var zone map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -265,17 +265,17 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 
 		// Set defaults for missing fields
 		zoneData := map[string]interface{}{
-			"id":                         zoneID,
-			"name":                       name,
-			"enabled":                    getStringOrDefault(zone, "enabled", "true"),
-			"target_temperature":         getStringOrDefault(zone, "target_temperature", "20"),
-			"current_temperature":        getStringOrDefault(zone, "current_temperature", "N/A"),
-			"satisfaction":               getStringOrDefault(zone, "satisfaction", "unknown"),
-			"valve_state":                getStringOrDefault(zone, "valve_state", "closed"),
-			"priority":                   getStringOrDefault(zone, "priority", "0"),
+			"id":                           zoneID,
+			"name":                         name,
+			"enabled":                      getStringOrDefault(zone, "enabled", "true"),
+			"target_temperature":           getStringOrDefault(zone, "target_temperature", "20"),
+			"current_temperature":          getStringOrDefault(zone, "current_temperature", "N/A"),
+			"satisfaction":                 getStringOrDefault(zone, "satisfaction", "unknown"),
+			"valve_state":                  getStringOrDefault(zone, "valve_state", "closed"),
+			"priority":                     getStringOrDefault(zone, "priority", "0"),
 			"temperature_sensor_entity_id": getStringOrDefault(zone, "temperature_sensor_entity_id", ""),
-			"valve_switch_entity_id":     getStringOrDefault(zone, "valve_switch_entity_id", ""),
-			"climate_entity_id":          getStringOrDefault(zone, "climate_entity_id", ""),
+			"valve_switch_entity_id":       getStringOrDefault(zone, "valve_switch_entity_id", ""),
+			"climate_entity_id":            getStringOrDefault(zone, "climate_entity_id", ""),
 		}
 
 		// Save zone to Redis
@@ -740,7 +740,7 @@ func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
-		
+
 		// Validate zone ID to prevent injection attacks
 		if !zoneIDPattern.MatchString(zoneID) {
 			w.Header().Set("Content-Type", "application/json")
@@ -750,7 +750,7 @@ func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.Handl
 			})
 			return
 		}
-		
+
 		// Get hours parameter (default 24 hours, max 720 hours/30 days)
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
@@ -761,12 +761,12 @@ func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.Handl
 				}
 			}
 		}
-		
+
 		ctx := r.Context()
 		history, err := tracker.GetTemperatureHistory(ctx, zoneID, hours)
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -774,7 +774,7 @@ func StatisticsTemperatureHistoryHandler(tracker *statistics.Tracker) http.Handl
 			})
 			return
 		}
-		
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"zone_id": zoneID,
 			"hours":   hours,
@@ -789,7 +789,7 @@ func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
-		
+
 		// Validate zone ID to prevent injection attacks
 		if !zoneIDPattern.MatchString(zoneID) {
 			w.Header().Set("Content-Type", "application/json")
@@ -799,7 +799,7 @@ func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFun
 			})
 			return
 		}
-		
+
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
@@ -809,12 +809,12 @@ func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFun
 				}
 			}
 		}
-		
+
 		ctx := r.Context()
 		activity, err := tracker.GetValveActivityHistory(ctx, zoneID, hours)
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -822,7 +822,7 @@ func StatisticsValveActivityHandler(tracker *statistics.Tracker) http.HandlerFun
 			})
 			return
 		}
-		
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"zone_id": zoneID,
 			"hours":   hours,
@@ -837,7 +837,7 @@ func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
-		
+
 		// Validate zone ID to prevent injection attacks
 		if !zoneIDPattern.MatchString(zoneID) {
 			w.Header().Set("Content-Type", "application/json")
@@ -847,7 +847,7 @@ func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFun
 			})
 			return
 		}
-		
+
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
@@ -857,12 +857,12 @@ func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFun
 				}
 			}
 		}
-		
+
 		ctx := r.Context()
 		metrics, err := tracker.GetEnergyMetrics(ctx, zoneID, hours)
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -870,7 +870,7 @@ func StatisticsEnergyMetricsHandler(tracker *statistics.Tracker) http.HandlerFun
 			})
 			return
 		}
-		
+
 		json.NewEncoder(w).Encode(metrics)
 	}
 }
@@ -880,7 +880,7 @@ func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFu
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
-		
+
 		// Validate zone ID to prevent injection attacks
 		if !zoneIDPattern.MatchString(zoneID) {
 			w.Header().Set("Content-Type", "application/json")
@@ -890,7 +890,7 @@ func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFu
 			})
 			return
 		}
-		
+
 		hours := 24
 		if hoursParam := r.URL.Query().Get("hours"); hoursParam != "" {
 			if h, err := strconv.Atoi(hoursParam); err == nil && h > 0 {
@@ -900,12 +900,12 @@ func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFu
 				}
 			}
 		}
-		
+
 		ctx := r.Context()
 		metrics, err := tracker.GetComfortMetrics(ctx, zoneID, hours)
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -913,7 +913,7 @@ func StatisticsComfortMetricsHandler(tracker *statistics.Tracker) http.HandlerFu
 			})
 			return
 		}
-		
+
 		json.NewEncoder(w).Encode(metrics)
 	}
 }
@@ -930,12 +930,12 @@ func StatisticsAllZonesComfortHandler(tracker *statistics.Tracker) http.HandlerF
 				}
 			}
 		}
-		
+
 		ctx := r.Context()
 		summary, err := tracker.GetAllZonesComfortSummary(ctx, hours)
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -943,7 +943,7 @@ func StatisticsAllZonesComfortHandler(tracker *statistics.Tracker) http.HandlerF
 			})
 			return
 		}
-		
+
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"hours": hours,
 			"zones": summary,
@@ -963,12 +963,12 @@ func StatisticsPerformanceMetricsHandler(tracker *statistics.Tracker) http.Handl
 				}
 			}
 		}
-		
+
 		ctx := r.Context()
 		metrics, err := tracker.GetSystemPerformanceMetrics(ctx, hours)
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -976,7 +976,7 @@ func StatisticsPerformanceMetricsHandler(tracker *statistics.Tracker) http.Handl
 			})
 			return
 		}
-		
+
 		json.NewEncoder(w).Encode(metrics)
 	}
 }
@@ -1137,157 +1137,157 @@ func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
 		// Get existing settings to merge with update
 		existingSettings, err := client.HGetAll(ctx, "multizone:integrations")
 		if err != nil {
-		logger.Warn("Failed to load existing integration settings: %v", err)
-		existingSettings = make(map[string]string)
+			logger.Warn("Failed to load existing integration settings: %v", err)
+			existingSettings = make(map[string]string)
 		}
 
 		// Merge new settings with existing
 		mergedSettings := make(map[string]interface{})
 		for k, v := range existingSettings {
-		mergedSettings[k] = v
+			mergedSettings[k] = v
 		}
 		for k, v := range settings {
-		mergedSettings[k] = v
+			mergedSettings[k] = v
 		}
 
 		// Allowed configuration keys
 		allowedKeys := map[string]bool{
-		"ha_enabled": true, "ha_base_url": true, "ha_token": true, "ha_websocket": true,
-		"mqtt_enabled": true, "mqtt_broker": true, "mqtt_port": true, "mqtt_username": true, "mqtt_password": true,
+			"ha_enabled": true, "ha_base_url": true, "ha_token": true, "ha_websocket": true,
+			"mqtt_enabled": true, "mqtt_broker": true, "mqtt_port": true, "mqtt_username": true, "mqtt_password": true,
 		}
 
 		// Validate settings structure
 		for key := range settings {
-		if !allowedKeys[key] {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "Invalid setting key: " + key,
-		})
-		return
-		}
+			if !allowedKeys[key] {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid setting key: " + key,
+				})
+				return
+			}
 
-		// All values must be strings
-		if _, ok := settings[key].(string); !ok {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "Setting " + key + " must be a string",
-		})
-		return
-		}
+			// All values must be strings
+			if _, ok := settings[key].(string); !ok {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Setting " + key + " must be a string",
+				})
+				return
+			}
 		}
 
 		// Check if both HA and MQTT are enabled (mutual exclusion)
 		haEnabled := false
 		if val, ok := mergedSettings["ha_enabled"].(string); ok {
-		haEnabled = val == "true"
+			haEnabled = val == "true"
 		}
 		mqttEnabled := false
 		if val, ok := mergedSettings["mqtt_enabled"].(string); ok {
-		mqttEnabled = val == "true"
+			mqttEnabled = val == "true"
 		}
 
 		if haEnabled && mqttEnabled {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.",
-		})
-		return
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.",
+			})
+			return
 		}
 
 		// Validate HA settings if enabled
 		if haEnabled {
-		haBaseURL, hasBaseURL := mergedSettings["ha_base_url"].(string)
-		haToken, hasToken := mergedSettings["ha_token"].(string)
+			haBaseURL, hasBaseURL := mergedSettings["ha_base_url"].(string)
+			haToken, hasToken := mergedSettings["ha_token"].(string)
 
-		if !hasBaseURL || haBaseURL == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "HA base URL is required when HA is enabled",
-		})
-		return
+			if !hasBaseURL || haBaseURL == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "HA base URL is required when HA is enabled",
+				})
+				return
+			}
+			if !hasToken || haToken == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "HA access token is required when HA is enabled",
+				})
+				return
+			}
+		} else {
+			// Don't include HA settings in the response when disabled (settings remain in Redis for easy re-enabling)
+			delete(mergedSettings, "ha_base_url")
+			delete(mergedSettings, "ha_token")
+			delete(mergedSettings, "ha_websocket")
 		}
-		if !hasToken || haToken == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "HA access token is required when HA is enabled",
-		})
-		return
-}
-	} else {
-		// Don't include HA settings in the response when disabled (settings remain in Redis for easy re-enabling)
-		delete(mergedSettings, "ha_base_url")
-		delete(mergedSettings, "ha_token")
-		delete(mergedSettings, "ha_websocket")
-	}
 
 		// Validate MQTT settings if enabled
 		if mqttEnabled {
-		mqttBroker, hasBroker := mergedSettings["mqtt_broker"].(string)
+			mqttBroker, hasBroker := mergedSettings["mqtt_broker"].(string)
 
-		if !hasBroker || mqttBroker == "" {
+			if !hasBroker || mqttBroker == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "MQTT broker is required when MQTT is enabled",
+				})
+				return
+			}
+
+			// Ensure MQTT port is set; default to 1883 if omitted
+			mqttPort, hasPort := mergedSettings["mqtt_port"].(string)
+			if !hasPort || mqttPort == "" {
+				mqttPort = "1883"
+				mergedSettings["mqtt_port"] = mqttPort
+			}
+			port, err := strconv.Atoi(mqttPort)
+			if err != nil || port < 1 || port > 65535 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "MQTT port must be between 1 and 65535",
+				})
+				return
+			}
+		} else {
+			// Don't include MQTT settings in the response when disabled (settings remain in Redis for easy re-enabling)
+			delete(mergedSettings, "mqtt_broker")
+			delete(mergedSettings, "mqtt_port")
+			delete(mergedSettings, "mqtt_username")
+			delete(mergedSettings, "mqtt_password")
+		}
+
+		// Save settings to Redis
+		if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to update integration settings",
+			})
+			return
+		}
+
+		// Check if HA-related settings changed
+		haSettingsChanged := false
+		for key := range settings {
+			if key == "ha_enabled" || key == "ha_base_url" || key == "ha_token" || key == "ha_websocket" {
+				haSettingsChanged = true
+				break
+			}
+		}
+
+		if haSettingsChanged {
+			logger.Info("HA integration settings changed. Please restart the logic container for changes to take effect.")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "MQTT broker is required when MQTT is enabled",
+			"status":  "updated",
+			"message": "Integration settings updated successfully",
 		})
-		return
-		}
-
-		// Ensure MQTT port is set; default to 1883 if omitted
-		mqttPort, hasPort := mergedSettings["mqtt_port"].(string)
-		if !hasPort || mqttPort == "" {
-		mqttPort = "1883"
-		mergedSettings["mqtt_port"] = mqttPort
-		}
-		port, err := strconv.Atoi(mqttPort)
-		if err != nil || port < 1 || port > 65535 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "MQTT port must be between 1 and 65535",
-		})
-		return
-		}
-	} else {
-		// Don't include MQTT settings in the response when disabled (settings remain in Redis for easy re-enabling)
-		delete(mergedSettings, "mqtt_broker")
-		delete(mergedSettings, "mqtt_port")
-		delete(mergedSettings, "mqtt_username")
-		delete(mergedSettings, "mqtt_password")
 	}
-
-	// Save settings to Redis
-	if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Failed to update integration settings",
-		})
-		return
-	}
-
-	// Check if HA-related settings changed
-	haSettingsChanged := false
-	for key := range settings {
-		if key == "ha_enabled" || key == "ha_base_url" || key == "ha_token" || key == "ha_websocket" {
-			haSettingsChanged = true
-			break
-		}
-	}
-
-	if haSettingsChanged {
-		logger.Info("HA integration settings changed. Please restart the logic container for changes to take effect.")
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "updated",
-		"message": "Integration settings updated successfully",
-	})
-}
 }
