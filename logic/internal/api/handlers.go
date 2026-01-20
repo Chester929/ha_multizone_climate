@@ -136,11 +136,183 @@ func GetZoneHandler(client *redis.Client) http.HandlerFunc {
 	}
 }
 
+// CreateZoneHandler creates a new zone
+func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var zone map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Invalid JSON format",
+			})
+			return
+		}
+
+		ctx := context.Background()
+
+		// Validate required fields
+		name, nameOk := zone["name"].(string)
+		if !nameOk || name == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Zone name is required",
+			})
+			return
+		}
+
+		// Generate zone ID if not provided
+		zoneID, idOk := zone["id"].(string)
+		if !idOk || zoneID == "" {
+			zoneID = "zone-" + strconv.FormatInt(time.Now().UnixNano()/1000000, 10)
+		}
+
+		// Validate zone ID format
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Zone ID must contain only alphanumeric characters, hyphens, and underscores",
+			})
+			return
+		}
+
+		// Check if zone already exists
+		key := "multizone:zone:" + zoneID
+		exists, err := client.Exists(ctx, key)
+		if err != nil {
+			logger.Error("Failed to check zone existence: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to check zone existence",
+			})
+			return
+		}
+		if exists > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Zone with this ID already exists",
+			})
+			return
+		}
+
+		// Validate temperature sensor entity if provided
+		if tempSensor, ok := zone["temperature_sensor_entity_id"].(string); ok && tempSensor != "" {
+			if !entityIDPattern.MatchString(tempSensor) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid temperature sensor entity ID format, expected format: domain.entity_name",
+				})
+				return
+			}
+		}
+
+		// Validate valve switch entity if provided
+		if valveSwitch, ok := zone["valve_switch_entity_id"].(string); ok && valveSwitch != "" {
+			if !entityIDPattern.MatchString(valveSwitch) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid valve switch entity ID format, expected format: domain.entity_name",
+				})
+				return
+			}
+		}
+
+		// Validate climate entity if provided
+		if climateEntity, ok := zone["climate_entity_id"].(string); ok && climateEntity != "" {
+			if !entityIDPattern.MatchString(climateEntity) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid climate entity ID format, expected format: domain.entity_name",
+				})
+				return
+			}
+		}
+
+		// Validate target temperature if provided
+		if targetTemp, ok := zone["target_temperature"].(string); ok && targetTemp != "" {
+			temp, err := strconv.ParseFloat(targetTemp, 64)
+			if err != nil || temp < -50 || temp > 100 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Target temperature must be between -50 and 100",
+				})
+				return
+			}
+		}
+
+		// Validate priority if provided
+		if priority, ok := zone["priority"].(string); ok && priority != "" {
+			p, err := strconv.Atoi(priority)
+			if err != nil || p < 0 || p > 100 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Priority must be between 0 and 100",
+				})
+				return
+			}
+		}
+
+		// Set defaults for missing fields
+		zoneData := map[string]interface{}{
+			"id":                         zoneID,
+			"name":                       name,
+			"enabled":                    getStringOrDefault(zone, "enabled", "true"),
+			"target_temperature":         getStringOrDefault(zone, "target_temperature", "20"),
+			"current_temperature":        getStringOrDefault(zone, "current_temperature", "N/A"),
+			"satisfaction":               getStringOrDefault(zone, "satisfaction", "unknown"),
+			"valve_state":                getStringOrDefault(zone, "valve_state", "closed"),
+			"priority":                   getStringOrDefault(zone, "priority", "0"),
+			"temperature_sensor_entity_id": getStringOrDefault(zone, "temperature_sensor_entity_id", ""),
+			"valve_switch_entity_id":     getStringOrDefault(zone, "valve_switch_entity_id", ""),
+			"climate_entity_id":          getStringOrDefault(zone, "climate_entity_id", ""),
+		}
+
+		// Save zone to Redis
+		if err := client.HSet(ctx, key, zoneData); err != nil {
+			logger.Error("Failed to create zone: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to create zone",
+			})
+			return
+		}
+
+		logger.Info("Zone created successfully: %s (%s)", zoneID, name)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "created",
+			"id":     zoneID,
+		})
+	}
+}
+
 // UpdateZoneHandler updates a zone
 func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
+
+		// Validate zone ID format
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Invalid zone ID format",
+			})
+			return
+		}
 
 		var updates map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
@@ -150,6 +322,86 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 
 		ctx := context.Background()
 		key := "multizone:zone:" + zoneID
+
+		// Check if zone exists
+		exists, err := client.Exists(ctx, key)
+		if err != nil {
+			logger.Error("Failed to check zone existence: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to check zone existence",
+			})
+			return
+		}
+		if exists == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Zone not found",
+			})
+			return
+		}
+
+		// Validate entity IDs if provided
+		if tempSensor, ok := updates["temperature_sensor_entity_id"].(string); ok && tempSensor != "" {
+			if !entityIDPattern.MatchString(tempSensor) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid temperature sensor entity ID format",
+				})
+				return
+			}
+		}
+
+		if valveSwitch, ok := updates["valve_switch_entity_id"].(string); ok && valveSwitch != "" {
+			if !entityIDPattern.MatchString(valveSwitch) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid valve switch entity ID format",
+				})
+				return
+			}
+		}
+
+		if climateEntity, ok := updates["climate_entity_id"].(string); ok && climateEntity != "" {
+			if !entityIDPattern.MatchString(climateEntity) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Invalid climate entity ID format",
+				})
+				return
+			}
+		}
+
+		// Validate target temperature if provided
+		if targetTemp, ok := updates["target_temperature"].(string); ok && targetTemp != "" {
+			temp, err := strconv.ParseFloat(targetTemp, 64)
+			if err != nil || temp < -50 || temp > 100 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Target temperature must be between -50 and 100",
+				})
+				return
+			}
+		}
+
+		// Validate priority if provided
+		if priority, ok := updates["priority"].(string); ok && priority != "" {
+			p, err := strconv.Atoi(priority)
+			if err != nil || p < 0 || p > 100 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Priority must be between 0 and 100",
+				})
+				return
+			}
+		}
 
 		// Update zone in Redis
 		if err := client.HSet(ctx, key, updates); err != nil {
@@ -161,6 +413,76 @@ func UpdateZoneHandler(client *redis.Client) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
 	}
+}
+
+// DeleteZoneHandler deletes a zone
+func DeleteZoneHandler(client *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		zoneID := vars["id"]
+
+		// Validate zone ID format
+		if !zoneIDPattern.MatchString(zoneID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Invalid zone ID format",
+			})
+			return
+		}
+
+		ctx := context.Background()
+		key := "multizone:zone:" + zoneID
+
+		// Check if zone exists
+		exists, err := client.Exists(ctx, key)
+		if err != nil {
+			logger.Error("Failed to check zone existence: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to check zone existence",
+			})
+			return
+		}
+		if exists == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Zone not found",
+			})
+			return
+		}
+
+		// Delete zone and its history
+		if err := client.Del(ctx, key); err != nil {
+			logger.Error("Failed to delete zone: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to delete zone",
+			})
+			return
+		}
+
+		// Also delete zone history
+		historyKey := "multizone:history:zone:" + zoneID
+		client.Del(ctx, historyKey) // Ignore error as history might not exist
+
+		logger.Info("Zone deleted successfully: %s", zoneID)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+	}
+}
+
+// Helper function to get string value from map or return default
+func getStringOrDefault(m map[string]interface{}, key string, defaultValue string) string {
+	if val, ok := m[key].(string); ok {
+		return val
+	}
+	return defaultValue
 }
 
 // CalculateMainTempHandler triggers main temperature calculation
@@ -635,4 +957,315 @@ func StatisticsPerformanceMetricsHandler(tracker *statistics.Tracker) http.Handl
 		
 		json.NewEncoder(w).Encode(metrics)
 	}
+}
+
+// GetGlobalConfigHandler returns the global configuration
+func GetGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
+return func(w http.ResponseWriter, r *http.Request) {
+ctx := context.Background()
+
+config, err := client.HGetAll(ctx, "multizone:config")
+if err != nil {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusInternalServerError)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Failed to fetch configuration",
+})
+return
+}
+
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(config)
+}
+}
+
+// UpdateGlobalConfigHandler updates the global configuration
+func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
+return func(w http.ResponseWriter, r *http.Request) {
+var config map[string]interface{}
+if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Invalid JSON format",
+})
+return
+}
+
+ctx := context.Background()
+
+// Validate main climate entity ID if provided
+if mainClimateEntity, ok := config["main_climate_entity_id"].(string); ok && mainClimateEntity != "" {
+if !entityIDPattern.MatchString(mainClimateEntity) {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Invalid main climate entity ID format, expected format: domain.entity_name",
+})
+return
+}
+}
+
+// Validate numeric configuration values if provided
+if mainTargetAllZonesSatisfied, ok := config["main_target_all_zones_satisfied"].(string); ok {
+temp, err := strconv.ParseFloat(mainTargetAllZonesSatisfied, 64)
+if err != nil || temp < 5 || temp > 35 {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "main_target_all_zones_satisfied must be between 5 and 35",
+})
+return
+}
+}
+
+if mainMinTemp, ok := config["main_min_temp"].(string); ok {
+temp, err := strconv.ParseFloat(mainMinTemp, 64)
+if err != nil || temp < 5 || temp > 35 {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "main_min_temp must be between 5 and 35",
+})
+return
+}
+}
+
+if mainMaxTemp, ok := config["main_max_temp"].(string); ok {
+temp, err := strconv.ParseFloat(mainMaxTemp, 64)
+if err != nil || temp < 5 || temp > 90 {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "main_max_temp must be between 5 and 90",
+})
+return
+}
+}
+
+// Save configuration to Redis
+if err := client.HSet(ctx, "multizone:config", config); err != nil {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusInternalServerError)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Failed to update configuration",
+})
+return
+}
+
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(map[string]interface{}{
+"status": "updated",
+})
+}
+}
+
+// GetIntegrationSettingsHandler returns the integration settings
+func GetIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
+return func(w http.ResponseWriter, r *http.Request) {
+ctx := context.Background()
+
+settings, err := client.HGetAll(ctx, "multizone:integrations")
+if err != nil {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusInternalServerError)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Failed to fetch integration settings",
+})
+return
+}
+
+// Apply defaults for missing values
+if _, ok := settings["ha_websocket"]; !ok || settings["ha_websocket"] == "" {
+settings["ha_websocket"] = "true"
+}
+
+// Mask sensitive fields
+maskedSettings := make(map[string]interface{})
+for k, v := range settings {
+maskedSettings[k] = v
+}
+if token, ok := maskedSettings["ha_token"].(string); ok && token != "" {
+maskedSettings["ha_token"] = "••••••••"
+}
+if password, ok := maskedSettings["mqtt_password"].(string); ok && password != "" {
+maskedSettings["mqtt_password"] = "••••••••"
+}
+
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(maskedSettings)
+}
+}
+
+// UpdateIntegrationSettingsHandler updates the integration settings
+func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
+return func(w http.ResponseWriter, r *http.Request) {
+var settings map[string]interface{}
+if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Invalid JSON format",
+})
+return
+}
+
+ctx := context.Background()
+
+// Get existing settings to merge with update
+existingSettings, err := client.HGetAll(ctx, "multizone:integrations")
+if err != nil {
+logger.Warn("Failed to load existing integration settings: %v", err)
+existingSettings = make(map[string]string)
+}
+
+// Merge new settings with existing
+mergedSettings := make(map[string]interface{})
+for k, v := range existingSettings {
+mergedSettings[k] = v
+}
+for k, v := range settings {
+mergedSettings[k] = v
+}
+
+// Allowed configuration keys
+allowedKeys := map[string]bool{
+"ha_enabled": true, "ha_base_url": true, "ha_token": true, "ha_websocket": true,
+"mqtt_enabled": true, "mqtt_broker": true, "mqtt_port": true, "mqtt_username": true, "mqtt_password": true,
+}
+
+// Validate settings structure
+for key := range settings {
+if !allowedKeys[key] {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Invalid setting key: " + key,
+})
+return
+}
+
+// All values must be strings
+if _, ok := settings[key].(string); !ok {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Setting " + key + " must be a string",
+})
+return
+}
+}
+
+// Check if both HA and MQTT are enabled (mutual exclusion)
+haEnabled := false
+if val, ok := mergedSettings["ha_enabled"].(string); ok {
+haEnabled = val == "true"
+}
+mqttEnabled := false
+if val, ok := mergedSettings["mqtt_enabled"].(string); ok {
+mqttEnabled = val == "true"
+}
+
+if haEnabled && mqttEnabled {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.",
+})
+return
+}
+
+// Validate HA settings if enabled
+if haEnabled {
+haBaseURL, hasBaseURL := mergedSettings["ha_base_url"].(string)
+haToken, hasToken := mergedSettings["ha_token"].(string)
+
+if !hasBaseURL || haBaseURL == "" {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "HA base URL is required when HA is enabled",
+})
+return
+}
+if !hasToken || haToken == "" {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "HA access token is required when HA is enabled",
+})
+return
+}
+} else {
+// Clear HA settings when disabled
+delete(mergedSettings, "ha_base_url")
+delete(mergedSettings, "ha_token")
+delete(mergedSettings, "ha_websocket")
+}
+
+// Validate MQTT settings if enabled
+if mqttEnabled {
+mqttBroker, hasBroker := mergedSettings["mqtt_broker"].(string)
+
+if !hasBroker || mqttBroker == "" {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "MQTT broker is required when MQTT is enabled",
+})
+return
+}
+
+// Ensure MQTT port is set; default to 1883 if omitted
+mqttPort, hasPort := mergedSettings["mqtt_port"].(string)
+if !hasPort || mqttPort == "" {
+mqttPort = "1883"
+mergedSettings["mqtt_port"] = mqttPort
+}
+port, err := strconv.Atoi(mqttPort)
+if err != nil || port < 1 || port > 65535 {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "MQTT port must be between 1 and 65535",
+})
+return
+}
+} else {
+// Clear MQTT settings when disabled
+delete(mergedSettings, "mqtt_broker")
+delete(mergedSettings, "mqtt_port")
+delete(mergedSettings, "mqtt_username")
+delete(mergedSettings, "mqtt_password")
+}
+
+// Save settings to Redis
+if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusInternalServerError)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Failed to update integration settings",
+})
+return
+}
+
+// Check if HA-related settings changed
+haSettingsChanged := false
+for key := range settings {
+if key == "ha_enabled" || key == "ha_base_url" || key == "ha_token" || key == "ha_websocket" {
+haSettingsChanged = true
+break
+}
+}
+
+if haSettingsChanged {
+logger.Info("HA integration settings changed. Please restart the logic container for changes to take effect.")
+}
+
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(map[string]interface{}{
+"status": "updated",
+"message": "Integration settings updated successfully",
+})
+}
 }

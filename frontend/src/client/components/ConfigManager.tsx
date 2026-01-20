@@ -3,6 +3,7 @@ import { Config } from '../types';
 
 // Whitelist of allowed configuration keys
 const ALLOWED_CONFIG_KEYS = [
+  'main_climate_entity_id',
   'main_target_temperature',
   'mode',
   'hysteresis',
@@ -47,6 +48,12 @@ function isValidConfig(data: unknown): data is Config {
     
     // Validate based on key type
     switch (key) {
+      case 'main_climate_entity_id':
+        // Entity ID must match format: domain.entity_name
+        if (!/^[a-z_]+\.[a-z0-9_]+$/.test(strValue)) {
+          return false;
+        }
+        break;
       case 'main_target_temperature':
       case 'hysteresis':
       case 'min_temperature':
@@ -177,12 +184,37 @@ export function ConfigManager() {
       </div>
 
       <div className="config-content">
+        <h3>Main Climate Entity</h3>
+        <div className="config-item">
+          <label>Main Climate Entity ID</label>
+          {editing ? (
+            <>
+              <input
+                type="text"
+                placeholder="climate.main_thermostat"
+                pattern="^[a-z_]+\.[a-z0-9_]+$"
+                title="Format: domain.entity_name (e.g., climate.thermostat)"
+                value={editedConfig.main_climate_entity_id || ''}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, main_climate_entity_id: e.target.value })
+                }
+              />
+              <small>Home Assistant entity ID for the main HVAC climate control</small>
+            </>
+          ) : (
+            <span>{config.main_climate_entity_id || 'Not set'}</span>
+          )}
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem' }}>Temperature Settings</h3>
         <div className="config-item">
           <label>Main Target Temperature (°C)</label>
           {editing ? (
             <input
               type="number"
               step="0.5"
+              min="5"
+              max="35"
               value={editedConfig.main_target_temperature || ''}
               onChange={(e) =>
                 setEditedConfig({ ...editedConfig, main_target_temperature: e.target.value })
