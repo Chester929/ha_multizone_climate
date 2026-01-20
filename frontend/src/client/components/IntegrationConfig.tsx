@@ -144,6 +144,39 @@ export function IntegrationConfig() {
     }
   };
 
+  const handleSyncStates = async () => {
+    setTestResult(null);
+    
+    if (editing) {
+      setTestResult({ type: 'error', message: 'Please save settings before syncing states.' });
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/ha/sync', {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          setTestResult({ type: 'error', message: 'Sync endpoint not available. This feature requires the logic container to be configured with HA integration enabled.' });
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status === 'synced') {
+        setTestResult({ type: 'success', message: 'All states synchronized successfully from Home Assistant!' });
+      } else {
+        setTestResult({ type: 'error', message: `Sync failed: ${data.error || 'Unknown error'}` });
+      }
+    } catch (error) {
+      setTestResult({ type: 'error', message: 'Sync feature requires the logic container to be running with HA integration enabled.' });
+    }
+  };
+
   if (loading) {
     return <div className="loading">Loading integration settings...</div>;
   }
@@ -229,9 +262,15 @@ export function IntegrationConfig() {
 
             {!editing && (
               <div className="config-item">
-                <button onClick={handleTestHA} className="btn btn-secondary">
+                <button onClick={handleTestHA} className="btn btn-secondary" style={{ marginRight: '0.5rem' }}>
                   Test Connection
                 </button>
+                <button onClick={handleSyncStates} className="btn btn-secondary">
+                  Sync States & Refresh Cache
+                </button>
+                <small style={{ display: 'block', marginTop: '0.5rem', fontSize: '0.85em', color: '#666' }}>
+                  Sync will refresh all entity states from Home Assistant and rebuild the entity cache
+                </small>
               </div>
             )}
           </div>
