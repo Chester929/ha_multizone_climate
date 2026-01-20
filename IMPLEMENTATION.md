@@ -352,6 +352,33 @@ docker-compose logs mqtt-middleware
 mosquitto_sub -h homeassistant.local -t 'multizone/#' -v
 ```
 
+### Home Assistant Integration Configuration
+
+When configuring Home Assistant integration through the frontend UI:
+
+1. **Navigate to Integrations tab** in the web UI (http://localhost:8099)
+2. **Edit integration settings** and configure:
+   - Enable Home Assistant integration
+   - Set Base URL (e.g., `http://homeassistant.local:8123`)
+   - Set Access Token (long-lived access token from HA)
+   - Configure WebSocket option (enabled by default)
+3. **Save settings** - configuration is stored in Redis
+4. **Restart logic container** for changes to take effect:
+   ```bash
+   docker-compose restart logic
+   ```
+5. **Test connection** using the "Test Connection" button in the UI
+
+**Note:** The logic container reads HA integration settings from Redis on startup. After changing HA integration settings, you must manually restart the logic container for the changes to take effect.
+
+```bash
+# Restart logic container to apply HA integration changes
+docker-compose restart logic
+
+# Verify HA integration is working
+curl http://localhost:8080/api/ha/status
+```
+
 ### Logging and Debugging
 
 The system supports structured logging with multiple log levels for better debugging and monitoring.
