@@ -783,14 +783,14 @@ func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFu
 		}
 
 		ctx := r.Context()
-		
+
 		// Get optional domain filter from query params
 		domain := r.URL.Query().Get("domain")
-		
+
 		// Fetch all entity states from Home Assistant
 		client := integration.GetClient()
 		states, err := client.GetStates(ctx)
-		
+
 		if err != nil {
 			logger.Error("Failed to fetch entities from HA: %v", err)
 			w.Header().Set("Content-Type", "application/json")
@@ -800,7 +800,7 @@ func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFu
 			})
 			return
 		}
-		
+
 		// Filter and format entities
 		entities := make([]map[string]interface{}, 0)
 		for _, state := range states {
@@ -816,23 +816,23 @@ func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFu
 						}
 					}
 				}
-				
+
 				if entityDomain != domain {
 					continue
 				}
 			}
-			
+
 			// Build entity response
 			entity := map[string]interface{}{
 				"entity_id": state.EntityID,
 				"state":     state.State,
 			}
-			
+
 			// Add friendly name if available
 			if friendlyName, ok := state.Attributes["friendly_name"].(string); ok {
 				entity["friendly_name"] = friendlyName
 			}
-			
+
 			// For climate entities, include additional attributes
 			if len(state.EntityID) > 8 && state.EntityID[:8] == "climate." {
 				if currentTemp, ok := state.Attributes["current_temperature"]; ok {
@@ -842,10 +842,10 @@ func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFu
 					entity["temperature"] = targetTemp
 				}
 			}
-			
+
 			entities = append(entities, entity)
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"entities": entities,

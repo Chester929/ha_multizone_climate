@@ -56,9 +56,20 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
       return;
     }
 
+    // Clear errors if validation passed
+    setEntityIdErrors({ temperature_sensor: '', valve_switch: '', climate: '' });
+
+    // Validate target_temperature before saving
+    if (editedZone.target_temperature !== undefined && editedZone.target_temperature !== null) {
+      const temp = parseFloat(editedZone.target_temperature as string);
+      if (isNaN(temp) || editedZone.target_temperature.toString().trim() === '') {
+        alert('Please enter a valid numeric target temperature before saving.');
+        return;
+      }
+    }
+    
     onUpdate(editedZone);
     setIsEditing(false);
-    setEntityIdErrors({ temperature_sensor: '', valve_switch: '', climate: '' });
   };
 
   const handleClimateEntityChange = (entityId: string, entity?: Entity) => {
@@ -81,28 +92,6 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
 
   const handleValveSwitchChange = (entityId: string) => {
     setEditedZone({ ...editedZone, valve_switch_entity_id: entityId });
-  };
-    }
-
-    if (hasErrors) {
-      setEntityIdErrors(errors);
-      return;
-    }
-
-    // Clear errors if validation passed
-    setEntityIdErrors({ temperature_sensor: '', valve_switch: '', climate: '' });
-
-    // Validate target_temperature before saving
-    if (editedZone.target_temperature !== undefined && editedZone.target_temperature !== null) {
-      const temp = parseFloat(editedZone.target_temperature as string);
-      if (isNaN(temp) || editedZone.target_temperature.toString().trim() === '') {
-        alert('Please enter a valid numeric target temperature before saving.');
-        return;
-      }
-    }
-    
-    onUpdate(editedZone);
-    setIsEditing(false);
   };
 
   const handleCancel = () => {

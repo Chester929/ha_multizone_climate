@@ -76,5 +76,3 @@ func TestHAGetEntitiesHandler_NilIntegration(t *testing.T) {
 	handler := HAGetEntitiesHandler(nil)
 	handler(w, req)
 }
-
-
