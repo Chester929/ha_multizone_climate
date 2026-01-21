@@ -29,6 +29,8 @@ type Integration struct {
 		climateToZone    map[string]string // climate_entity_id -> zone_key
 		mainClimateID    string            // main_climate_entity_id
 	}
+	// Mutex to protect concurrent zone state updates
+	zoneUpdateMutex sync.Mutex
 }
 
 // NewIntegration creates a new Home Assistant integration
@@ -310,6 +312,10 @@ func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state str
 		valveState = "open"
 	}
 
+	// Protect zone state update with mutex to prevent race conditions
+	i.zoneUpdateMutex.Lock()
+	defer i.zoneUpdateMutex.Unlock()
+
 	// Get current valve state to check if it changed
 	zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
 	if err == nil {
@@ -399,6 +405,10 @@ func (i *Integration) updateZoneClimate(ctx context.Context, entityID, state str
 
 	// Extract target temperature from climate entity
 	if targetTemp, ok := attributes["temperature"].(float64); ok {
+		// Protect zone state update with mutex to prevent race conditions
+		i.zoneUpdateMutex.Lock()
+		defer i.zoneUpdateMutex.Unlock()
+
 		// Get current zone target temperature from Redis
 		zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
 		if err != nil {
@@ -566,10 +576,40 @@ func (i *Integration) SetValveState(ctx context.Context, entityID string, open b
 		return fmt.Errorf("integration not started")
 	}
 
+	// Execute the valve operation
+	var err error
 	if open {
-		return i.client.TurnOnSwitch(ctx, entityID)
+		err = i.client.TurnOnSwitch(ctx, entityID)
+	} else {
+		err = i.client.TurnOffSwitch(ctx, entityID)
 	}
-	return i.client.TurnOffSwitch(ctx, entityID)
+
+	if err != nil {
+		return err
+	}
+
+	// Verify the state was applied (production-ready confirmation)
+	// Use a short delay to allow HA to process the command
+	time.Sleep(100 * time.Millisecond)
+	
+	state, verifyErr := i.client.GetState(ctx, entityID)
+	if verifyErr == nil {
+		expectedState := "off"
+		if open {
+			expectedState = "on"
+		}
+		
+		if state.State != expectedState {
+			logger.Warn("Valve state mismatch after update: entity=%s expected=%s actual=%s", 
+				entityID, expectedState, state.State)
+			// Still return nil as the command was sent successfully
+			// WebSocket will eventually sync the actual state
+		} else {
+			logger.Debug("Valve state verified: entity=%s state=%s", entityID, state.State)
+		}
+	}
+
+	return nil
 }
 
 // SetMainTemperature sets the main climate temperature in Home Assistant
@@ -662,6 +702,55 @@ func (i *Integration) Stop() error {
 	logger.Info("Home Assistant integration stopped")
 
 	return nil
+}
+
+// IsHealthy checks if the Home Assistant integration is healthy
+// Production-ready health check for monitoring and graceful degradation
+func (i *Integration) IsHealthy(ctx context.Context) bool {
+	if !i.enabled {
+		return false
+	}
+
+	// Quick health check - ping HA API
+	if err := i.client.Ping(ctx); err != nil {
+		logger.Warn("HA integration health check failed: %v", err)
+		return false
+	}
+
+	// Check WebSocket connection if enabled
+	if i.websocketEnabled && !i.wsClient.IsConnected() {
+		logger.Warn("HA WebSocket is not connected")
+		return false
+	}
+
+	return true
+}
+
+// GetIntegrationStatus returns detailed status information for production monitoring
+func (i *Integration) GetIntegrationStatus(ctx context.Context) map[string]interface{} {
+	status := map[string]interface{}{
+		"enabled":            i.enabled,
+		"websocket_enabled":  i.websocketEnabled,
+		"websocket_connected": false,
+		"healthy":            false,
+	}
+
+	if i.enabled {
+		status["healthy"] = i.IsHealthy(ctx)
+		if i.websocketEnabled {
+			status["websocket_connected"] = i.wsClient.IsConnected()
+		}
+	}
+
+	// Get entity cache stats
+	i.entityCache.RLock()
+	status["cache_temp_sensors"] = len(i.entityCache.tempSensorToZone)
+	status["cache_valves"] = len(i.entityCache.valveToZone)
+	status["cache_climates"] = len(i.entityCache.climateToZone)
+	status["cache_main_climate_configured"] = i.entityCache.mainClimateID != ""
+	i.entityCache.RUnlock()
+
+	return status
 }
 
 // IsEnabled returns whether the integration is enabled
