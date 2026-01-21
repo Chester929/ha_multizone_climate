@@ -31,14 +31,6 @@ jobs:
             context: ./logic
             dockerfile: ./logic/Dockerfile
             image: multizone-logic
-          - name: frontend
-            context: ./frontend
-            dockerfile: ./frontend/Dockerfile
-            image: multizone-frontend
-          - name: mqtt-middleware
-            context: ./mqtt-middleware
-            dockerfile: ./mqtt-middleware/Dockerfile
-            image: multizone-mqtt
     
     steps:
       - name: Checkout code

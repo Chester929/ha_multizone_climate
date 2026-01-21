@@ -12,17 +12,8 @@ build: ## Build all containers
 build-logic: ## Build logic container only
 	docker-compose build logic
 
-build-frontend: ## Build frontend container only
-	docker-compose build frontend
-
-build-mqtt: ## Build MQTT middleware container only
-	docker-compose build mqtt-middleware
-
 start: ## Start all services
 	docker-compose up -d
-
-start-with-mqtt: ## Start all services including MQTT
-	docker-compose --profile mqtt up -d
 
 stop: ## Stop all services
 	docker-compose down
@@ -35,12 +26,6 @@ logs: ## Show logs from all containers
 
 logs-logic: ## Show logs from logic container
 	docker-compose logs -f logic
-
-logs-frontend: ## Show logs from frontend container
-	docker-compose logs -f frontend
-
-logs-mqtt: ## Show logs from MQTT middleware
-	docker-compose logs -f mqtt-middleware
 
 logs-redis: ## Show logs from Redis
 	docker-compose logs -f redis
@@ -57,21 +42,12 @@ redis-cli: ## Connect to Redis CLI
 test-logic: ## Run Go tests
 	cd logic && go test ./...
 
-test-frontend: ## Run frontend tests
-	cd frontend && npm test
-
 lint-logic: ## Lint Go code
 	cd logic && go vet ./...
 	cd logic && gofmt -l .
 
-lint-frontend: ## Lint TypeScript code
-	cd frontend && npm run lint
-
 dev-logic: ## Run logic container in development mode
 	cd logic && go run cmd/server/main.go
-
-dev-frontend: ## Run frontend in development mode
-	cd frontend && npm run dev
 
 init-env: ## Create .env file from example
 	cp .env.example .env
@@ -80,7 +56,6 @@ init-env: ## Create .env file from example
 status: ## Check status of all services
 	@echo "Checking services..."
 	@curl -s http://localhost:8080/health | jq . || echo "Logic container not responding"
-	@curl -s http://localhost:8099/health | jq . || echo "Frontend container not responding"
 
 init-redis: ## Initialize Redis with example data
 	./examples/init-redis.sh
