@@ -98,24 +98,29 @@ func ListZonesHandler(client *redis.Client) http.HandlerFunc {
 			return
 		}
 
-		zones := []models.ZoneState{}
+		zones := []map[string]interface{}{}
 		for _, key := range zoneKeys {
 			zoneData, err := client.HGetAll(ctx, key)
 			if err != nil {
 				continue
 			}
 
-			// Simple zone construction (in full impl, would parse all fields)
-			zone := models.ZoneState{
-				ID:   zoneData["id"],
-				Name: zoneData["name"],
-			}
-			zones = append(zones, zone)
+			// Return all zone data as-is from Redis
+			zones = append(zones, convertToInterfaceMap(zoneData))
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(zones)
 	}
+}
+
+// convertToInterfaceMap converts a map[string]string to map[string]interface{}
+func convertToInterfaceMap(data map[string]string) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range data {
+		result[k] = v
+	}
+	return result
 }
 
 // GetZoneHandler returns a specific zone
@@ -141,9 +146,6 @@ func GetZoneHandler(client *redis.Client) http.HandlerFunc {
 // CreateZoneHandler creates a new zone
 func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// integration parameter reserved for future HA entity validation
-		_ = integration
-
 		var zone map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -229,6 +231,7 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 		}
 
 		// Validate climate entity if provided
+		climateEntityID := ""
 		if climateEntity, ok := zone["climate_entity_id"].(string); ok && climateEntity != "" {
 			if !entityIDPattern.MatchString(climateEntity) {
 				w.Header().Set("Content-Type", "application/json")
@@ -238,6 +241,7 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 				})
 				return
 			}
+			climateEntityID = climateEntity
 		}
 
 		// Validate target temperature if provided
@@ -261,6 +265,31 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 					"error": err.Error(),
 				})
 				return
+			}
+		}
+
+		// Auto-load data from climate entity if HA integration is enabled
+		if climateEntityID != "" && integration != nil && integration.IsEnabled() {
+			haClient := integration.GetClient()
+			climateState, err := haClient.GetState(ctx, climateEntityID)
+			if err != nil {
+				logger.Warn("Failed to load climate entity state: %v", err)
+			} else {
+				// Auto-load current temperature if not explicitly overridden by temperature sensor
+				if _, hasTempSensor := zone["temperature_sensor_entity_id"]; !hasTempSensor {
+					if currentTemp, ok := climateState.Attributes["current_temperature"].(float64); ok {
+						zone["current_temperature"] = fmt.Sprintf("%.1f", currentTemp)
+						logger.Info("Auto-loaded current temperature from climate entity: %.1f", currentTemp)
+					}
+				}
+				
+				// Auto-load target temperature if not provided
+				if _, hasTargetTemp := zone["target_temperature"]; !hasTargetTemp {
+					if targetTemp, ok := climateState.Attributes["temperature"].(float64); ok {
+						zone["target_temperature"] = fmt.Sprintf("%.1f", targetTemp)
+						logger.Info("Auto-loaded target temperature from climate entity: %.1f", targetTemp)
+					}
+				}
 			}
 		}
 
@@ -288,6 +317,30 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 				"error": "Failed to create zone",
 			})
 			return
+		}
+
+		// Refresh entity cache after zone creation
+		if integration != nil && integration.IsEnabled() {
+			if err := integration.RefreshEntityCache(ctx); err != nil {
+				logger.Error("Failed to refresh entity cache: %v", err)
+			}
+		}
+
+		// If zone has temperature sensor, sync current temperature from HA
+		tempSensorEntity := getStringOrDefault(zone, "temperature_sensor_entity_id", "")
+		integrationAvailable := integration != nil && integration.IsEnabled()
+		if tempSensorEntity != "" && integrationAvailable {
+			haClient := integration.GetClient()
+			sensorState, err := haClient.GetState(ctx, tempSensorEntity)
+			if err != nil {
+				logger.Warn("Failed to sync temperature sensor: %v", err)
+			} else {
+				temp, err := strconv.ParseFloat(sensorState.State, 64)
+				if err == nil {
+					client.HSet(ctx, key, "current_temperature", fmt.Sprintf("%.1f", temp))
+					logger.Info("Synced current temperature from sensor: %.1f", temp)
+				}
+			}
 		}
 
 		logger.Info("Zone created successfully: %s (%s)", zoneID, name)

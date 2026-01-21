@@ -345,6 +345,7 @@ func (p *Processor) loadZoneByKey(ctx context.Context, key string) (*models.Zone
 		Name:                    data["name"],
 		TemperatureSensorEntity: data["temperature_sensor_entity_id"],
 		ValveSwitchEntity:       data["valve_switch_entity_id"],
+		ClimateEntity:           data["climate_entity_id"],
 		ValveState:              data["valve_state"],
 	}
 

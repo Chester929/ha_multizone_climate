@@ -361,14 +361,26 @@ func (i *Integration) updateZoneClimate(ctx context.Context, entityID, state str
 		return nil
 	}
 
+	// Get zone data to check if temperature sensor is configured
+	zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
+	if err != nil {
+		return err
+	}
+
+	// Extract current temperature from climate entity if no temperature sensor is configured
+	tempSensorEntity, hasTempSensor := zoneData["temperature_sensor_entity_id"]
+	if !hasTempSensor || tempSensorEntity == "" {
+		if currentTemp, ok := attributes["current_temperature"].(float64); ok {
+			// Update zone current temperature from climate entity
+			if err := i.redisClient.HSet(ctx, zoneKey, "current_temperature", currentTemp); err != nil {
+				return err
+			}
+			logger.Debug("Updated zone current temperature from HA climate: %s -> %.1f°C", zoneKey, currentTemp)
+		}
+	}
+
 	// Extract target temperature from climate entity
 	if targetTemp, ok := attributes["temperature"].(float64); ok {
-		// Get current zone target temperature from Redis
-		zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
-		if err != nil {
-			return err
-		}
-
 		currentTargetStr, ok := zoneData["target_temperature"]
 		if !ok {
 			currentTargetStr = "0"
@@ -431,14 +443,22 @@ func (i *Integration) SyncAllStates(ctx context.Context) error {
 
 	logger.Info("Syncing states for %d zones", len(zoneKeys))
 
-	// Sync each zone's sensors
+	// Sync each zone's sensors and climate entities
 	for _, key := range zoneKeys {
 		zoneData, err := i.redisClient.HGetAll(ctx, key)
 		if err != nil {
 			continue
 		}
 
-		// Sync temperature sensor
+		// Sync climate entity first (if configured)
+		climateEntity, hasClimateEntity := zoneData["climate_entity_id"]
+		if hasClimateEntity && climateEntity != "" {
+			if err := i.syncZoneClimate(ctx, key, climateEntity); err != nil {
+				logger.Error("Error syncing zone climate entity %s: %v", climateEntity, err)
+			}
+		}
+
+		// Sync temperature sensor (overrides climate entity current temp if present)
 		if sensorEntity, ok := zoneData["temperature_sensor_entity_id"]; ok && sensorEntity != "" {
 			if err := i.syncTemperatureSensor(ctx, key, sensorEntity); err != nil {
 				logger.Error("Error syncing temperature sensor %s: %v", sensorEntity, err)
@@ -496,6 +516,43 @@ func (i *Integration) syncValveSwitch(ctx context.Context, zoneKey, entityID str
 	}
 
 	return i.redisClient.HSet(ctx, zoneKey, "valve_state", valveState)
+}
+
+// syncZoneClimate syncs a zone climate entity from HA to Redis
+func (i *Integration) syncZoneClimate(ctx context.Context, zoneKey, entityID string) error {
+	state, err := i.client.GetState(ctx, entityID)
+	if err != nil {
+		return err
+	}
+
+	updates := make(map[string]interface{})
+
+	// Get zone data to check if temperature sensor is configured
+	zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
+	if err != nil {
+		return err
+	}
+
+	// Sync current temperature from climate entity if no temperature sensor is configured
+	tempSensorEntity, hasTempSensor := zoneData["temperature_sensor_entity_id"]
+	if !hasTempSensor || tempSensorEntity == "" {
+		if currentTemp, ok := state.Attributes["current_temperature"].(float64); ok {
+			updates["current_temperature"] = currentTemp
+			logger.Debug("Synced current temperature from zone climate entity: %.1f", currentTemp)
+		}
+	}
+
+	// Sync target temperature from climate entity
+	if targetTemp, ok := state.Attributes["temperature"].(float64); ok {
+		updates["target_temperature"] = targetTemp
+		logger.Debug("Synced target temperature from zone climate entity: %.1f", targetTemp)
+	}
+
+	if len(updates) > 0 {
+		return i.redisClient.HSet(ctx, zoneKey, updates)
+	}
+
+	return nil
 }
 
 // syncMainClimate syncs the main climate entity from HA to Redis
