@@ -30,6 +30,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self.data: dict[str, Any] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
@@ -37,13 +41,22 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Validate the main climate entity exists
-            if not self.hass.states.get(user_input["main_climate_entity"]):
-                errors["main_climate_entity"] = "entity_not_found"
-            else:
-                # Store main climate entity and proceed to zone setup
-                self.data = user_input
-                return await self.async_step_zones()
+            # Check for duplicate configurations
+            for entry in self._async_current_entries():
+                if entry.data.get("main_climate_entity") == user_input.get(
+                    "main_climate_entity"
+                ):
+                    errors["base"] = "already_configured"
+                    break
+
+            if not errors:
+                # Validate the main climate entity exists
+                if not self.hass.states.get(user_input["main_climate_entity"]):
+                    errors["main_climate_entity"] = "entity_not_found"
+                else:
+                    # Store main climate entity and proceed to zone setup
+                    self.data = user_input
+                    return await self.async_step_zones()
 
         return self.async_show_form(
             step_id="user",
@@ -61,14 +74,27 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Merge zone data with main climate data
-            self.data.update(user_input)
+            # Validate temperature_sensor entity exists
+            if not self.hass.states.get(user_input["temperature_sensor"]):
+                errors["temperature_sensor"] = "entity_not_found"
             
-            # Create the config entry
-            return self.async_create_entry(
-                title=f"Multizone Climate ({user_input.get('zone_name', 'Zone 1')})",
-                data=self.data,
-            )
+            # Validate valve_switch entity exists
+            if not self.hass.states.get(user_input["valve_switch"]):
+                errors["valve_switch"] = "entity_not_found"
+            
+            # Validate optional climate_entity if provided
+            if user_input.get("climate_entity") and not self.hass.states.get(user_input["climate_entity"]):
+                errors["climate_entity"] = "entity_not_found"
+            
+            if not errors:
+                # Merge zone data with main climate data
+                self.data.update(user_input)
+                
+                # Create the config entry
+                return self.async_create_entry(
+                    title=f"Multizone Climate ({user_input.get('zone_name', 'Zone 1')})",
+                    data=self.data,
+                )
 
         # Schema for zone configuration with entity selectors
         zones_schema = vol.Schema(
