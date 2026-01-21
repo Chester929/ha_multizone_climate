@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Zone } from '../types';
 import { TemperatureChart } from './TemperatureChart';
+import { useDefaults } from '../hooks/useDefaults';
 
 interface ZoneCardProps {
   zone: Zone;
@@ -13,6 +14,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const [showChart, setShowChart] = useState(false);
   const [editedZone, setEditedZone] = useState(zone);
   const [sliderValue, setSliderValue] = useState(zone.target_temperature || '20');
+  const { defaults } = useDefaults();
 
   // Sync editedZone when zone prop changes (e.g., from WebSocket updates)
   useEffect(() => {
@@ -206,7 +208,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
                 step="0.1"
                 min="0"
                 max="5"
-                value={editedZone.opening_offset || 0.3}
+                value={editedZone.opening_offset ?? defaults?.zone.opening_offset ?? 0.3}
                 onChange={(e) => setEditedZone({ ...editedZone, opening_offset: parseFloat(e.target.value) || 0.3 })}
                 className="detail-input"
               />
@@ -218,7 +220,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
                 step="0.1"
                 min="0"
                 max="5"
-                value={editedZone.closing_offset || 0.3}
+                value={editedZone.closing_offset ?? defaults?.zone.closing_offset ?? 0.3}
                 onChange={(e) => setEditedZone({ ...editedZone, closing_offset: parseFloat(e.target.value) || 0.3 })}
                 className="detail-input"
               />

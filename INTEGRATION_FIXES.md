@@ -316,3 +316,34 @@ Potential improvements for future consideration:
 - **Zone UI**: `frontend/src/client/components/ZoneCard.tsx`
 - **Config UI**: `frontend/src/client/components/ConfigManager.tsx`
 - **Integration UI**: `frontend/src/client/components/IntegrationConfig.tsx`
+
+## Deployment Notes
+
+### Frontend Build Requirements
+
+The frontend requires `node_modules` to be installed before building:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+This is standard for Node.js/React applications and not a code issue. The build process:
+1. Installs dependencies from `package.json` into `node_modules/`
+2. Compiles TypeScript and React components
+3. Bundles client and server code into `dist/`
+
+For production deployments:
+- Use multi-stage Docker builds to keep the final image lean
+- Install only production dependencies with `npm ci --production`
+- The `node_modules/` directory should be in `.gitignore` (already configured)
+
+### Default Values
+
+Configuration default values are now centralized:
+- **Backend**: Defined in `logic/internal/models/defaults.go`
+- **Frontend**: Fetched from `/api/defaults` endpoint via `useDefaults` hook
+- **UI Components**: Use fetched defaults as fallback values
+
+This ensures consistency between backend and frontend without hardcoding values in multiple places.

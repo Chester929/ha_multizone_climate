@@ -1326,3 +1326,32 @@ func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
 		})
 	}
 }
+
+// GetDefaultsHandler returns default configuration values
+func GetDefaultsHandler() http.HandlerFunc {
+return func(w http.ResponseWriter, r *http.Request) {
+defaults := map[string]interface{}{
+"zone": map[string]interface{}{
+"opening_offset":          models.DefaultOpeningOffset,
+"closing_offset":          models.DefaultClosingOffset,
+"target_change_threshold": models.DefaultTargetChangeThreshold,
+"priority":                models.DefaultPriority,
+},
+"global": map[string]interface{}{
+"main_target_all_zones_satisfied": models.DefaultMainTargetAllZonesSatisfied,
+"use_average_mode":                models.DefaultUseAverageMode,
+"slider_position":                 models.DefaultSliderPosition,
+"min_valves_open":                 models.DefaultMinValvesOpen,
+"main_min_temp":                   models.DefaultMainMinTemp,
+"main_max_temp":                   models.DefaultMainMaxTemp,
+"main_change_threshold":           models.DefaultMainChangeThreshold,
+"valve_actuation_delay":           models.DefaultValveActuationDelay,
+"coordinator_interval":            models.DefaultCoordinatorInterval,
+"satisfaction_eps":                models.DefaultSatisfactionEpsilon,
+},
+}
+
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(defaults)
+}
+}

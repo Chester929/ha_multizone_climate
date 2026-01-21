@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Config } from '../types';
+import { useDefaults } from '../hooks/useDefaults';
 
 // Whitelist of allowed configuration keys
 const ALLOWED_CONFIG_KEYS = [
@@ -97,6 +98,7 @@ export function ConfigManager() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editedConfig, setEditedConfig] = useState<Config>({});
+  const { defaults } = useDefaults();
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -247,7 +249,7 @@ export function ConfigManager() {
               step="0.1"
               min="0"
               max="1"
-              value={editedConfig.slider_position || '0.5'}
+              value={editedConfig.slider_position || defaults?.global.slider_position?.toString() || '0.5'}
               onChange={(e) =>
                 setEditedConfig({ ...editedConfig, slider_position: e.target.value })
               }
@@ -346,7 +348,7 @@ export function ConfigManager() {
                 type="number"
                 min="0"
                 max="10"
-                value={editedConfig.min_valves_open || '1'}
+                value={editedConfig.min_valves_open || defaults?.global.min_valves_open?.toString() || '1'}
                 onChange={(e) =>
                   setEditedConfig({ ...editedConfig, min_valves_open: e.target.value })
                 }
@@ -366,7 +368,7 @@ export function ConfigManager() {
                 type="number"
                 min="30"
                 max="600"
-                value={editedConfig.valve_actuation_delay || '120'}
+                value={editedConfig.valve_actuation_delay || defaults?.global.valve_actuation_delay?.toString() || '120'}
                 onChange={(e) =>
                   setEditedConfig({ ...editedConfig, valve_actuation_delay: e.target.value })
                 }
@@ -388,7 +390,7 @@ export function ConfigManager() {
                 type="number"
                 min="5"
                 max="300"
-                value={editedConfig.coordinator_interval || '15'}
+                value={editedConfig.coordinator_interval || defaults?.global.coordinator_interval?.toString() || '15'}
                 onChange={(e) =>
                   setEditedConfig({ ...editedConfig, coordinator_interval: e.target.value })
                 }
@@ -409,7 +411,7 @@ export function ConfigManager() {
                 step="0.1"
                 min="0"
                 max="2"
-                value={editedConfig.satisfaction_eps || '0'}
+                value={editedConfig.satisfaction_eps || defaults?.global.satisfaction_eps?.toString() || '0'}
                 onChange={(e) =>
                   setEditedConfig({ ...editedConfig, satisfaction_eps: e.target.value })
                 }
