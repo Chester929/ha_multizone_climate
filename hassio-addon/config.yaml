@@ -15,6 +15,8 @@ host_network: true
 options:
   main_climate_entity: ""
   ha_token: ""
+  integration:
+    coordinator_interval: 30
   redis:
     mode: bundled
     password: ""
@@ -26,6 +28,8 @@ options:
 schema:
   main_climate_entity: str?
   ha_token: password?
+  integration:
+    coordinator_interval: int(5-300)?
   redis:
     mode: list(bundled|external)
     host: str?

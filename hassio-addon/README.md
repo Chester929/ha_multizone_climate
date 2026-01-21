@@ -16,6 +16,15 @@ This add-on provides intelligent management of multiple heating/cooling zones in
 
 ## Configuration
 
+### Integration
+
+```yaml
+integration:
+  coordinator_interval: 30  # Seconds between command checks (5-300)
+```
+
+- **coordinator_interval**: How often (in seconds) the integration polls for commands to execute. Range: 5-300 seconds. Default: 30 seconds. Requires add-on restart to apply changes.
+
 ### Redis
 
 ```yaml
