@@ -89,6 +89,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
     async def _execute_command(self, entity_id: str, action: str, value):
         """Execute a command on a Home Assistant entity."""
+        if not isinstance(entity_id, str) or "." not in entity_id:
+            _LOGGER.warning(f"Invalid entity_id format for command: {entity_id}")
+            return
         domain = entity_id.split(".")[0]
 
         if action == "set_temperature" and domain == "climate":
