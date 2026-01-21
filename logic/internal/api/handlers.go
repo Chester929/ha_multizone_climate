@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
@@ -230,7 +229,6 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 		}
 
 		// Validate climate entity if provided
-		climateEntityID := ""
 		if climateEntity, ok := zone["climate_entity_id"].(string); ok && climateEntity != "" {
 			if !entityIDPattern.MatchString(climateEntity) {
 				w.Header().Set("Content-Type", "application/json")
@@ -240,7 +238,6 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 				})
 				return
 			}
-			climateEntityID = climateEntity
 		}
 
 		// Validate target temperature if provided
