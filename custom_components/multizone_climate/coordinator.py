@@ -34,7 +34,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=interval_seconds),
         )
         self.backend_url = backend_url.rstrip("/")
-        self.session = aiohttp.ClientSession()
+        # Create session with default timeout
+        timeout = aiohttp.ClientTimeout(total=10)
+        self.session = aiohttp.ClientSession(timeout=timeout)
 
     async def _async_update_data(self):
         """Fetch commands from backend and execute them."""

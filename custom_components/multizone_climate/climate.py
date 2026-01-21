@@ -56,7 +56,6 @@ async def async_setup_entry(
         async with coordinator.session.post(
             f"{coordinator.backend_url}/api/zones",
             json=zone_config,
-            timeout=coordinator.session.timeout,
         ) as response:
             if response.status not in (200, 201):
                 _LOGGER.warning(
@@ -198,7 +197,6 @@ class MultizoneClimateEntity(ClimateEntity):
                     "current_temperature": self._attr_current_temperature or 0,
                     "target_temperature": temperature,
                 },
-                timeout=self.coordinator.session.timeout,
             ) as response:
                 if response.status != 200:
                     _LOGGER.warning(
