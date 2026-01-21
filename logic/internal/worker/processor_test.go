@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -54,7 +55,7 @@ func (m *mockRedisClient) HSet(ctx context.Context, key string, values map[strin
 		case string:
 			m.zones[key][k] = val
 		case int64:
-			m.zones[key][k] = string(rune(val))
+			m.zones[key][k] = strconv.FormatInt(val, 10)
 		}
 	}
 	return nil
@@ -113,13 +114,9 @@ func (m *mockHAIntegration) SetZoneEnabled(ctx context.Context, entityID string,
 }
 
 func TestProcessorWithMockedDependencies(t *testing.T) {
-	// Setup mock dependencies
-	_ = newMockRedisClient()
-	_ = newMockHAIntegration()
-	
-	// Note: We need to create a wrapper that implements the homeassistant.Integration interface
-	// For now, we'll test without actual HA integration since it's mocked
-	var haIntegration *homeassistant.Integration = nil
+	// Note: Mock dependencies are defined above but not used in this test
+	// as we're testing the processor creation with nil dependencies
+	var haIntegration *homeassistant.Integration
 	
 	processor := NewProcessor(nil, haIntegration)
 	

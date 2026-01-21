@@ -22,11 +22,6 @@ func NewIntegration(baseURL, token string) *Integration {
 	}
 }
 
-// IsEnabled returns whether the integration is enabled
-func IsEnabled() bool {
-	return true
-}
-
 // IsEnabled returns whether this integration instance is enabled
 func (i *Integration) IsEnabled() bool {
 	return i.enabled
