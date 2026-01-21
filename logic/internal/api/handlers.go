@@ -1007,7 +1007,15 @@ func IntegrationStateUpdateHandler(client *redis.Client) http.HandlerFunc {
 		jobData := map[string]interface{}{
 			"zone_id": update.ZoneID,
 		}
-		jobJSON, _ := json.Marshal(jobData)
+		jobJSON, err := json.Marshal(jobData)
+		if err != nil {
+			logger.Error("Failed to marshal calculation job data: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to enqueue calculation job",
+			})
+			return
+		}
 		if err := client.LPush(ctx, "multizone:jobs:calculate_temp", string(jobJSON)); err != nil {
 			logger.Error("Failed to enqueue calculation job: %v", err)
 		}
