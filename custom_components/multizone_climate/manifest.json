@@ -4,8 +4,8 @@
   "version": "2.0.0",
   "documentation": "https://github.com/Chester929/ha_multizone_climate",
   "issue_tracker": "https://github.com/Chester929/ha_multizone_climate/issues",
-  "requirements": [],
+  "requirements": ["aiohttp>=3.8.0"],
   "codeowners": ["@Chester929"],
   "config_flow": true,
-  "iot_class": "local_push"
+  "iot_class": "local_polling"
 }
