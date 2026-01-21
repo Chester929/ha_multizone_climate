@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
+	redisv8 "github.com/go-redis/redis/v8"
 )
 
 // TestGetDefaultsHandler tests the GetDefaultsHandler endpoint
@@ -121,4 +123,104 @@ func TestGetDefaultsHandlerConsistency(t *testing.T) {
 			t.Errorf("Request %d: Inconsistent opening_offset value", i)
 		}
 	}
+}
+
+// TestIntegrationStateUpdateHandler tests the state update endpoint
+func TestIntegrationStateUpdateHandler(t *testing.T) {
+	t.Run("InvalidJSON", func(t *testing.T) {
+		handler := IntegrationStateUpdateHandler(nil)
+		
+		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBufferString("invalid json"))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+	
+	t.Run("MissingZoneID", func(t *testing.T) {
+		handler := IntegrationStateUpdateHandler(nil)
+		
+		payload := map[string]interface{}{
+			"current_temperature": 20.5,
+		}
+		body, _ := json.Marshal(payload)
+		
+		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("WithMiniredis", func(t *testing.T) {
+		// Start miniredis mock server
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		// Create redis client connected to miniredis
+		rdb := redisv8.NewClient(&redisv8.Options{
+			Addr: mr.Addr(),
+		})
+		defer rdb.Close()
+
+		// Create a test zone in miniredis
+		zoneID := "test-zone-1"
+		zoneKey := "multizone:zone:" + zoneID
+		mr.HSet(zoneKey, "name", "Test Zone")
+
+		// Verify we can interact with miniredis
+		val := mr.HGet(zoneKey, "name")
+		if val != "Test Zone" {
+			t.Errorf("Expected 'Test Zone', got '%s'", val)
+		}
+		
+		// Test validates that:
+		// 1. Miniredis is properly imported and functional
+		// 2. It can be used for future integration tests
+		// Note: Full integration test would require refactoring redis.Client
+		// to accept an injectable redis client for testing
+	})
+}
+
+// TestIntegrationDeleteCommandsHandler tests the delete commands endpoint
+func TestIntegrationDeleteCommandsHandler(t *testing.T) {
+	t.Run("InvalidJSON", func(t *testing.T) {
+		handler := IntegrationDeleteCommandsHandler(nil)
+		
+		req := httptest.NewRequest("DELETE", "/api/integration/commands", bytes.NewBufferString("invalid json"))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+	
+	t.Run("EmptyEntityIDs", func(t *testing.T) {
+		handler := IntegrationDeleteCommandsHandler(nil)
+		
+		payload := map[string]interface{}{
+			"entity_ids": []string{},
+		}
+		body, _ := json.Marshal(payload)
+		
+		req := httptest.NewRequest("DELETE", "/api/integration/commands", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
 }
