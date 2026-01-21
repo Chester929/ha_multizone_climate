@@ -883,214 +883,25 @@ func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 	}
 }
 
-// GetIntegrationSettingsHandler returns the integration settings
+// GetIntegrationSettingsHandler returns empty integration settings (no integrations available)
 func GetIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
-
-		settings, err := client.HGetAll(ctx, "multizone:integrations")
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Failed to fetch integration settings",
-			})
-			return
-		}
-
-		// Apply defaults for missing values
-		if _, ok := settings["ha_websocket"]; !ok || settings["ha_websocket"] == "" {
-			settings["ha_websocket"] = "true"
-		}
-
-		// Mask sensitive fields
-		maskedSettings := make(map[string]interface{})
-		for k, v := range settings {
-			maskedSettings[k] = v
-		}
-		if token, ok := maskedSettings["ha_token"].(string); ok && token != "" {
-			maskedSettings["ha_token"] = "••••••••"
-		}
-		if password, ok := maskedSettings["mqtt_password"].(string); ok && password != "" {
-			maskedSettings["mqtt_password"] = "••••••••"
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(maskedSettings)
-	}
+return func(w http.ResponseWriter, r *http.Request) {
+// Return empty settings since all integrations have been removed
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(map[string]interface{}{})
+}
 }
 
-// UpdateIntegrationSettingsHandler updates the integration settings
+// UpdateIntegrationSettingsHandler accepts but ignores integration settings (no integrations available)
 func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var settings map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Invalid JSON format",
-			})
-			return
-		}
-
-		ctx := context.Background()
-
-		// Get existing settings to merge with update
-		existingSettings, err := client.HGetAll(ctx, "multizone:integrations")
-		if err != nil {
-			logger.Warn("Failed to load existing integration settings: %v", err)
-			existingSettings = make(map[string]string)
-		}
-
-		// Merge new settings with existing
-		mergedSettings := make(map[string]interface{})
-		for k, v := range existingSettings {
-			mergedSettings[k] = v
-		}
-		for k, v := range settings {
-			mergedSettings[k] = v
-		}
-
-		// Allowed configuration keys
-		allowedKeys := map[string]bool{
-			"ha_enabled": true, "ha_base_url": true, "ha_token": true, "ha_websocket": true,
-			"mqtt_enabled": true, "mqtt_broker": true, "mqtt_port": true, "mqtt_username": true, "mqtt_password": true,
-		}
-
-		// Validate settings structure
-		for key := range settings {
-			if !allowedKeys[key] {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Invalid setting key: " + key,
-				})
-				return
-			}
-
-			// All values must be strings
-			if _, ok := settings[key].(string); !ok {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Setting " + key + " must be a string",
-				})
-				return
-			}
-		}
-
-		// Check if both HA and MQTT are enabled (mutual exclusion)
-		haEnabled := false
-		if val, ok := mergedSettings["ha_enabled"].(string); ok {
-			haEnabled = val == "true"
-		}
-		mqttEnabled := false
-		if val, ok := mergedSettings["mqtt_enabled"].(string); ok {
-			mqttEnabled = val == "true"
-		}
-
-		if haEnabled && mqttEnabled {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.",
-			})
-			return
-		}
-
-		// Validate HA settings if enabled
-		if haEnabled {
-			haBaseURL, hasBaseURL := mergedSettings["ha_base_url"].(string)
-			haToken, hasToken := mergedSettings["ha_token"].(string)
-
-			if !hasBaseURL || haBaseURL == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "HA base URL is required when HA is enabled",
-				})
-				return
-			}
-			if !hasToken || haToken == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "HA access token is required when HA is enabled",
-				})
-				return
-			}
-		} else {
-			// Don't include HA settings in the response when disabled (settings remain in Redis for easy re-enabling)
-			delete(mergedSettings, "ha_base_url")
-			delete(mergedSettings, "ha_token")
-			delete(mergedSettings, "ha_websocket")
-		}
-
-		// Validate MQTT settings if enabled
-		if mqttEnabled {
-			mqttBroker, hasBroker := mergedSettings["mqtt_broker"].(string)
-
-			if !hasBroker || mqttBroker == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "MQTT broker is required when MQTT is enabled",
-				})
-				return
-			}
-
-			// Ensure MQTT port is set; default to 1883 if omitted
-			mqttPort, hasPort := mergedSettings["mqtt_port"].(string)
-			if !hasPort || mqttPort == "" {
-				mqttPort = "1883"
-				mergedSettings["mqtt_port"] = mqttPort
-			}
-			port, err := strconv.Atoi(mqttPort)
-			if err != nil || port < 1 || port > 65535 {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "MQTT port must be between 1 and 65535",
-				})
-				return
-			}
-		} else {
-			// Don't include MQTT settings in the response when disabled (settings remain in Redis for easy re-enabling)
-			delete(mergedSettings, "mqtt_broker")
-			delete(mergedSettings, "mqtt_port")
-			delete(mergedSettings, "mqtt_username")
-			delete(mergedSettings, "mqtt_password")
-		}
-
-		// Save settings to Redis
-		if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Failed to update integration settings",
-			})
-			return
-		}
-
-		// Check if HA-related settings changed
-		haSettingsChanged := false
-		for key := range settings {
-			if key == "ha_enabled" || key == "ha_base_url" || key == "ha_token" || key == "ha_websocket" {
-				haSettingsChanged = true
-				break
-			}
-		}
-
-		if haSettingsChanged {
-			logger.Info("HA integration settings changed. Please restart the logic container for changes to take effect.")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "updated",
-			"message": "Integration settings updated successfully",
-		})
-	}
+return func(w http.ResponseWriter, r *http.Request) {
+// Accept the request but don't do anything since integrations are removed
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(map[string]interface{}{
+"status":  "ignored",
+"message": "Integration settings are not used in addon-only mode",
+})
+}
 }
 
 // GetDefaultsHandler returns default configuration values
