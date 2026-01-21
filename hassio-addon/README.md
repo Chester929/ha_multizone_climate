@@ -10,9 +10,13 @@ This add-on provides intelligent management of multiple heating/cooling zones in
 
 1. Add this repository to your Home Assistant add-on store
 2. Install the "Multizone Climate" add-on
-3. Configure the addon (see Configuration section below)
+3. Configure the add-on (see Configuration section below)
 4. Start the add-on
-5. Access the UI through the Home Assistant sidebar or the "OPEN WEB UI" button
+5. Install the Multizone Climate custom integration:
+   - Go to Settings → Devices & Services
+   - Click "Add Integration"
+   - Search for "Multizone Climate"
+   - Follow the configuration wizard
 
 ## Configuration
 
@@ -51,62 +55,60 @@ logic:
 
 - **log_level**: Set logging verbosity for the logic container
 
-### Frontend
-
-```yaml
-frontend:
-  port: 8099  # Web interface port
-```
-
-- **port**: Port for the web interface (default: 8099)
-
 ## Usage
 
-### Accessing the UI
+### Setting Up Zones
 
-- **Via Sidebar**: Click the "Multizone Climate" panel in your Home Assistant sidebar
-- **Via Add-on Page**: Click "OPEN WEB UI" button on the add-on page
-- **Direct Access**: Navigate to `http://homeassistant.local:8099` (if port is exposed)
+After installing both the add-on and custom integration:
 
-### Creating Zones
-
-1. Open the Multizone Climate UI
-2. Click "Add Zone"
-3. Enter zone details:
-   - Name: Zone identifier (e.g., "Bedroom")
-   - Temperature Sensor Entity ID: e.g., `sensor.bedroom_temperature`
-   - Valve Switch Entity ID: e.g., `switch.bedroom_valve`
-   - Climate Entity ID: (optional) e.g., `climate.bedroom_thermostat`
+1. Open Home Assistant Settings → Devices & Services
+2. Find the "Multizone Climate" integration
+3. Configure zones through the integration's configuration wizard:
+   - Zone Name: Identifier (e.g., "Bedroom")
+   - Temperature Sensor: Select from your existing sensors
+   - Valve Switch: Select from your existing switches
    - Target Temperature: Desired temperature for this zone
    - Priority: Zone priority (higher priority zones are satisfied first)
-4. Save the zone
+4. The integration will create a climate entity for each configured zone
+
+### Managing Zones
+
+- **Through HA Interface**: Use the climate entities created by the integration
+- **Direct API**: The add-on exposes a REST API at `http://addon_slug:8080` for advanced usage
 
 ### Configuration Options
 
-In the Configuration tab, you can:
-- Set the main climate entity ID
-- Configure temperature calculation method
-- Set minimum number of valves that must remain open
-- Adjust valve actuation delays
-- Configure safety thresholds
+Global configuration is stored in the add-on and can be accessed via API:
+- Main climate entity ID
+- Temperature calculation method
+- Minimum number of valves that must remain open
+- Valve actuation delays
+- Safety thresholds
 
 ## Features
 
 - **Intelligent Zone Management**: Per-room temperature targets with automatic valve control
 - **Safety Features**: Ensures minimum valves stay open to protect HVAC system
 - **Smart Algorithms**: Priority-based zone satisfaction and optimal temperature calculation
-- **Real-time Monitoring**: Live statistics and metrics for all zones
-- **Historical Data**: Track temperature and valve activity over time
+- **Native HA Integration**: Climate entities for each zone with config flow setup
+- **Event-Driven**: Automatic updates when temperature sensors change
+- **RESTful API**: Full API access for advanced automation
 
 ## Architecture
 
-The add-on consists of three main components:
+The system consists of two main components:
 
-1. **Logic Container (GoLang)**: Core algorithms, valve management, and safety checks
-2. **Frontend (TypeScript)**: Web-based user interface for configuration and monitoring
-3. **Redis**: State storage and message queuing
+1. **Home Assistant Add-on** (2 containers):
+   - **Logic Container (GoLang)**: Core algorithms, valve management, safety checks, and REST API
+   - **Redis**: State storage, configuration persistence, and job queues
 
-All components run within the add-on and communicate via Redis.
+2. **Custom Integration** (Python):
+   - Config flow with entity selectors
+   - Climate entities (one per zone)
+   - Coordinator for polling commands
+   - Event-driven temperature synchronization
+
+The add-on runs the backend logic, while the custom integration provides the user interface through native Home Assistant climate entities.
 
 ## Support
 

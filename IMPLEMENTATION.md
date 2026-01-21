@@ -1,12 +1,36 @@
 # Multizone Climate - Implementation Guide
 
-This document provides a comprehensive guide for deploying and using the Multizone Climate system.
+This document provides a comprehensive guide for deploying and using the Multizone Climate system with its 2-container add-on and native Python custom integration.
 
 ## Quick Start
 
-### Using Pre-built Multi-architecture Images
+### Using Home Assistant Add-on (Recommended)
 
-The easiest way to get started is using pre-built images from GitHub Container Registry:
+The easiest way to get started is using the Home Assistant add-on:
+
+1. **Add the repository to Home Assistant**
+   - Navigate to Supervisor → Add-on Store
+   - Click the menu (⋮) → Repositories
+   - Add: `https://github.com/Chester929/ha_multizone_climate`
+
+2. **Install the add-on**
+   - Find "Multizone Climate" in the add-on store
+   - Click Install
+
+3. **Configure and start the add-on**
+   - Set your preferred options in the Configuration tab
+   - Start the add-on
+
+4. **Install the Custom Integration**
+   - Restart Home Assistant
+   - Go to Settings → Devices & Services
+   - Click "Add Integration"
+   - Search for "Multizone Climate"
+   - Follow the configuration wizard to select entities
+
+### Using Pre-built Multi-architecture Images (Development)
+
+For development or standalone deployment:
 
 ```bash
 # Clone the repository
@@ -19,9 +43,6 @@ cp .env.example .env
 
 # Start services using pre-built images
 docker-compose -f docker-compose.ghcr.yml up -d
-
-# Or with MQTT middleware
-docker-compose -f docker-compose.ghcr.yml --profile mqtt up -d
 ```
 
 The images automatically support multiple architectures:
@@ -31,10 +52,9 @@ The images automatically support multiple architectures:
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
+- Docker and Docker Compose installed (for standalone deployment)
 - Home Assistant (for integration)
-- Redis (bundled or external)
-- MQTT Broker (optional, for MQTT integration)
+- Redis (bundled in add-on)
 
 ### Local Development (Building from Source)
 
@@ -54,54 +74,53 @@ The images automatically support multiple architectures:
    ```bash
    # Start with bundled Redis (default)
    docker-compose up -d
-   
-   # Or with MQTT middleware
-   docker-compose --profile mqtt up -d
    ```
 
-4. **Access the frontend**
-   - Open http://localhost:8099 in your browser
+4. **Access the Logic API**
    - The Logic API is available at http://localhost:8080
-
-### Home Assistant Add-on Installation
-
-1. **Add the repository to Home Assistant**
-   - Navigate to Supervisor → Add-on Store
-   - Click the menu (⋮) → Repositories
-   - Add: `https://github.com/Chester929/ha_multizone_climate`
-
-2. **Install the add-on**
-   - Find "Multizone Climate" in the add-on store
-   - Click Install
-
-3. **Configure the add-on**
-   - Set your preferred options in the Configuration tab
-   - Start the add-on
-
-4. **Access the interface**
-   - Click "Open Web UI" or use the sidebar panel
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  Docker Compose Stack                    │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   Logic      │  │  Frontend    │  │   MQTT       │ │
-│  │  (GoLang)    │  │ (TypeScript) │  │ (Optional)   │ │
-│  │              │  │              │  │              │ │
-│  │  Port: 8080  │  │  Port: 8099  │  │              │ │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘ │
-│         │                 │                  │         │
-│         └─────────────────┴──────────────────┘         │
-│                           │                            │
-│                    ┌──────▼──────┐                     │
-│                    │    Redis    │                     │
-│                    │  Port: 6379 │                     │
-│                    └─────────────┘                     │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│         Home Assistant Add-on               │
+├─────────────────────────────────────────────┤
+│                                             │
+│  ┌──────────────────┐  ┌────────────────┐  │
+│  │ Logic Container  │  │ Redis Container│  │
+│  │   (GoLang)       │  │   (Bundled)    │  │
+│  │                  │  │                │  │
+│  │ • Algorithms     │  │ • State Store  │  │
+│  │ • Job Queue      │  │ • Config Data  │  │
+│  │ • Valve Control  │  │ • Job Queues   │  │
+│  │ • Safety Checks  │  │ • Persistence  │  │
+│  │ • REST API       │  │                │  │
+│  └────────┬─────────┘  └────────────────┘  │
+│           │ :8080                           │
+└───────────┼─────────────────────────────────┘
+            │
+            │ HTTP REST API
+            ▼
+┌─────────────────────────────────────────────┐
+│      Home Assistant Custom Integration      │
+├─────────────────────────────────────────────┤
+│                                             │
+│  • Config Flow with Entity Selectors       │
+│  • Climate Entities (one per zone)         │
+│  • Coordinator (polls for commands)        │
+│  • State Sync (pushes temperature updates) │
+│                                             │
+└─────────────────────────────────────────────┘
+            │
+            │ Service Calls
+            ▼
+┌─────────────────────────────────────────────┐
+│         Home Assistant Core                 │
+│                                             │
+│  • Main Climate Entity (existing)          │
+│  • Temperature Sensors (existing)          │
+│  • Valve Switches (existing)               │
+└─────────────────────────────────────────────┘
 ```
 
 ### Components
@@ -113,34 +132,26 @@ The images automatically support multiple architectures:
   - Main target temperature calculation
   - Valve management and safety checks
   - Background job processing
-  - HTTP API for frontend
-  - Home Assistant API client
-
-#### Frontend Container (TypeScript/Node.js)
-- **Purpose**: Web UI and user interface
-- **Port**: 8099
-- **Key Features**:
-  - Zone management interface
-  - Real-time statistics dashboard
-  - Configuration management
-  - Redis data visualization
-
-#### MQTT Middleware (Node.js) - Optional
-- **Purpose**: Bridge between Redis and MQTT
-- **Key Features**:
-  - Redis to MQTT state synchronization
-  - Home Assistant auto-discovery
-  - MQTT command handling
-  - Topic management
+  - HTTP API for integration
+  - Redis state management
 
 #### Redis
 - **Purpose**: Centralized data store
-- **Port**: 6379
+- **Port**: 6379 (internal)
 - **Usage**:
   - Configuration storage
   - Zone state persistence
   - Job queue management
-  - Pub/Sub for real-time updates
+  - Command queue for integration
+
+#### Custom Integration (Python)
+- **Purpose**: Native Home Assistant integration
+- **Key Features**:
+  - Multi-step config flow with entity selectors
+  - Climate entities for each zone
+  - Coordinator for polling commands
+  - Event-driven temperature sensor sync
+  - Native HA service call integration
 
 ## Configuration
 
@@ -180,25 +191,6 @@ multizone:zone:bedroom:
 - `REDIS_PASSWORD`: Redis password (optional)
 - `LOG_LEVEL`: Logging level (debug, info, warn, error) (default: info)
 - `HTTP_PORT`: HTTP server port (default: 8080)
-
-**Frontend Container:**
-- `REDIS_HOST`: Redis server hostname
-- `REDIS_PORT`: Redis server port
-- `REDIS_PASSWORD`: Redis password (optional)
-- `WEB_PORT`: Web server port (default: 8099)
-- `LOGIC_API_URL`: Logic container API URL
-
-**MQTT Middleware:**
-- `REDIS_HOST`: Redis server hostname
-- `REDIS_PORT`: Redis server port
-- `REDIS_PASSWORD`: Redis password (optional)
-- `LOG_LEVEL`: Logging level (debug, info, warn, error)
-- `MQTT_BROKER`: MQTT broker hostname
-- `MQTT_PORT`: MQTT broker port (default: 1883)
-- `MQTT_USERNAME`: MQTT username (optional)
-- `MQTT_PASSWORD`: MQTT password (optional)
-- `MQTT_DISCOVERY_PREFIX`: HA discovery prefix (default: homeassistant)
-- `MQTT_TOPIC_PREFIX`: MQTT topic prefix (default: multizone)
 
 ## API Documentation
 
@@ -241,51 +233,59 @@ POST /api/calculate
 Response: {"status": "calculated", "message": "Temperature calculation triggered"}
 ```
 
-### Frontend API
-
-**List Zones**
+**Get Commands (for integration)**
 ```
-GET /api/zones
-```
-
-**Get Configuration**
-```
-GET /api/config
+GET /api/commands
+Response: {"commands": [{"type": "set_valve", "zone_id": "bedroom", "state": "on"}, ...]}
 ```
 
-**Update Configuration**
+**Update State (from integration)**
 ```
-PUT /api/config
-Body: {"use_average_mode": true, "min_valves_open": 2}
+POST /api/state
+Body: {"zone_id": "bedroom", "current_temperature": 21.5}
+Response: {"status": "updated"}
 ```
 
 ## Integration with Home Assistant
 
-### Option 1: MQTT Integration (Auto-Discovery)
+### Custom Integration Setup
 
-1. **Enable MQTT in configuration**
-   ```yaml
-   mqtt:
-     enabled: true
-     broker: "homeassistant.local"
-     port: 1883
-   ```
+The system uses a native Python custom integration:
 
-2. **Start with MQTT profile**
-   ```bash
-   docker-compose --profile mqtt up -d
-   ```
+1. **Install the add-on** (contains Logic + Redis containers)
 
-3. **Entities will be automatically discovered**:
-   - `climate.multizone_bedroom`
-   - `sensor.multizone_bedroom_temperature`
-   - `binary_sensor.multizone_bedroom_valve`
+2. **Install the custom integration**:
+   - Option A: Through HACS (when published)
+   - Option B: Manual installation
+     ```bash
+     # Copy custom_components/multizone_climate to your HA config directory
+     cp -r custom_components/multizone_climate /config/custom_components/
+     ```
 
-### Option 2: Home Assistant Service API
+3. **Restart Home Assistant**
 
-1. **Configure entity mappings in Redis**
-2. **Use existing Home Assistant entities**
-3. **No MQTT broker required**
+4. **Add the integration**:
+   - Go to Settings → Devices & Services
+   - Click "Add Integration"
+   - Search for "Multizone Climate"
+
+5. **Configure through the wizard**:
+   - **Step 1**: Connection settings (add-on URL, typically `http://addon_slug:8080`)
+   - **Step 2**: Main climate entity selection (searchable selector)
+   - **Step 3**: Zone configuration (for each zone):
+     - Zone name
+     - Temperature sensor (searchable selector)
+     - Valve switch (searchable selector)
+     - Target temperature
+     - Opening/closing offsets
+     - Priority
+     - Fallback valve option
+
+6. **The integration will**:
+   - Create one climate entity per zone
+   - Poll the add-on for valve commands (configurable interval)
+   - Push temperature sensor changes to the add-on
+   - Execute valve on/off commands via service calls
 
 ## Algorithms
 
@@ -312,7 +312,7 @@ The system calculates the main thermostat target based on all zone demands:
 
 ### Redis Connection Issues
 ```bash
-# Check Redis is running
+# Check Redis is running (when using docker-compose)
 docker-compose ps redis
 
 # Check Redis logs
@@ -324,8 +324,11 @@ redis-cli -h localhost -p 6379 ping
 
 ### Logic Container Issues
 ```bash
-# Check logs
+# Check logs (docker-compose)
 docker-compose logs logic
+
+# Check logs (add-on)
+# View through Supervisor → Multizone Climate → Logs
 
 # Verify health
 curl http://localhost:8080/health
@@ -334,50 +337,27 @@ curl http://localhost:8080/health
 curl http://localhost:8080/status
 ```
 
-### Frontend Issues
-```bash
-# Check logs
-docker-compose logs frontend
+### Custom Integration Issues
 
-# Verify health
-curl http://localhost:8099/health
-```
+1. **Integration not showing up**:
+   - Ensure custom_components/multizone_climate is in the correct location
+   - Restart Home Assistant
+   - Check Home Assistant logs for errors
 
-### MQTT Issues
-```bash
-# Check MQTT middleware logs
-docker-compose logs mqtt-middleware
+2. **Cannot connect to add-on**:
+   - Verify add-on is running
+   - Check add-on URL in integration configuration
+   - For add-on, URL should be `http://addon_slug:8080`
 
-# Verify MQTT broker connection
-mosquitto_sub -h homeassistant.local -t 'multizone/#' -v
-```
+3. **Entities not updating**:
+   - Check coordinator polling interval
+   - Verify add-on is accessible
+   - Check integration logs in Home Assistant
 
-### Home Assistant Integration Configuration
-
-When configuring Home Assistant integration through the frontend UI:
-
-1. **Navigate to Integrations tab** in the web UI (http://localhost:8099)
-2. **Edit integration settings** and configure:
-   - Enable Home Assistant integration
-   - Set Base URL (e.g., `http://homeassistant.local:8123`)
-   - Set Access Token (long-lived access token from HA)
-   - Configure WebSocket option (enabled by default)
-3. **Save settings** - configuration is stored in Redis
-4. **Restart logic container** for changes to take effect:
-   ```bash
-   docker-compose restart logic
-   ```
-5. **Test connection** using the "Test Connection" button in the UI
-
-**Note:** The logic container reads HA integration settings from Redis on startup. After changing HA integration settings, you must manually restart the logic container for the changes to take effect.
-
-```bash
-# Restart logic container to apply HA integration changes
-docker-compose restart logic
-
-# Verify HA integration is working
-curl http://localhost:8080/api/ha/status
-```
+4. **Temperature not syncing**:
+   - Verify temperature sensors are configured correctly
+   - Check if sensors are updating
+   - Review integration logs for state_changed events
 
 ### Logging and Debugging
 
@@ -405,9 +385,6 @@ Via docker-compose override:
 # docker-compose.override.yml
 services:
   logic:
-    environment:
-      - LOG_LEVEL=debug
-  mqtt-middleware:
     environment:
       - LOG_LEVEL=debug
 ```
@@ -482,12 +459,6 @@ cd logic
 go test ./...
 ```
 
-**TypeScript Frontend:**
-```bash
-cd frontend
-npm test
-```
-
 ### Code Structure
 
 ```
@@ -505,19 +476,13 @@ ha_multizone_climate/
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── go.sum
-├── frontend/              # TypeScript frontend
-│   ├── src/
-│   │   └── server.ts      # Express server
-│   ├── public/
-│   │   └── index.html     # Web UI
-│   ├── Dockerfile
-│   ├── package.json
-│   └── tsconfig.json
-├── mqtt-middleware/       # MQTT bridge
-│   ├── src/
-│   │   └── index.js       # Main application
-│   ├── Dockerfile
-│   └── package.json
+├── custom_components/     # Python custom integration
+│   └── multizone_climate/
+│       ├── __init__.py
+│       ├── climate.py     # Climate platform
+│       ├── config_flow.py # Configuration wizard
+│       ├── coordinator.py # Data coordinator
+│       └── manifest.json
 ├── hassio-addon/          # HA add-on config
 │   ├── config.yaml
 │   ├── run
@@ -532,9 +497,9 @@ ha_multizone_climate/
 
 1. **Redis Password**: Always set a password for Redis in production
 2. **Network Security**: Use firewalls to restrict access to container ports
-3. **MQTT Credentials**: Use strong passwords for MQTT authentication
-4. **Environment Variables**: Never commit sensitive data to version control
-5. **TLS/SSL**: Consider using TLS for Redis and MQTT connections
+3. **Environment Variables**: Never commit sensitive data to version control
+4. **TLS/SSL**: Consider using TLS for Redis connections
+5. **Integration Security**: Custom integration uses HA's built-in authentication
 
 ## Performance Tuning
 
@@ -548,10 +513,10 @@ ha_multizone_climate/
 - Monitor job queue sizes
 - Use appropriate log levels (info or warning in production)
 
-### Frontend
-- Enable HTTP caching for static assets
-- Consider using a reverse proxy (nginx)
-- Monitor WebSocket connections
+### Custom Integration
+- Adjust coordinator polling interval based on needs
+- Monitor Home Assistant performance impact
+- Use reasonable update intervals
 
 ## Contributing
 

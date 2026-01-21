@@ -20,9 +20,6 @@ cp .env.example .env
 
 # Start services using pre-built images
 docker-compose -f docker-compose.ghcr.yml up -d
-
-# Or with MQTT middleware
-docker-compose -f docker-compose.ghcr.yml --profile mqtt up -d
 ```
 
 ### zones-config.yaml
@@ -30,8 +27,7 @@ docker-compose -f docker-compose.ghcr.yml --profile mqtt up -d
 Example zone configuration in YAML format. This demonstrates:
 - Global system configuration
 - Multiple zone configurations (bedroom, living room, kitchen, bathroom)
-- MQTT settings
-- Entity mappings
+- Entity mappings for temperature sensors and valve switches
 
 ### init-redis.sh
 
@@ -81,12 +77,20 @@ redis-cli HGETALL multizone:zone:bedroom
 redis-cli KEYS "multizone:zone:*"
 ```
 
-### Access the Frontend
+### Access the Add-on API
 
-After initialization, access the frontend at:
-- http://localhost:8099
+After initialization, the add-on API is available at:
+- http://localhost:8080 (when using docker-compose)
+- Or via Home Assistant: `http://addon_slug:8080` (when using the add-on)
 
-You should see the example zones displayed with their current states.
+You can query the API to see the example zones and their states.
+
+### Access via Custom Integration
+
+When using the Home Assistant add-on:
+1. Install the custom integration
+2. Configure zones through the integration wizard
+3. The integration will create climate entities for each zone
 
 ## Customizing the Configuration
 

@@ -1,23 +1,23 @@
 # Multi-architecture Docker Builds
 
-This repository uses GitHub Actions to automatically build and push multi-architecture Docker images to GitHub Container Registry (GHCR).
+This repository uses GitHub Actions to automatically build and push multi-architecture Docker images to GitHub Container Registry (GHCR) for the Logic container.
 
 ## Supported Architectures
 
-All container images support the following architectures:
+The Logic container image supports the following architectures:
 - **linux/amd64** (x86_64) - Standard desktop/server systems
 - **linux/arm/v7** (armv7) - 32-bit ARM devices (e.g., Raspberry Pi 2/3)
 - **linux/arm64** (aarch64) - 64-bit ARM devices (e.g., Raspberry Pi 4, Apple Silicon)
 
-## Container Images
+## Container Image
 
-The following images are built and published:
+The following image is built and published:
 
 | Component | Image Name | Description |
 |-----------|------------|-------------|
 | Logic Container | `ghcr.io/chester929/multizone-logic` | Core business logic (GoLang) |
-| Frontend | `ghcr.io/chester929/multizone-frontend` | Web UI (TypeScript) |
-| MQTT Middleware | `ghcr.io/chester929/multizone-mqtt` | MQTT integration (Node.js) |
+
+**Note:** Redis uses the official Redis image from Docker Hub, which already provides multi-architecture support.
 
 ## Image Tags
 
@@ -45,16 +45,14 @@ All builds include a tag with the commit SHA:
 
 ```bash
 docker pull ghcr.io/chester929/multizone-logic:latest
-docker pull ghcr.io/chester929/multizone-frontend:latest
-docker pull ghcr.io/chester929/multizone-mqtt:latest
 ```
 
 ### Pull Specific Version
 
 ```bash
 docker pull ghcr.io/chester929/multizone-logic:1.2.3
-docker pull ghcr.io/chester929/multizone-frontend:1.2
-docker pull ghcr.io/chester929/multizone-mqtt:1
+docker pull ghcr.io/chester929/multizone-logic:1.2
+docker pull ghcr.io/chester929/multizone-logic:1
 ```
 
 ### Use in Docker Compose
@@ -81,7 +79,6 @@ The workflow (`.github/workflows/docker-multiarch.yml`) is triggered by:
 
 ### Build Features
 
-- **Parallel builds**: All three components build simultaneously via matrix strategy
 - **Build caching**: GitHub Actions cache speeds up subsequent builds
 - **Multi-platform**: Single command builds all architectures
 - **Automatic tagging**: Smart tag generation based on Git context

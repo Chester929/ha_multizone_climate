@@ -1,8 +1,10 @@
 # Migration to Addon-Only Architecture
 
+> **Note**: This document describes a historical migration from MQTT/WebSocket API to an add-on-only architecture with a frontend. The project has since evolved further to use a 2-container add-on (Logic + Redis) with a native Python custom integration. See README.md for the current architecture.
+
 ## Summary
 
-This repository has been successfully migrated from a multi-integration system (MQTT, HA WebSocket API, Custom Integration) to a pure Home Assistant addon architecture.
+This repository was migrated from a multi-integration system (MQTT, HA WebSocket API, Custom Integration) to a Home Assistant addon architecture.
 
 ## Changes Made
 
