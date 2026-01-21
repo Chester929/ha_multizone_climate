@@ -629,9 +629,9 @@ graph TB
     subgraph "Logic Container (GoLang)"
         subgraph "HTTP API Layer"
             HTTPServer[HTTP Server :8080]
-            HealthEndpoint[/health]
-            MetricsEndpoint[/metrics]
-            StatusEndpoint[/status]
+            HealthEndpoint["/health endpoint"]
+            MetricsEndpoint["/metrics endpoint"]
+            StatusEndpoint["/status endpoint"]
         end
         
         subgraph "Core Logic Engine"
@@ -660,6 +660,9 @@ graph TB
         end
     end
     
+    HTTPServer --> HealthEndpoint
+    HTTPServer --> MetricsEndpoint
+    HTTPServer --> StatusEndpoint
     HTTPServer --> TempCalculator
     HTTPServer --> ValveManager
     HTTPServer --> SafetyChecker
