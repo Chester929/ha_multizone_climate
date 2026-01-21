@@ -75,7 +75,10 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required("zone_name", default="Zone 1"): cv.string,
                 vol.Required("temperature_sensor"): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=SENSOR_DOMAIN),
+                    selector.EntitySelectorConfig(
+                        domain=SENSOR_DOMAIN,
+                        device_class="temperature",
+                    ),
                 ),
                 vol.Required("valve_switch"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
@@ -151,7 +154,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     "temperature_sensor",
                     default=self.config_entry.data.get("temperature_sensor"),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=SENSOR_DOMAIN),
+                    selector.EntitySelectorConfig(
+                        domain=SENSOR_DOMAIN,
+                        device_class="temperature",
+                    ),
                 ),
                 vol.Optional(
                     "valve_switch",
