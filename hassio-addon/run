@@ -7,21 +7,15 @@ REDIS_MODE=$(bashio::config 'redis.mode')
 REDIS_PASSWORD=$(bashio::config 'redis.password')
 LOG_LEVEL=$(bashio::config 'logic.log_level')
 FRONTEND_PORT=$(bashio::config 'frontend.port')
-COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
-BACKEND_PORT=$(bashio::config 'integration.backend_port')
 
 bashio::log.info "Redis mode: ${REDIS_MODE}"
 bashio::log.info "Log level: ${LOG_LEVEL}"
 bashio::log.info "Frontend port: ${FRONTEND_PORT}"
-bashio::log.info "Backend port: ${BACKEND_PORT}"
-bashio::log.info "Coordinator interval: ${COORDINATOR_INTERVAL}s"
 
 # Export environment variables
 export REDIS_PASSWORD="${REDIS_PASSWORD}"
 export LOG_LEVEL="${LOG_LEVEL}"
 export WEB_PORT="${FRONTEND_PORT}"
-export COORDINATOR_INTERVAL="${COORDINATOR_INTERVAL}"
-export BACKEND_PORT="${BACKEND_PORT}"
 
 # Start services using docker-compose
 bashio::log.info "Starting containers..."
