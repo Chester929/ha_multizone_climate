@@ -107,3 +107,8 @@ func (c *Client) GetString(ctx context.Context, key string) (string, error) {
 func (c *Client) HDel(ctx context.Context, key string, fields ...string) error {
 	return c.rdb.HDel(ctx, key, fields...).Err()
 }
+
+// NewTestClient creates a redis Client from a raw go-redis client for testing
+func NewTestClient(rdb *redis.Client) *Client {
+	return &Client{rdb: rdb}
+}
