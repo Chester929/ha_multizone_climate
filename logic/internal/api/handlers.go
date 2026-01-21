@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
+	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
@@ -927,5 +929,64 @@ func GetDefaultsHandler() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(defaults)
+	}
+}
+
+// GetEntitiesHandler returns Home Assistant entities filtered by domain
+func GetEntitiesHandler(haClient *homeassistant.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Parse domains from query parameter (comma-separated)
+		domainsParam := r.URL.Query().Get("domains")
+		var domains []string
+		if domainsParam != "" {
+			// Split by comma and trim spaces
+			for _, d := range strings.Split(domainsParam, ",") {
+				domain := strings.TrimSpace(d)
+				if domain != "" {
+					domains = append(domains, domain)
+				}
+			}
+		}
+
+		// If HA client is not configured, return empty list
+		if haClient == nil {
+			logger.Debug("Home Assistant client not configured, returning empty entity list")
+			json.NewEncoder(w).Encode([]map[string]string{})
+			return
+		}
+
+		// Fetch entities from Home Assistant
+		entities, err := haClient.GetEntitiesByDomains(domains)
+		if err != nil {
+			logger.Error("Failed to fetch entities from Home Assistant: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to fetch entities: %v", err),
+			})
+			return
+		}
+
+		// Convert to simpler format for frontend
+		type EntityResponse struct {
+			EntityID     string `json:"entity_id"`
+			FriendlyName string `json:"friendly_name"`
+		}
+
+		response := make([]EntityResponse, 0, len(entities))
+		for _, entity := range entities {
+			resp := EntityResponse{
+				EntityID:     entity.EntityID,
+				FriendlyName: entity.FriendlyName,
+			}
+			// If no friendly name, use entity_id
+			if resp.FriendlyName == "" {
+				resp.FriendlyName = entity.EntityID
+			}
+			response = append(response, resp)
+		}
+
+		json.NewEncoder(w).Encode(response)
 	}
 }

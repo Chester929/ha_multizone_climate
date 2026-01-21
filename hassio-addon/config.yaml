@@ -13,6 +13,8 @@ init: false
 host_network: true
 
 options:
+  main_climate_entity: ""
+  ha_token: ""
   redis:
     mode: bundled
     password: ""
@@ -22,6 +24,8 @@ options:
     port: 8099
 
 schema:
+  main_climate_entity: str?
+  ha_token: password?
   redis:
     mode: list(bundled|external)
     host: str?

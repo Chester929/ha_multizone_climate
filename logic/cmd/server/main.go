@@ -12,6 +12,7 @@ import (
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/api"
 	"github.com/chester929/ha_multizone_climate/logic/internal/config"
+	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/chester929/ha_multizone_climate/logic/internal/statistics"
@@ -38,6 +39,14 @@ func main() {
 	}
 	defer redisClient.Close()
 	logger.Info("Connected to Redis successfully")
+
+	// Initialize Home Assistant client (optional)
+	haClient := homeassistant.NewClient(cfg)
+	if haClient != nil {
+		logger.Info("Home Assistant client initialized")
+	} else {
+		logger.Info("Home Assistant client not configured (entity selector will use manual entry)")
+	}
 
 	// Initialize worker pool with processor
 	processor := worker.NewProcessor(redisClient)
@@ -70,6 +79,9 @@ func main() {
 
 	// Configuration defaults endpoint
 	router.HandleFunc("/api/defaults", api.GetDefaultsHandler()).Methods("GET")
+
+	// Home Assistant entities endpoint
+	router.HandleFunc("/api/entities", api.GetEntitiesHandler(haClient)).Methods("GET")
 
 	// Integration settings endpoints (for future use if needed)
 	router.HandleFunc("/api/integrations", api.GetIntegrationSettingsHandler(redisClient)).Methods("GET")

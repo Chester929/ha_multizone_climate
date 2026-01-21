@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Config } from '../types';
 import { useDefaults } from '../hooks/useDefaults';
+import { EntitySelector } from './EntitySelector';
 
 // Whitelist of allowed configuration keys
 const ALLOWED_CONFIG_KEYS = [
@@ -204,15 +205,13 @@ export function ConfigManager() {
           <label>Main Climate Entity ID</label>
           {editing ? (
             <>
-              <input
-                type="text"
-                placeholder="climate.main_thermostat"
-                pattern="^[a-z_]+\.[a-z0-9_]+$"
-                title="Format: domain.entity_name (e.g., climate.thermostat)"
+              <EntitySelector
                 value={editedConfig.main_climate_entity_id || ''}
-                onChange={(e) =>
-                  setEditedConfig({ ...editedConfig, main_climate_entity_id: e.target.value })
+                onChange={(entityId) =>
+                  setEditedConfig({ ...editedConfig, main_climate_entity_id: entityId })
                 }
+                domains="climate"
+                placeholder="climate.main_thermostat"
               />
               <small>Home Assistant entity ID for the main HVAC climate control</small>
             </>
