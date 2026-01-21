@@ -25,10 +25,10 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
-	
+
 	// Initialize logger with configured log level
 	logger.Init(cfg.LogLevel)
-	
+
 	logger.Info("Loaded configuration: Redis=%s:%s, LogLevel=%s", cfg.RedisHost, cfg.RedisPort, cfg.LogLevel)
 
 	// Initialize Redis client
@@ -46,24 +46,24 @@ func main() {
 		logger.Warn("Failed to load integration settings from Redis: %v", err)
 	} else if len(integrationSettings) > 0 {
 		logger.Info("Loading Home Assistant integration settings from Redis...")
-		
+
 		// Override HA settings from Redis if available
 		if haEnabled, ok := integrationSettings["ha_enabled"]; ok && haEnabled == "true" {
 			cfg.HAEnabled = true
-			
+
 			if haBaseURL, ok := integrationSettings["ha_base_url"]; ok && haBaseURL != "" {
 				cfg.HABaseURL = haBaseURL
 			}
-			
+
 			if haToken, ok := integrationSettings["ha_token"]; ok && haToken != "" {
 				cfg.HAToken = haToken
 			}
-			
+
 			if haWebsocket, ok := integrationSettings["ha_websocket"]; ok {
 				cfg.HAWebsocket = haWebsocket == "true"
 			}
-			
-			logger.Info("Loaded HA settings from Redis: Enabled=%v, BaseURL=%s, Websocket=%v", 
+
+			logger.Info("Loaded HA settings from Redis: Enabled=%v, BaseURL=%s, Websocket=%v",
 				cfg.HAEnabled, cfg.HABaseURL, cfg.HAWebsocket)
 		} else {
 			cfg.HAEnabled = false
@@ -144,6 +144,7 @@ func main() {
 		router.HandleFunc("/api/ha/status", api.HAStatusHandler(haIntegration)).Methods("GET")
 		router.HandleFunc("/api/ha/test", api.HATestConnectionHandler(haIntegration)).Methods("GET")
 		router.HandleFunc("/api/ha/sync", api.HASyncStatesHandler(haIntegration)).Methods("POST")
+		router.HandleFunc("/api/ha/entities", api.HAGetEntitiesHandler(haIntegration)).Methods("GET")
 		router.HandleFunc("/api/ha/valve", api.HASetValveHandler(haIntegration)).Methods("POST")
 		router.HandleFunc("/api/ha/temperature", api.HASetMainTempHandler(haIntegration)).Methods("POST")
 		logger.Info("Home Assistant API endpoints registered")

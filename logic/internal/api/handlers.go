@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
@@ -766,6 +767,91 @@ func HASetMainTempHandler(integration *homeassistant.Integration) http.HandlerFu
 			"status":      "success",
 			"entity_id":   req.EntityID,
 			"temperature": req.Temperature,
+		})
+	}
+}
+
+// HAGetEntitiesHandler retrieves entities from Home Assistant
+func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Check for nil integration
+		if integration == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Home Assistant integration is not configured",
+			})
+			return
+		}
+
+		if !integration.IsEnabled() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Home Assistant integration is not enabled",
+			})
+			return
+		}
+
+		ctx := r.Context()
+
+		// Get optional domain filter from query params
+		domain := r.URL.Query().Get("domain")
+
+		// Fetch all entity states from Home Assistant
+		client := integration.GetClient()
+		states, err := client.GetStates(ctx)
+
+		if err != nil {
+			logger.Error("Failed to fetch entities from HA: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to fetch entities: %v", err),
+			})
+			return
+		}
+
+		// Filter and format entities
+		entities := make([]map[string]interface{}, 0)
+		for _, state := range states {
+			// Apply domain filter if specified
+			if domain != "" {
+				// Extract domain from entity_id (format: domain.entity_name)
+				parts := strings.SplitN(state.EntityID, ".", 2)
+				if len(parts) < 2 || parts[0] != domain {
+					continue
+				}
+			}
+
+			// Build entity response
+			entity := map[string]interface{}{
+				"entity_id": state.EntityID,
+				"state":     state.State,
+			}
+
+			// Add friendly name if available
+			if friendlyName, ok := state.Attributes["friendly_name"].(string); ok {
+				entity["friendly_name"] = friendlyName
+			}
+
+			// For climate entities, include additional attributes
+			if strings.HasPrefix(state.EntityID, "climate.") {
+				if currentTemp, ok := state.Attributes["current_temperature"]; ok {
+					entity["current_temperature"] = currentTemp
+				}
+				if targetTemp, ok := state.Attributes["temperature"]; ok {
+					entity["temperature"] = targetTemp
+				}
+			}
+
+			entities = append(entities, entity)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"entities": entities,
+			"count":    len(entities),
 		})
 	}
 }

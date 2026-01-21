@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Zone } from '../types';
 import { TemperatureChart } from './TemperatureChart';
 import { useDefaults } from '../hooks/useDefaults';
+import { EntitySelector, Entity } from './EntitySelector';
 
 interface ZoneCardProps {
   zone: Zone;
@@ -69,6 +70,28 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
     
     onUpdate(editedZone);
     setIsEditing(false);
+  };
+
+  const handleClimateEntityChange = (entityId: string, entity?: Entity) => {
+    const newZone = { ...editedZone, climate_entity_id: entityId };
+    
+    if (entity) {
+      // Auto-load target temperature from climate entity if not already set
+      if (entity.temperature !== undefined && !editedZone.target_temperature) {
+        newZone.target_temperature = entity.temperature.toString();
+        setSliderValue(entity.temperature.toString());
+      }
+    }
+    
+    setEditedZone(newZone);
+  };
+
+  const handleTempSensorChange = (entityId: string) => {
+    setEditedZone({ ...editedZone, temperature_sensor_entity_id: entityId });
+  };
+
+  const handleValveSwitchChange = (entityId: string) => {
+    setEditedZone({ ...editedZone, valve_switch_entity_id: entityId });
   };
 
   const handleCancel = () => {
@@ -187,43 +210,40 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
         {isEditing && (
           <>
             <div className="zone-detail zone-detail-full">
-              <div className="detail-label">Temperature Sensor Entity ID</div>
-              <input
-                type="text"
-                placeholder="sensor.bedroom_temperature"
-                pattern="^[a-z_]+\.[a-z0-9_]+$"
-                title="Format: domain.entity_name (e.g., sensor.bedroom_temperature)"
-                value={editedZone.temperature_sensor_entity_id || ''}
-                onChange={(e) => setEditedZone({ ...editedZone, temperature_sensor_entity_id: e.target.value })}
-                className="detail-input"
-              />
-            </div>
-            <div className="zone-detail zone-detail-full">
-              <div className="detail-label">Valve Switch Entity ID</div>
-              <input
-                type="text"
-                placeholder="switch.bedroom_valve"
-                pattern="^[a-z_]+\.[a-z0-9_]+$"
-                title="Format: domain.entity_name (e.g., switch.bedroom_valve)"
-                value={editedZone.valve_switch_entity_id || ''}
-                onChange={(e) => setEditedZone({ ...editedZone, valve_switch_entity_id: e.target.value })}
-                className="detail-input"
-              />
-            </div>
-            <div className="zone-detail zone-detail-full">
-              <div className="detail-label">Climate Entity ID (Optional)</div>
-              <input
-                type="text"
-                placeholder="climate.bedroom_thermostat"
-                pattern="^[a-z_]+\.[a-z0-9_]+$"
-                title="Format: domain.entity_name (e.g., climate.bedroom_thermostat)"
+              <div className="detail-label">Climate Entity (Optional)</div>
+              <EntitySelector
                 value={editedZone.climate_entity_id || ''}
-                onChange={(e) => setEditedZone({ ...editedZone, climate_entity_id: e.target.value })}
-                className="detail-input"
+                onChange={handleClimateEntityChange}
+                domain="climate"
+                placeholder="climate.bedroom_thermostat"
               />
-              <small style={{ fontSize: '0.85em', color: '#666', marginTop: '0.25rem' }}>
+              <small style={{ fontSize: '0.85em', color: '#666', marginTop: '0.25rem', display: 'block' }}>
                 Link to existing HA climate entity for synchronized control
               </small>
+            </div>
+            <div className="zone-detail zone-detail-full">
+              <div className="detail-label">Temperature Sensor Entity</div>
+              <EntitySelector
+                value={editedZone.temperature_sensor_entity_id || ''}
+                onChange={handleTempSensorChange}
+                domain="sensor"
+                placeholder="sensor.bedroom_temperature"
+              />
+              {entityIdErrors.temperature_sensor && (
+                <span className="error-message">{entityIdErrors.temperature_sensor}</span>
+              )}
+            </div>
+            <div className="zone-detail zone-detail-full">
+              <div className="detail-label">Valve Switch Entity</div>
+              <EntitySelector
+                value={editedZone.valve_switch_entity_id || ''}
+                onChange={handleValveSwitchChange}
+                domain="switch"
+                placeholder="switch.bedroom_valve"
+              />
+              {entityIdErrors.valve_switch && (
+                <span className="error-message">{entityIdErrors.valve_switch}</span>
+              )}
             </div>
             <div className="zone-detail">
               <div className="detail-label">Priority</div>
