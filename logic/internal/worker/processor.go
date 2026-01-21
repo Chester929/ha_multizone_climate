@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
-	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
@@ -16,17 +15,15 @@ import (
 
 // Processor implements the JobProcessor interface
 type Processor struct {
-	redisClient   *redis.Client
-	haIntegration *homeassistant.Integration
-	statsTracker  *statistics.Tracker
+	redisClient  *redis.Client
+	statsTracker *statistics.Tracker
 }
 
 // NewProcessor creates a new job processor
-func NewProcessor(redisClient *redis.Client, haIntegration *homeassistant.Integration) *Processor {
+func NewProcessor(redisClient *redis.Client) *Processor {
 	return &Processor{
-		redisClient:   redisClient,
-		haIntegration: haIntegration,
-		statsTracker:  statistics.NewTracker(redisClient),
+		redisClient:  redisClient,
+		statsTracker: statistics.NewTracker(redisClient),
 	}
 }
 
@@ -77,15 +74,9 @@ func (p *Processor) ProcessCalculateTemp(ctx context.Context, params map[string]
 	if shouldUpdate {
 		result["new_target"] = newTarget
 		logger.Info("Calculated new target temperature: %.1f°C (was %.1f°C)", newTarget, mainClimate.TargetTemperature)
-
-		// Update via Home Assistant if integration is available
-		if p.haIntegration != nil && p.haIntegration.IsEnabled() && config.MainClimateEntityID != "" {
-			if err := p.haIntegration.SetMainTemperature(ctx, config.MainClimateEntityID, newTarget); err != nil {
-				logger.Warn("Failed to update main temperature via HA: %v", err)
-			} else {
-				logger.Debug("Updated main temperature via Home Assistant: %.1f°C", newTarget)
-			}
-		}
+		
+		// Note: In addon-only mode, the addon doesn't directly control HA entities
+		// The calculated temperature is stored and can be used by automation or manual adjustment
 	} else {
 		logger.Debug("No temperature update needed (current: %.1f°C)", mainClimate.TargetTemperature)
 	}
@@ -131,36 +122,30 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 		zoneByID[zones[i].ID] = &zones[i]
 	}
 
-	// Apply operations to Home Assistant if integration is available
+	// Note: In addon-only mode, valve operations are calculated but not directly executed
+	// The addon stores the intended state which can be used by HA automations
 	appliedCount := 0
-	if p.haIntegration != nil && p.haIntegration.IsEnabled() {
-		for _, op := range executedOps {
-			zone, ok := zoneByID[op.ZoneID]
-			if !ok || zone == nil || zone.ValveSwitchEntity == "" {
-				logger.Warn("Cannot execute operation for zone %s: zone or valve entity not found", op.ZoneID)
-				continue
-			}
-
-			// Apply the operation
-			shouldOpen := op.Operation == "open"
-			if err := p.haIntegration.SetValveState(ctx, zone.ValveSwitchEntity, shouldOpen); err != nil {
-				logger.Warn("Failed to set valve state for zone %s: %v", zone.ID, err)
-			} else {
-				appliedCount++
-				logger.Debug("Set valve %s to %s for zone %s (priority: %d)",
-					zone.ValveSwitchEntity, op.Operation, zone.ID, zone.Priority)
-
-				// Record valve activity in statistics, using the canonical zone valve state
-				if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, zone.ValveState, time.Now()); err != nil {
-					logger.Warn("Failed to record valve activity: %v", err)
-				}
-
-				// Save updated zone state to Redis
-				if err := p.saveZone(ctx, zone); err != nil {
-					logger.Warn("Failed to save zone state: %v", err)
-				}
-			}
+	for _, op := range executedOps {
+		zone, ok := zoneByID[op.ZoneID]
+		if !ok || zone == nil || zone.ValveSwitchEntity == "" {
+			logger.Warn("Cannot execute operation for zone %s: zone or valve entity not found", op.ZoneID)
+			continue
 		}
+
+		// Log the intended operation
+		logger.Debug("Intended valve operation: %s to %s for zone %s (priority: %d)",
+			zone.ValveSwitchEntity, op.Operation, zone.ID, zone.Priority)
+		
+		// Record valve activity in statistics
+		if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, zone.ValveState, time.Now()); err != nil {
+			logger.Warn("Failed to record valve activity: %v", err)
+		}
+
+		// Save updated zone state to Redis
+		if err := p.saveZone(ctx, zone); err != nil {
+			logger.Warn("Failed to save zone state: %v", err)
+		}
+		appliedCount++
 	}
 
 	// Track zone statistics for zones that had valve state changes
@@ -175,35 +160,29 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 	// Check and enforce minimum valves using priority-based selection
 	minValvesToOpen := algorithm.CheckMinimumValvesByPriority(zones, config.MinValvesOpen)
 	if len(minValvesToOpen) > 0 {
-		logger.Info("Opening %d fallback valves to meet minimum requirement", len(minValvesToOpen))
+		logger.Info("Identified %d fallback valves to meet minimum requirement", len(minValvesToOpen))
 
-		if p.haIntegration != nil && p.haIntegration.IsEnabled() {
-			for _, zoneID := range minValvesToOpen {
-				zone, ok := zoneByID[zoneID]
-				if !ok || zone == nil || zone.ValveSwitchEntity == "" {
-					continue
-				}
-
-				if err := p.haIntegration.SetValveState(ctx, zone.ValveSwitchEntity, true); err != nil {
-					logger.Warn("Failed to open fallback valve for zone %s: %v", zone.ID, err)
-				} else {
-					appliedCount++
-					logger.Debug("Opened fallback valve for zone %s (priority: %d)", zone.ID, zone.Priority)
-
-					// Update zone state and set LastActuated timestamp
-					zone.ValveState = "open"
-					setLastActuated(zone)
-					
-					// Record valve activity
-					if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
-						logger.Warn("Failed to record valve activity: %v", err)
-					}
-					
-					if err := p.saveZone(ctx, zone); err != nil {
-						logger.Warn("Failed to save zone state: %v", err)
-					}
-				}
+		for _, zoneID := range minValvesToOpen {
+			zone, ok := zoneByID[zoneID]
+			if !ok || zone == nil || zone.ValveSwitchEntity == "" {
+				continue
 			}
+
+			logger.Debug("Intended fallback valve open for zone %s (priority: %d)", zone.ID, zone.Priority)
+
+			// Update zone state and set LastActuated timestamp
+			zone.ValveState = "open"
+			setLastActuated(zone)
+			
+			// Record valve activity
+			if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
+				logger.Warn("Failed to record valve activity: %v", err)
+			}
+			
+			if err := p.saveZone(ctx, zone); err != nil {
+				logger.Warn("Failed to save zone state: %v", err)
+			}
+			appliedCount++
 		}
 	}
 
@@ -266,7 +245,7 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 
 		// Attempt to open fallback valves
 		minValvesToOpen := algorithm.CheckMinimumValvesByPriority(zones, config.MinValvesOpen)
-		if len(minValvesToOpen) > 0 && p.haIntegration != nil && p.haIntegration.IsEnabled() {
+		if len(minValvesToOpen) > 0 {
 			logger.Info("Attempting to open %d fallback valves", len(minValvesToOpen))
 			openedCount := 0
 
@@ -282,21 +261,18 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 					continue
 				}
 
-				if err := p.haIntegration.SetValveState(ctx, zone.ValveSwitchEntity, true); err != nil {
-					logger.Error("Failed to open safety fallback valve for zone %s: %v", zone.ID, err)
-				} else {
-					openedCount++
-					zone.ValveState = "open"
-					setLastActuated(zone)
-					
-					// Record valve activity
-					if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
-						logger.Warn("Failed to record valve activity: %v", err)
-					}
-					
-					if err := p.saveZone(ctx, zone); err != nil {
-						logger.Error("Failed to persist safety fallback valve state for zone %s: %v", zone.ID, err)
-					}
+				logger.Debug("Intended safety fallback valve open for zone %s", zone.ID)
+				openedCount++
+				zone.ValveState = "open"
+				setLastActuated(zone)
+				
+				// Record valve activity
+				if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
+					logger.Warn("Failed to record valve activity: %v", err)
+				}
+				
+				if err := p.saveZone(ctx, zone); err != nil {
+					logger.Error("Failed to persist safety fallback valve state for zone %s: %v", zone.ID, err)
 				}
 			}
 

@@ -7,8 +7,21 @@ This document provides a comprehensive overview of all tests in the ha_multizone
 The project has three layers of testing:
 
 1. **Unit Tests** - Test individual components in isolation
-2. **Integration Tests** - Test component interactions and system integration
+2. **Integration Tests** - Test component interactions and system integration (addon services)
 3. **End-to-End Tests** - Test the complete system with all services running
+
+## Addon-Only Architecture
+
+This project is a **Home Assistant Addon** with a containerized architecture. It does NOT:
+- Make direct API calls to Home Assistant
+- Use MQTT for communication
+- Auto-discover or auto-create entities
+
+Instead, the addon:
+- Stores entity IDs that users manually configure
+- Calculates intended states (valve open/close, temperature targets)
+- Can be used by HA automations to actually control entities
+- Provides a UI through HA Ingress for configuration and monitoring
 
 ## Unit Tests
 
@@ -41,30 +54,9 @@ The project has three layers of testing:
 - ✅ Disabled zones are excluded
 - ✅ Valve safety logic works correctly
 
-### HomeAssistant Integration Tests (`logic/internal/homeassistant/integration_test.go`)
-
-#### 8 test suites covering HA <-> Addon integration
-- **Integration Creation**: Valid/invalid configurations
-- **Main Temperature Control**: 0.5°C precision enforcement
-- **Valve State Control**: Open/close operations
-- **Temperature Sensor Reading**: Get current temperature
-- **Zone Temperature Control**: 0.1°C precision enforcement
-- **Zone Enable/Disable**: Turn zones on/off
-- **HVAC Action Reporting**: 
-  - Valve closed → "idle" state
-  - Valve open → "heating" or "cooling" state
-
-**Key Requirements Verified:**
-- ✅ Addon provides climate entity per zone
-- ✅ Zone target temp can be changed by 0.1°C
-- ✅ Main climate can be changed by 0.5°C
-- ✅ Zone can be turned on/off
-- ✅ Current temp read from sensor
-- ✅ HVAC state is "idle" when valve closed
-
 ### Worker/Processor Tests (`logic/internal/worker/processor_test.go`)
 
-#### 6 test suites covering workflow integration
+#### Test suites covering addon workflow
 - **Processor Creation**: With various dependency configurations
 - **LastActuated Timestamp**: Proper time tracking
 - **Temperature Precision in Workflow**:
@@ -73,18 +65,18 @@ The project has three layers of testing:
 - **Zone State Management**:
   - Enable/disable functionality
   - Valve state transitions (open/closed)
-  - HVAC action based on valve state
+  - Zone state stored in addon (not directly controlled)
 - **Main Climate Control**:
   - Read current temperature
   - Set target temperature
   - Verify 0.5°C precision
-  - Main climate drives zones coordination
+  - Entity ID storage in addon
 
 **Key Requirements Verified:**
 - ✅ Full workflow respects temperature precision
-- ✅ Main climate already exists in HA (read current, write target)
-- ✅ Zones are controlled individually
-- ✅ Valve state determines HVAC action
+- ✅ Main climate entity ID stored (addon doesn't control it directly)
+- ✅ Zones valve states tracked (addon calculates intended states)
+- ✅ Addon stores configuration but doesn't make HA API calls
 
 ### Other Unit Tests
 
@@ -95,7 +87,7 @@ The project has three layers of testing:
 
 ### Bash Integration Tests (run-tests.sh)
 
-**Purpose**: Test service orchestration and API integration
+**Purpose**: Test addon service orchestration and API integration
 
 #### Service Health Checks
 1. Logic service health endpoint
@@ -114,21 +106,17 @@ The project has three layers of testing:
 10. Data persistence (SET/GET)
 11. Hash operations (HSET/HGET)
 
-#### MQTT Integration Tests
-12. MQTT broker connectivity (via mqtt-tests.js)
-13. Topic subscription
-14. Message publishing
-15. HA discovery messages
-
 #### End-to-End Tests
-16. Full zone lifecycle (create, read, update, delete)
-17. Cross-service data flow
+12. Full zone lifecycle (create, read, update, delete)
+13. Cross-service data flow
 
-**Note**: These tests are **useful** and should be kept. They verify that:
-- All services start correctly
+**Note**: These tests verify that:
+- All addon services start correctly
 - Services can communicate with each other
 - Data persists across service boundaries
-- The system works as an integrated whole
+- The addon works as an integrated whole
+- NO MQTT tests (MQTT was removed in addon-only architecture)
+- NO direct HA API tests (addon uses manual entity ID configuration)
 
 ## Test Coverage Summary
 
@@ -139,26 +127,19 @@ The project has three layers of testing:
 - Edge cases and boundary conditions tested
 - Precision requirements verified (0.1°C and 0.5°C)
 
-### HA Integration
-- **8 test suites** covering all HA interactions
-- Climate entity management
-- Sensor reading
-- Valve control
-- HVAC state reporting
-- Temperature precision verified
-
-### Workflow Integration
-- **6 test suites** covering processor logic
+### Addon Workflow
+- **Test suites** covering processor logic
 - Full workflow tested
 - State management verified
 - Precision requirements validated
+- Addon-only architecture verified (no direct HA API calls)
 
-### System Integration
-- **17 integration tests** covering service orchestration
+### Addon Service Integration
+- **13 integration tests** covering service orchestration
 - Health checks
 - API functionality
 - Data persistence
-- MQTT communication
+- **NO MQTT tests** (MQTT removed in addon-only architecture)
 
 ## Running Tests
 
@@ -172,7 +153,6 @@ go test ./...
 ```bash
 cd logic
 go test ./internal/algorithm -v
-go test ./internal/homeassistant -v
 go test ./internal/worker -v
 ```
 
@@ -196,12 +176,10 @@ go test ./... -cover
 |------------|----------|---------------|
 | Zone temp precision 0.1°C | ✅ | algorithm/temperature_extended_test.go, worker/processor_test.go |
 | Main climate precision 0.5°C | ✅ | algorithm/temperature_extended_test.go, worker/processor_test.go |
-| Main climate drives zones | ✅ | worker/processor_test.go |
-| Zone enable/disable | ✅ | homeassistant/integration_test.go, worker/processor_test.go |
-| Valve closed = idle HVAC | ✅ | homeassistant/integration_test.go, worker/processor_test.go |
-| Valve open = heating/cooling | ✅ | homeassistant/integration_test.go |
-| Read temp from sensor | ✅ | homeassistant/integration_test.go |
-| Climate entity per zone | ✅ | homeassistant/integration_test.go |
+| Addon stores entity IDs | ✅ | worker/processor_test.go |
+| Addon calculates intended states | ✅ | worker/processor_test.go |
+| No direct HA API calls | ✅ | worker/processor.go (all HA integration removed) |
+| Manual entity configuration | ✅ | Addon-only architecture |
 | Main logic scenarios | ✅ | algorithm/*_test.go (50+ test cases) |
 
 ## Adding New Tests

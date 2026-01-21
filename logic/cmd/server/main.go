@@ -40,7 +40,7 @@ func main() {
 	logger.Info("Connected to Redis successfully")
 
 	// Initialize worker pool with processor
-	processor := worker.NewProcessor(redisClient, nil)
+	processor := worker.NewProcessor(redisClient)
 	workerPool := worker.NewPool(redisClient, 5, processor)
 	workerPool.Start(ctx)
 	logger.Info("Worker pool started")

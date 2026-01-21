@@ -218,12 +218,6 @@ try {
 - View service logs: `docker-compose -f docker-compose.test.yml logs`
 - Increase health check timeouts in `docker-compose.test.yml`
 
-### MQTT Tests Fail
-
-- Verify MQTT broker is running: `docker-compose -f docker-compose.test.yml logs mqtt-broker-test`
-- Check MQTT middleware logs: `docker-compose -f docker-compose.test.yml logs mqtt-middleware-test`
-- Ensure port 11883 is not in use
-
 ### Redis Connection Issues
 
 - Check Redis is healthy: `docker-compose -f docker-compose.test.yml exec redis-test redis-cli ping`

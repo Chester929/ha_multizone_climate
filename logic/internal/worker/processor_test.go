@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 )
 
@@ -61,84 +60,6 @@ func (m *mockRedisClient) HSet(ctx context.Context, key string, values map[strin
 	return nil
 }
 
-// mockHAIntegration is a mock implementation of the HA integration for testing
-type mockHAIntegration struct {
-	mainTempCalls   []float64
-	valveStateCalls []valveStateCall
-	zoneEnabledCalls []zoneEnabledCall
-	enabled         bool
-}
-
-type valveStateCall struct {
-	entityID string
-	open     bool
-}
-
-type zoneEnabledCall struct {
-	entityID string
-	enabled  bool
-}
-
-func newMockHAIntegration() *mockHAIntegration {
-	return &mockHAIntegration{
-		mainTempCalls:   []float64{},
-		valveStateCalls: []valveStateCall{},
-		zoneEnabledCalls: []zoneEnabledCall{},
-		enabled:         true,
-	}
-}
-
-func (m *mockHAIntegration) IsEnabled() bool {
-	return m.enabled
-}
-
-func (m *mockHAIntegration) SetMainTemperature(ctx context.Context, entityID string, temperature float64) error {
-	m.mainTempCalls = append(m.mainTempCalls, temperature)
-	return nil
-}
-
-func (m *mockHAIntegration) SetValveState(ctx context.Context, entityID string, open bool) error {
-	m.valveStateCalls = append(m.valveStateCalls, valveStateCall{
-		entityID: entityID,
-		open:     open,
-	})
-	return nil
-}
-
-func (m *mockHAIntegration) SetZoneEnabled(ctx context.Context, entityID string, enabled bool) error {
-	m.zoneEnabledCalls = append(m.zoneEnabledCalls, zoneEnabledCall{
-		entityID: entityID,
-		enabled:  enabled,
-	})
-	return nil
-}
-
-func TestProcessorWithMockedDependencies(t *testing.T) {
-	// Note: Mock dependencies (mockRedisClient and mockHAIntegration) are defined above
-	// for future use when implementing actual HTTP API calls for the HA integration.
-	// Currently testing the processor creation with nil dependencies.
-	var haIntegration *homeassistant.Integration
-	
-	processor := NewProcessor(nil, haIntegration)
-	
-	if processor == nil {
-		t.Fatal("Expected processor to be non-nil")
-	}
-	
-	// Verify processor was created with correct dependencies
-	if processor.redisClient != nil {
-		t.Error("Expected redisClient to be nil when nil is passed")
-	}
-	
-	if processor.haIntegration != nil {
-		t.Error("Expected haIntegration to be nil when nil is passed")
-	}
-	
-	if processor.statsTracker == nil {
-		t.Error("Expected statsTracker to be created")
-	}
-}
-
 func TestSetLastActuated(t *testing.T) {
 	zone := &models.ZoneState{
 		ID:   "test_zone",
@@ -169,37 +90,21 @@ func TestSetLastActuated(t *testing.T) {
 
 func TestProcessorCreation(t *testing.T) {
 	tests := []struct {
-		name          string
-		redisClient   interface{}
-		haIntegration *homeassistant.Integration
+		name        string
+		redisClient interface{}
 	}{
 		{
-			name:          "Create with nil dependencies",
-			redisClient:   nil,
-			haIntegration: nil,
-		},
-		{
-			name:          "Create with HA integration",
-			redisClient:   nil,
-			haIntegration: homeassistant.NewIntegration("http://ha:8123", "token"),
-		},
-		{
-			name:          "Create with disabled HA integration",
-			redisClient:   nil,
-			haIntegration: homeassistant.NewIntegration("", ""),
+			name:        "Create with nil redis client",
+			redisClient: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			processor := NewProcessor(nil, tt.haIntegration)
+			processor := NewProcessor(nil)
 			
 			if processor == nil {
 				t.Fatal("Expected processor to be non-nil")
-			}
-			
-			if processor.haIntegration != tt.haIntegration {
-				t.Error("Expected haIntegration to match input")
 			}
 			
 			if processor.statsTracker == nil {
@@ -293,20 +198,24 @@ func TestZoneStateManagement(t *testing.T) {
 		}
 	})
 	
-	t.Run("HVAC action based on valve state", func(t *testing.T) {
-		ha := homeassistant.NewIntegration("http://ha:8123", "token")
-		ctx := context.Background()
-		
-		// When valve is closed, HVAC action should be idle
-		action := ha.GetZoneHVACAction(ctx, "climate.zone1", false)
-		if action != "idle" {
-			t.Errorf("HVAC action = %v, want idle when valve is closed", action)
+	t.Run("Zone state stored in addon", func(t *testing.T) {
+		// In addon-only mode, valve states are stored but not directly controlled
+		zone := models.ZoneState{
+			ID:                "zone1",
+			Name:              "Test Zone",
+			ValveState:        "closed",
+			ValveSwitchEntity: "switch.zone1_valve",
 		}
 		
-		// When valve is open, HVAC action should be heating (or cooling)
-		action = ha.GetZoneHVACAction(ctx, "climate.zone1", true)
-		if action != "heating" && action != "cooling" {
-			t.Errorf("HVAC action = %v, want heating or cooling when valve is open", action)
+		// Verify entity ID is stored
+		if zone.ValveSwitchEntity != "switch.zone1_valve" {
+			t.Errorf("ValveSwitchEntity = %v, want switch.zone1_valve", zone.ValveSwitchEntity)
+		}
+		
+		// Verify state can be updated (for tracking purposes)
+		zone.ValveState = "open"
+		if zone.ValveState != "open" {
+			t.Errorf("ValveState = %v, want open", zone.ValveState)
 		}
 	})
 }
@@ -339,9 +248,9 @@ func TestMainClimateControl(t *testing.T) {
 		}
 	})
 	
-	t.Run("Main climate drives zones", func(t *testing.T) {
-		// This test verifies that the main climate entity is used to control the overall heating
-		// while zones are controlled individually
+	t.Run("Main climate entity stored in addon", func(t *testing.T) {
+		// In addon-only mode, the main climate entity ID is stored
+		// but the addon doesn't directly control it
 		
 		config := models.GlobalConfig{
 			MainClimateEntityID: "climate.main_thermostat",
