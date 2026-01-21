@@ -15,6 +15,7 @@ host_network: true
 options:
   integration:
     coordinator_interval: 30
+    backend_port: 8080
   redis:
     mode: bundled
     password: ""
@@ -26,6 +27,7 @@ options:
 schema:
   integration:
     coordinator_interval: int(5-300)?
+    backend_port: port?
   redis:
     mode: list(bundled|external)
     host: str?

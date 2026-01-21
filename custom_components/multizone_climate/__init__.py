@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -17,9 +18,9 @@ PLATFORMS: list[Platform] = [Platform.CLIMATE]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Multizone Climate from a config entry."""
-    # Get backend URL from addon or use default
-    # In addon mode, backend is on localhost
-    backend_url = "http://localhost:8080"
+    # Get backend port from environment variable (set by addon)
+    backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+    backend_url = f"http://localhost:{backend_port}"
     
     # Create coordinator
     coordinator = MultizoneClimateCoordinator(hass, backend_url)

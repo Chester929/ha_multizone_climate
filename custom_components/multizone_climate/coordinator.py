@@ -1,4 +1,5 @@
 """Data coordinator for Multizone Climate integration."""
+import asyncio
 import logging
 from datetime import timedelta
 import os
@@ -23,8 +24,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             interval_seconds = int(raw_interval)
         except ValueError:
             _LOGGER.warning(
-                "Invalid COORDINATOR_INTERVAL value '%s'; falling back to default 30 seconds",
-                raw_interval,
+                f"Invalid COORDINATOR_INTERVAL value '{raw_interval}'; falling back to default 30 seconds"
             )
             interval_seconds = 30
         super().__init__(
@@ -34,16 +34,13 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=interval_seconds),
         )
         self.backend_url = backend_url.rstrip("/")
-        self._session = None
+        self.session = aiohttp.ClientSession()
 
     async def _async_update_data(self):
         """Fetch commands from backend and execute them."""
         try:
-            if self._session is None:
-                self._session = aiohttp.ClientSession()
-
             # Get pending commands from backend
-            async with self._session.get(
+            async with self.session.get(
                 f"{self.backend_url}/api/integration/commands",
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
@@ -119,44 +116,66 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(f"Unknown action {action} for entity {entity_id}")
 
     async def _acknowledge_commands(self, entity_ids: list[str]):
-        """Acknowledge executed commands to backend."""
-        try:
-            if self._session is None:
-                self._session = aiohttp.ClientSession()
-
-            async with self._session.delete(
-                f"{self.backend_url}/api/integration/commands",
-                json={"entity_ids": entity_ids},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                if response.status != 200:
-                    _LOGGER.warning(f"Failed to acknowledge commands: status {response.status}")
-                else:
-                    _LOGGER.debug(f"Acknowledged {len(entity_ids)} commands")
-        except Exception as err:
-            _LOGGER.error(f"Error acknowledging commands: {err}")
+        """Acknowledge executed commands to backend with retry mechanism."""
+        max_retries = 5
+        retry_delay = 5
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with self.session.delete(
+                    f"{self.backend_url}/api/integration/commands",
+                    json={"entity_ids": entity_ids},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response:
+                    if response.status != 200:
+                        _LOGGER.warning(f"Failed to acknowledge commands (attempt {attempt}/{max_retries}): status {response.status}")
+                        if attempt < max_retries:
+                            await asyncio.sleep(retry_delay)
+                            continue
+                    else:
+                        _LOGGER.debug(f"Acknowledged {len(entity_ids)} commands")
+                        return
+            except Exception as err:
+                _LOGGER.error(f"Error acknowledging commands (attempt {attempt}/{max_retries}): {err}")
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_delay)
+                    continue
+        
+        # After 5 failed tries, log error and give up
+        _LOGGER.error(f"Failed to acknowledge commands after {max_retries} attempts. Commands: {entity_ids}")
 
     async def push_state_update(self, zone_id: str, current_temp: float):
-        """Push temperature state update to backend."""
-        try:
-            if self._session is None:
-                self._session = aiohttp.ClientSession()
-
-            async with self._session.post(
-                f"{self.backend_url}/api/integration/state_update",
-                json={"zone_id": zone_id, "current_temperature": current_temp},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                if response.status != 200:
-                    _LOGGER.warning(
-                        f"Failed to push state update for zone {zone_id}: status {response.status}"
-                    )
-                else:
-                    _LOGGER.debug(f"Pushed state update for zone {zone_id}: {current_temp}°C")
-        except Exception as err:
-            _LOGGER.error(f"Error pushing state update for zone {zone_id}: {err}")
+        """Push temperature state update to backend with retry mechanism."""
+        max_retries = 5
+        retry_delay = 5
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with self.session.post(
+                    f"{self.backend_url}/api/integration/state_update",
+                    json={"zone_id": zone_id, "current_temperature": current_temp},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response:
+                    if response.status != 200:
+                        _LOGGER.warning(
+                            f"Failed to push state update for zone {zone_id} (attempt {attempt}/{max_retries}): status {response.status}"
+                        )
+                        if attempt < max_retries:
+                            await asyncio.sleep(retry_delay)
+                            continue
+                    else:
+                        _LOGGER.debug(f"Pushed state update for zone {zone_id}: {current_temp}°C")
+                        return
+            except Exception as err:
+                _LOGGER.error(f"Error pushing state update for zone {zone_id} (attempt {attempt}/{max_retries}): {err}")
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_delay)
+                    continue
+        
+        # After 5 failed tries, log error and give up
+        _LOGGER.error(f"Failed to push state update for zone {zone_id} after {max_retries} attempts")
 
     async def async_shutdown(self):
         """Cleanup on shutdown."""
-        if self._session:
-            await self._session.close()
+        if self.session:
+            await self.session.close()

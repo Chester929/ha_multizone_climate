@@ -39,6 +39,32 @@ async def async_setup_entry(
     priority = config_data.get("priority", 50)
     is_fallback = config_data.get("is_fallback_valve", False)
 
+    # Register zone with backend
+    zone_config = {
+        "zone_id": zone_id,
+        "name": zone_name,
+        "temperature_sensor": temperature_sensor,
+        "valve_switch": valve_switch,
+        "target_temperature": target_temp,
+        "opening_offset": opening_offset,
+        "closing_offset": closing_offset,
+        "priority": priority,
+        "is_fallback_valve": is_fallback,
+    }
+    
+    try:
+        async with coordinator.session.post(
+            f"{coordinator.backend_url}/api/zones",
+            json=zone_config,
+            timeout=coordinator.session.timeout,
+        ) as response:
+            if response.status not in (200, 201):
+                _LOGGER.warning(
+                    f"Failed to register zone {zone_name} with backend: status {response.status}"
+                )
+    except Exception as err:
+        _LOGGER.error(f"Error registering zone {zone_name} with backend: {err}")
+
     # Create the zone climate entity
     entity = MultizoneClimateEntity(
         coordinator=coordinator,
@@ -163,11 +189,29 @@ class MultizoneClimateEntity(ClimateEntity):
         self._attr_target_temperature = temperature
         self.async_write_ha_state()
 
-        # TODO: Push target temperature update to backend
-        # This would require a new backend API endpoint
-        _LOGGER.info(
-            f"Zone {self._zone_name} target temperature set to {temperature}°C"
-        )
+        # Push target temperature update to backend
+        try:
+            async with self.coordinator.session.post(
+                f"{self.coordinator.backend_url}/api/integration/state_update",
+                json={
+                    "zone_id": self._zone_id,
+                    "current_temperature": self._attr_current_temperature or 0,
+                    "target_temperature": temperature,
+                },
+                timeout=self.coordinator.session.timeout,
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.warning(
+                        f"Failed to push target temperature update for zone {self._zone_name}: status {response.status}"
+                    )
+                else:
+                    _LOGGER.info(
+                        f"Zone {self._zone_name} target temperature set to {temperature}°C"
+                    )
+        except Exception as err:
+            _LOGGER.error(
+                f"Error pushing target temperature update for zone {self._zone_name}: {err}"
+            )
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""

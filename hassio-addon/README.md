@@ -21,9 +21,11 @@ This add-on provides intelligent management of multiple heating/cooling zones in
 ```yaml
 integration:
   coordinator_interval: 30  # Seconds between command checks (5-300)
+  backend_port: 8080        # Backend API port (1024-65535)
 ```
 
 - **coordinator_interval**: How often (in seconds) the integration polls for commands to execute. Range: 5-300 seconds. Default: 30 seconds. Requires add-on restart to apply changes.
+- **backend_port**: Port for the backend API server. Range: 1024-65535. Default: 8080. Requires add-on restart to apply changes.
 
 ### Redis
 

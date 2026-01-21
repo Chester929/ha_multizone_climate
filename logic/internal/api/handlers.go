@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	"github.com/chester929/ha_multizone_climate/logic/internal/statistics"
+	redisv8 "github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 )
 
@@ -937,9 +939,9 @@ func IntegrationStateUpdateHandler(client *redis.Client) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		var update struct {
-			ZoneID             string  `json:"zone_id"`
-			CurrentTemperature float64 `json:"current_temperature"`
-			TargetTemperature  float64 `json:"target_temperature,omitempty"`
+			ZoneID             string   `json:"zone_id"`
+			CurrentTemperature float64  `json:"current_temperature"`
+			TargetTemperature  *float64 `json:"target_temperature,omitempty"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
@@ -988,8 +990,8 @@ func IntegrationStateUpdateHandler(client *redis.Client) http.HandlerFunc {
 			"last_updated", time.Now().Format(time.RFC3339),
 		}
 
-		if update.TargetTemperature > 0 {
-			updates = append(updates, "target_temperature", update.TargetTemperature)
+		if update.TargetTemperature != nil && *update.TargetTemperature > 0 {
+			updates = append(updates, "target_temperature", *update.TargetTemperature)
 		}
 
 		if err := client.HSet(ctx, zoneKey, updates...); err != nil {
@@ -1038,7 +1040,7 @@ func IntegrationGetCommandsHandler(client *redis.Client) http.HandlerFunc {
 
 		// Get all commands from the hash
 		commands, err := client.HGetAll(ctx, commandsKey)
-		if err != nil && err.Error() != "redis: nil" {
+		if err != nil && !errors.Is(err, redisv8.Nil) {
 			logger.Error("Failed to retrieve commands: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{
