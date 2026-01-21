@@ -327,7 +327,9 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 		}
 
 		// If zone has temperature sensor, sync current temperature from HA
-		if tempSensorEntity := getStringOrDefault(zone, "temperature_sensor_entity_id", ""); tempSensorEntity != "" && integration != nil && integration.IsEnabled() {
+		tempSensorEntity := getStringOrDefault(zone, "temperature_sensor_entity_id", "")
+		integrationAvailable := integration != nil && integration.IsEnabled()
+		if tempSensorEntity != "" && integrationAvailable {
 			haClient := integration.GetClient()
 			sensorState, err := haClient.GetState(ctx, tempSensorEntity)
 			if err != nil {

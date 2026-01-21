@@ -369,7 +369,7 @@ func (i *Integration) updateZoneClimate(ctx context.Context, entityID, state str
 
 	// Extract current temperature from climate entity if no temperature sensor is configured
 	tempSensorEntity, hasTempSensor := zoneData["temperature_sensor_entity_id"]
-	if (!hasTempSensor || tempSensorEntity == "") {
+	if !hasTempSensor || tempSensorEntity == "" {
 		if currentTemp, ok := attributes["current_temperature"].(float64); ok {
 			// Update zone current temperature from climate entity
 			if err := i.redisClient.HSet(ctx, zoneKey, "current_temperature", currentTemp); err != nil {
@@ -535,7 +535,7 @@ func (i *Integration) syncZoneClimate(ctx context.Context, zoneKey, entityID str
 
 	// Sync current temperature from climate entity if no temperature sensor is configured
 	tempSensorEntity, hasTempSensor := zoneData["temperature_sensor_entity_id"]
-	if (!hasTempSensor || tempSensorEntity == "") {
+	if !hasTempSensor || tempSensorEntity == "" {
 		if currentTemp, ok := state.Attributes["current_temperature"].(float64); ok {
 			updates["current_temperature"] = currentTemp
 			logger.Debug("Synced current temperature from zone climate entity: %.1f", currentTemp)
