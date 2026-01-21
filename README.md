@@ -148,13 +148,9 @@ Native Python integration providing the user interface and entity management:
 2. Copy it to your Home Assistant `config/custom_components/` directory
 3. Restart Home Assistant
 
-**Method B: HACS (if available)**
+**Method B: HACS (Future)**
 
-1. Open HACS → Integrations
-2. Add this repository as a custom repository
-3. Search for "Multizone Climate"
-4. Download and install
-5. Restart Home Assistant
+HACS support is planned for future releases. Currently, use manual installation.
 
 ### Step 3: Configure Zones
 
@@ -262,7 +258,7 @@ Each zone now has a climate entity that you can:
 - **Target Temperature**: Desired temperature in °C (adjustable anytime)
 - **Priority**: Zone importance (0=lowest, 100=highest, default=50)
 
-**Note:** Opening/closing offsets and fallback valve behavior are managed by the backend and not currently configurable through the UI.
+**Note:** Advanced valve control parameters (temperature offsets for opening/closing valves, fallback valve selection) are managed internally by the backend and not currently configurable through the UI.
 
 ## Technology Stack
 
