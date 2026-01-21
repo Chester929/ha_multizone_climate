@@ -14,14 +14,6 @@ services:
       - LOG_LEVEL=debug
     command: go run cmd/server/main.go
 
-  frontend:
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    environment:
-      - LOG_LEVEL=debug
-    command: npm run dev
-
   redis:
     ports:
       - "6379:6379"
