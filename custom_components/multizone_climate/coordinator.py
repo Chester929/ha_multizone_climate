@@ -18,8 +18,15 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, backend_url: str):
         """Initialize the coordinator."""
         # Get coordinator interval from environment variable (set by addon)
-        interval_seconds = int(os.environ.get("COORDINATOR_INTERVAL", "30"))
-        
+        raw_interval = os.environ.get("COORDINATOR_INTERVAL", "30")
+        try:
+            interval_seconds = int(raw_interval)
+        except ValueError:
+            _LOGGER.warning(
+                "Invalid COORDINATOR_INTERVAL value '%s'; falling back to default 30 seconds",
+                raw_interval,
+            )
+            interval_seconds = 30
         super().__init__(
             hass,
             _LOGGER,
