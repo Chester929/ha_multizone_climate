@@ -591,3 +591,16 @@ body {
     gap: 15px;
   }
 }
+
+/* Error styling for validation */
+.detail-input.error {
+  border-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 0.85em;
+  display: block;
+  margin-top: 0.25rem;
+}

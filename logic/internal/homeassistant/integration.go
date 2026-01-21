@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
+	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 )
 
@@ -24,6 +26,7 @@ type Integration struct {
 		sync.RWMutex
 		tempSensorToZone map[string]string // temperature_sensor_entity_id -> zone_key
 		valveToZone      map[string]string // valve_switch_entity_id -> zone_key
+		climateToZone    map[string]string // climate_entity_id -> zone_key
 		mainClimateID    string            // main_climate_entity_id
 	}
 }
@@ -41,6 +44,7 @@ func NewIntegration(baseURL, token string, redisClient *redis.Client, enableWebS
 	// Initialize entity cache maps
 	i.entityCache.tempSensorToZone = make(map[string]string)
 	i.entityCache.valveToZone = make(map[string]string)
+	i.entityCache.climateToZone = make(map[string]string)
 
 	return i
 }
@@ -107,6 +111,7 @@ func (i *Integration) buildEntityCache(ctx context.Context) error {
 	// Clear existing cache
 	i.entityCache.tempSensorToZone = make(map[string]string)
 	i.entityCache.valveToZone = make(map[string]string)
+	i.entityCache.climateToZone = make(map[string]string)
 	i.entityCache.mainClimateID = ""
 
 	// Get all zones
@@ -129,6 +134,10 @@ func (i *Integration) buildEntityCache(ctx context.Context) error {
 		if valve, ok := zoneData["valve_switch_entity_id"]; ok && valve != "" {
 			i.entityCache.valveToZone[valve] = key
 		}
+
+		if climate, ok := zoneData["climate_entity_id"]; ok && climate != "" {
+			i.entityCache.climateToZone[climate] = key
+		}
 	}
 
 	// Get main climate entity ID
@@ -139,8 +148,8 @@ func (i *Integration) buildEntityCache(ctx context.Context) error {
 		}
 	}
 
-	logger.Info("Entity cache built: %d temperature sensors, %d valves",
-		len(i.entityCache.tempSensorToZone), len(i.entityCache.valveToZone))
+	logger.Info("Entity cache built: %d temperature sensors, %d valves, %d climate entities",
+		len(i.entityCache.tempSensorToZone), len(i.entityCache.valveToZone), len(i.entityCache.climateToZone))
 
 	return nil
 }
@@ -199,6 +208,13 @@ func (i *Integration) handleStateChange(event *Event) {
 			logger.Error("Error updating main climate: %v", err)
 		}
 	}
+
+	// Check if this is a zone climate entity
+	if i.isZoneClimate(entityID) {
+		if err := i.updateZoneClimate(ctx, entityID, state, attributes); err != nil {
+			logger.Error("Error updating zone climate: %v", err)
+		}
+	}
 }
 
 // isTemperatureSensor checks if an entity is a temperature sensor
@@ -230,6 +246,15 @@ func (i *Integration) isMainClimate(entityID string) bool {
 	defer i.entityCache.RUnlock()
 
 	return i.entityCache.mainClimateID == entityID
+}
+
+// isZoneClimate checks if an entity is a zone climate entity using the cache
+func (i *Integration) isZoneClimate(entityID string) bool {
+	i.entityCache.RLock()
+	defer i.entityCache.RUnlock()
+
+	_, exists := i.entityCache.climateToZone[entityID]
+	return exists
 }
 
 // updateTemperatureSensor updates temperature sensor data in Redis using cache
@@ -319,6 +344,59 @@ func (i *Integration) updateMainClimate(ctx context.Context, entityID, state str
 	}
 
 	logger.Debug("Updated main climate: %s", entityID)
+
+	return nil
+}
+
+// updateZoneClimate updates zone climate entity data in Redis
+func (i *Integration) updateZoneClimate(ctx context.Context, entityID, state string, attributes map[string]interface{}) error {
+	// Use cache for O(1) lookup
+	i.entityCache.RLock()
+	zoneKey, exists := i.entityCache.climateToZone[entityID]
+	i.entityCache.RUnlock()
+
+	if !exists {
+		// Entity not in cache, might be newly added - log for troubleshooting
+		logger.Debug("Climate entity %s not found in entity cache", entityID)
+		return nil
+	}
+
+	// Extract target temperature from climate entity
+	if targetTemp, ok := attributes["temperature"].(float64); ok {
+		// Get current zone target temperature from Redis
+		zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
+		if err != nil {
+			return err
+		}
+
+		currentTargetStr, ok := zoneData["target_temperature"]
+		if !ok {
+			currentTargetStr = "0"
+		}
+
+		currentTarget, err := strconv.ParseFloat(currentTargetStr, 64)
+		if err != nil {
+			currentTarget = 0
+		}
+
+		// Only update if the temperature changed (to avoid loops)
+		// Use threshold from default configuration for consistency
+		if math.Abs(targetTemp-currentTarget) > models.DefaultTargetChangeThreshold {
+			// Update zone target temperature
+			if err := i.redisClient.HSet(ctx, zoneKey, "target_temperature", targetTemp); err != nil {
+				return err
+			}
+
+			logger.Info("Updated zone target temperature from HA climate: %s -> %.1f°C", zoneKey, targetTemp)
+
+			// Trigger recalculation job
+			if err := i.triggerRecalculation(ctx); err != nil {
+				logger.Error("Error triggering recalculation: %v", err)
+			}
+		}
+	}
+
+	logger.Debug("Updated zone climate: %s -> %s", zoneKey, entityID)
 
 	return nil
 }
@@ -465,6 +543,44 @@ func (i *Integration) SetMainTemperature(ctx context.Context, entityID string, t
 	}
 
 	return i.client.SetTemperature(ctx, entityID, temperature)
+}
+
+// SetZoneClimateTemperature sets a zone climate entity temperature in Home Assistant
+func (i *Integration) SetZoneClimateTemperature(ctx context.Context, zoneKey string) error {
+	if !i.enabled {
+		return fmt.Errorf("integration not started")
+	}
+
+	// Get zone data to find climate entity and target temperature
+	zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
+	if err != nil {
+		return err
+	}
+
+	climateEntityID, ok := zoneData["climate_entity_id"]
+	if !ok || climateEntityID == "" {
+		// No climate entity configured for this zone
+		return nil
+	}
+
+	targetTempStr, ok := zoneData["target_temperature"]
+	if !ok {
+		return nil
+	}
+
+	targetTemp, err := strconv.ParseFloat(targetTempStr, 64)
+	if err != nil {
+		return err
+	}
+
+	// Set temperature on the zone's climate entity
+	if err := i.client.SetTemperature(ctx, climateEntityID, targetTemp); err != nil {
+		return err
+	}
+
+	logger.Info("Set zone climate temperature: %s (%s) -> %.1f°C", zoneKey, climateEntityID, targetTemp)
+
+	return nil
 }
 
 // Stop stops the Home Assistant integration

@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Config } from '../types';
+import { useDefaults } from '../hooks/useDefaults';
 
 // Whitelist of allowed configuration keys
 const ALLOWED_CONFIG_KEYS = [
   'main_climate_entity_id',
-  'main_target_temperature',
-  'mode',
-  'hysteresis',
-  'min_temperature',
-  'max_temperature',
-  'update_interval',
+  'main_target_all_zones_satisfied',
+  'use_average_mode',
+  'slider_position',
+  'min_valves_open',
+  'main_min_temp',
+  'main_max_temp',
+  'main_change_threshold',
+  'valve_actuation_delay',
+  'coordinator_interval',
+  'satisfaction_eps',
 ];
 
 // Helper to check if a string represents a finite numeric value
@@ -54,19 +59,28 @@ function isValidConfig(data: unknown): data is Config {
           return false;
         }
         break;
-      case 'main_target_temperature':
-      case 'hysteresis':
-      case 'min_temperature':
-      case 'max_temperature':
-      case 'update_interval':
+      case 'main_target_all_zones_satisfied':
+      case 'slider_position':
+      case 'main_change_threshold':
+      case 'satisfaction_eps':
+      case 'main_min_temp':
+      case 'main_max_temp':
         // These configuration values must be numeric strings
         if (!isNumericString(strValue)) {
           return false;
         }
         break;
-      case 'mode':
-        // Mode must be a non-empty string
-        if (strValue.length === 0) {
+      case 'use_average_mode':
+        // Boolean fields should be "true" or "false"
+        if (strValue !== 'true' && strValue !== 'false') {
+          return false;
+        }
+        break;
+      case 'min_valves_open':
+      case 'valve_actuation_delay':
+      case 'coordinator_interval':
+        // Integer fields must be numeric
+        if (!isNumericString(strValue)) {
           return false;
         }
         break;
@@ -84,6 +98,7 @@ export function ConfigManager() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editedConfig, setEditedConfig] = useState<Config>({});
+  const { defaults } = useDefaults();
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -206,60 +221,207 @@ export function ConfigManager() {
           )}
         </div>
 
-        <h3 style={{ marginTop: '1.5rem' }}>Temperature Settings</h3>
+        <h3 style={{ marginTop: '1.5rem' }}>Temperature Calculation Settings</h3>
+        
         <div className="config-item">
-          <label>Main Target Temperature (°C)</label>
+          <label>Calculation Mode</label>
+          {editing ? (
+            <>
+              <select
+                value={editedConfig.use_average_mode || 'false'}
+                onChange={(e) => setEditedConfig({ ...editedConfig, use_average_mode: e.target.value })}
+              >
+                <option value="false">Slider Mode</option>
+                <option value="true">Average Mode</option>
+              </select>
+              <small>Average: mean of all zones. Slider: interpolate between min/max targets</small>
+            </>
+          ) : (
+            <span>{config.use_average_mode === 'true' ? 'Average Mode' : 'Slider Mode'}</span>
+          )}
+        </div>
+
+        {editing && editedConfig.use_average_mode === 'false' && (
+          <div className="config-item">
+            <label>Slider Position (0.0 - 1.0)</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="1"
+              value={editedConfig.slider_position || defaults?.global.slider_position?.toString() || '0.5'}
+              onChange={(e) =>
+                setEditedConfig({ ...editedConfig, slider_position: e.target.value })
+              }
+            />
+            <small>Position between minimum and maximum zone targets (0=min, 1=max)</small>
+          </div>
+        )}
+
+        <div className="config-item">
+          <label>Main Target (All Zones Satisfied) °C</label>
+          {editing ? (
+            <>
+              <input
+                type="number"
+                step="0.5"
+                min="5"
+                max="35"
+                value={editedConfig.main_target_all_zones_satisfied || ''}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, main_target_all_zones_satisfied: e.target.value })
+                }
+              />
+              <small>Target temperature when all zones are satisfied</small>
+            </>
+          ) : (
+            <span>{config.main_target_all_zones_satisfied || 'Not set'}</span>
+          )}
+        </div>
+
+        <div className="config-item">
+          <label>Main Change Threshold °C</label>
+          {editing ? (
+            <>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="5"
+                value={editedConfig.main_change_threshold || '0.5'}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, main_change_threshold: e.target.value })
+                }
+              />
+              <small>Minimum temperature change to update main thermostat</small>
+            </>
+          ) : (
+            <span>{config.main_change_threshold || 'Not set'}</span>
+          )}
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem' }}>Temperature Limits</h3>
+
+        <div className="config-item">
+          <label>Main Minimum Temperature °C</label>
           {editing ? (
             <input
               type="number"
               step="0.5"
               min="5"
               max="35"
-              value={editedConfig.main_target_temperature || ''}
+              value={editedConfig.main_min_temp || ''}
               onChange={(e) =>
-                setEditedConfig({ ...editedConfig, main_target_temperature: e.target.value })
+                setEditedConfig({ ...editedConfig, main_min_temp: e.target.value })
               }
             />
           ) : (
-            <span>{config.main_target_temperature || 'Not set'}</span>
+            <span>{config.main_min_temp || 'Not set'}</span>
           )}
         </div>
 
         <div className="config-item">
-          <label>Mode</label>
+          <label>Main Maximum Temperature °C</label>
           {editing ? (
-            <select
-              value={editedConfig.mode || ''}
-              onChange={(e) => setEditedConfig({ ...editedConfig, mode: e.target.value })}
-            >
-              <option value="">Select mode</option>
-              <option value="heating">Heating</option>
-              <option value="cooling">Cooling</option>
-              <option value="auto">Auto</option>
-            </select>
+            <input
+              type="number"
+              step="0.5"
+              min="5"
+              max="90"
+              value={editedConfig.main_max_temp || ''}
+              onChange={(e) =>
+                setEditedConfig({ ...editedConfig, main_max_temp: e.target.value })
+              }
+            />
           ) : (
-            <span>{config.mode || 'Not set'}</span>
+            <span>{config.main_max_temp || 'Not set'}</span>
           )}
         </div>
 
-        {Object.entries(editing ? editedConfig : config)
-          .filter(([key]) => key !== 'main_target_temperature' && key !== 'mode')
-          .map(([key, value]) => (
-            <div key={key} className="config-item">
-              <label>{key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</label>
-              {editing ? (
-                <input
-                  type="text"
-                  value={value || ''}
-                  onChange={(e) =>
-                    setEditedConfig({ ...editedConfig, [key]: e.target.value })
-                  }
-                />
-              ) : (
-                <span>{value || 'Not set'}</span>
-              )}
-            </div>
-          ))}
+        <h3 style={{ marginTop: '1.5rem' }}>Valve Management</h3>
+
+        <div className="config-item">
+          <label>Minimum Valves Open</label>
+          {editing ? (
+            <>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                value={editedConfig.min_valves_open || defaults?.global.min_valves_open?.toString() || '1'}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, min_valves_open: e.target.value })
+                }
+              />
+              <small>Minimum number of valves to keep open (safety feature)</small>
+            </>
+          ) : (
+            <span>{config.min_valves_open || 'Not set'}</span>
+          )}
+        </div>
+
+        <div className="config-item">
+          <label>Valve Actuation Delay (seconds)</label>
+          {editing ? (
+            <>
+              <input
+                type="number"
+                min="30"
+                max="600"
+                value={editedConfig.valve_actuation_delay || defaults?.global.valve_actuation_delay?.toString() || '120'}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, valve_actuation_delay: e.target.value })
+                }
+              />
+              <small>Cooldown period between valve state changes</small>
+            </>
+          ) : (
+            <span>{config.valve_actuation_delay || 'Not set'}</span>
+          )}
+        </div>
+
+        <h3 style={{ marginTop: '1.5rem' }}>Advanced Settings</h3>
+
+        <div className="config-item">
+          <label>Coordinator Interval (seconds)</label>
+          {editing ? (
+            <>
+              <input
+                type="number"
+                min="5"
+                max="300"
+                value={editedConfig.coordinator_interval || defaults?.global.coordinator_interval?.toString() || '15'}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, coordinator_interval: e.target.value })
+                }
+              />
+              <small>How often to recalculate and update system state</small>
+            </>
+          ) : (
+            <span>{config.coordinator_interval || 'Not set'}</span>
+          )}
+        </div>
+
+        <div className="config-item">
+          <label>Satisfaction Epsilon °C</label>
+          {editing ? (
+            <>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="2"
+                value={editedConfig.satisfaction_eps || defaults?.global.satisfaction_eps?.toString() || '0'}
+                onChange={(e) =>
+                  setEditedConfig({ ...editedConfig, satisfaction_eps: e.target.value })
+                }
+              />
+              <small>Additional tolerance for satisfaction calculation (0 = exact)</small>
+            </>
+          ) : (
+            <span>{config.satisfaction_eps || 'Not set'}</span>
+          )}
+        </div>
       </div>
 
       <div className="config-controls">
