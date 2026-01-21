@@ -1056,7 +1056,8 @@ func IntegrationGetCommandsHandler(client *redis.Client) http.HandlerFunc {
 			Value    interface{} `json:"value,omitempty"`
 		}
 
-		var commandList []Command
+		// Initialize as empty slice to ensure JSON returns [] instead of null
+		commandList := make([]Command, 0)
 
 		for entityID, commandData := range commands {
 			var cmd map[string]interface{}

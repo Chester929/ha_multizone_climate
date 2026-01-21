@@ -447,20 +447,14 @@ func TestIntegrationGetCommandsHandler(t *testing.T) {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		// When there are no commands, the response can have either nil or empty array
-		commands := response["commands"]
-		if commands == nil {
-			// nil is acceptable for empty command queue
-			return
-		}
-
-		commandList, ok := commands.([]interface{})
+		// Should return an empty array, not nil
+		commands, ok := response["commands"].([]interface{})
 		if !ok {
-			t.Fatalf("Expected commands to be array or nil, got: %T", commands)
+			t.Fatalf("Expected commands to be an array, got: %T (%v)", response["commands"], response["commands"])
 		}
 
-		if len(commandList) != 0 {
-			t.Errorf("Expected 0 commands, got %d", len(commandList))
+		if len(commands) != 0 {
+			t.Errorf("Expected 0 commands, got %d", len(commands))
 		}
 	})
 
