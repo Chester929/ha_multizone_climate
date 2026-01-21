@@ -2,6 +2,32 @@
 
 This directory contains comprehensive integration tests for the Multizone Climate system.
 
+## Purpose
+
+These integration tests verify that all system components work together correctly:
+- **Service orchestration** - All containers start and communicate
+- **API functionality** - REST endpoints work end-to-end
+- **Data persistence** - Redis stores and retrieves data correctly
+- **MQTT communication** - Message broker integration works
+- **Full workflows** - Complete user scenarios function properly
+
+**Note**: These tests complement the unit tests by verifying integration between components. While unit tests verify individual components work correctly (algorithm logic, HA integration functions), integration tests verify the complete system works together.
+
+## Relationship to Unit Tests
+
+- **Unit Tests** (`logic/internal/*/test.go`) - Test individual components:
+  - Algorithm logic (temperature calculation, valve management)
+  - HA integration functions (climate entity control, sensor reading)
+  - Worker/processor logic (workflow coordination)
+  
+- **Integration Tests** (this directory) - Test component interactions:
+  - Service health and connectivity
+  - API request/response flows
+  - Database persistence
+  - Inter-service communication
+
+Both are necessary for comprehensive test coverage.
+
 ## Overview
 
 The integration test suite validates the entire system working together, including:
@@ -191,12 +217,6 @@ try {
 - Check if all services are healthy: `docker-compose -f docker-compose.test.yml ps`
 - View service logs: `docker-compose -f docker-compose.test.yml logs`
 - Increase health check timeouts in `docker-compose.test.yml`
-
-### MQTT Tests Fail
-
-- Verify MQTT broker is running: `docker-compose -f docker-compose.test.yml logs mqtt-broker-test`
-- Check MQTT middleware logs: `docker-compose -f docker-compose.test.yml logs mqtt-middleware-test`
-- Ensure port 11883 is not in use
 
 ### Redis Connection Issues
 
