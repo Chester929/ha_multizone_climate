@@ -1,7 +1,7 @@
 name: "Multizone Climate"
 version: "2.0.0"
 slug: multizone_climate
-description: "Advanced multi-zone HVAC management with containerized microservices architecture"
+description: "Advanced multi-zone HVAC management - Home Assistant add-on for intelligent zone control"
 arch:
   - amd64
   - armv7
@@ -16,12 +16,6 @@ options:
   redis:
     mode: bundled
     password: ""
-  mqtt:
-    enabled: false
-    broker: "homeassistant.local"
-    port: 1883
-    username: ""
-    password: ""
   logic:
     log_level: "info"
   frontend:
@@ -33,12 +27,6 @@ schema:
     host: str?
     port: port?
     password: password?
-  mqtt:
-    enabled: bool
-    broker: str?
-    port: port?
-    username: str?
-    password: password?
   logic:
     log_level: list(debug|info|warning|error)
   frontend:
@@ -49,9 +37,6 @@ ports:
 
 ports_description:
   8099/tcp: "Frontend Web Interface"
-
-services:
-  - mqtt:want
 
 ingress: true
 ingress_port: 8099

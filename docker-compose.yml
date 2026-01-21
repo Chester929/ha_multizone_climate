@@ -42,29 +42,6 @@ services:
       - redis
       - logic
 
-  mqtt-middleware:
-    build:
-      context: ./mqtt-middleware
-      dockerfile: Dockerfile
-    container_name: multizone-mqtt
-    restart: unless-stopped
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - MQTT_BROKER=${MQTT_BROKER:-homeassistant.local}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - MQTT_USERNAME=${MQTT_USERNAME:-}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
-      - MQTT_DISCOVERY_PREFIX=homeassistant
-      - MQTT_TOPIC_PREFIX=multizone
-    depends_on:
-      - redis
-      - logic
-    profiles:
-      - mqtt
-
   redis:
     image: redis:7-alpine
     container_name: multizone-redis

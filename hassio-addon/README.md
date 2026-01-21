@@ -2,48 +2,107 @@
 
 Advanced multi-zone HVAC management for Home Assistant.
 
-## Features
+## About
 
-- **Containerized Architecture**: Modern microservices design with separate Logic, Frontend, and MQTT containers
-- **GoLang Logic Engine**: High-performance core algorithms for temperature calculation and valve management
-- **TypeScript Frontend**: Modern web UI for zone management and monitoring
-- **Multiple Integration Options**: MQTT, Home Assistant Service API, or native Python integration
-- **Smart Algorithms**: Intelligent main target temperature calculation and valve orchestration
-- **Safety Features**: Minimum valve enforcement and valve lock mechanisms
-- **Real-time Updates**: WebSocket and MQTT Pub/Sub for instant state synchronization
+This add-on provides intelligent management of multiple heating/cooling zones in your Home Assistant setup. It coordinates zone temperatures, valve control, and main HVAC thermostat settings to optimize comfort and energy efficiency.
+
+## Installation
+
+1. Add this repository to your Home Assistant add-on store
+2. Install the "Multizone Climate" add-on
+3. Configure the addon (see Configuration section below)
+4. Start the add-on
+5. Access the UI through the Home Assistant sidebar or the "OPEN WEB UI" button
 
 ## Configuration
 
 ### Redis
-- **mode**: Choose `bundled` to use the included Redis container or `external` to use your own Redis server
-- **password**: Redis password for security (optional but recommended)
 
-### MQTT (Optional)
-- **enabled**: Enable MQTT integration for Home Assistant auto-discovery
-- **broker**: MQTT broker address (default: homeassistant.local)
-- **port**: MQTT broker port (default: 1883)
-- **username**: MQTT username (optional)
-- **password**: MQTT password (optional)
+```yaml
+redis:
+  mode: bundled  # Options: bundled or external
+  host: ""       # Required if mode is external
+  port: 6379     # Required if mode is external
+  password: ""   # Optional Redis password
+```
 
-### Logic Container
-- **log_level**: Logging verbosity (debug, info, warning, error)
+- **mode**: Use bundled Redis (default) or connect to external Redis server
+- **host**: Redis host address (only for external mode)
+- **port**: Redis port (only for external mode)  
+- **password**: Redis authentication password (optional)
+
+### Logic
+
+```yaml
+logic:
+  log_level: info  # Options: debug, info, warning, error
+```
+
+- **log_level**: Set logging verbosity for the logic container
 
 ### Frontend
-- **port**: Web interface port (default: 8099)
+
+```yaml
+frontend:
+  port: 8099  # Web interface port
+```
+
+- **port**: Port for the web interface (default: 8099)
 
 ## Usage
 
-After installation:
+### Accessing the UI
 
-1. Access the web interface through the Home Assistant sidebar
-2. Configure your zones with temperature sensors and valve switches
-3. Set target temperatures for each zone
-4. The system will automatically manage your HVAC based on zone demands
+- **Via Sidebar**: Click the "Multizone Climate" panel in your Home Assistant sidebar
+- **Via Add-on Page**: Click "OPEN WEB UI" button on the add-on page
+- **Direct Access**: Navigate to `http://homeassistant.local:8099` (if port is exposed)
 
-## Documentation
+### Creating Zones
 
-For detailed architecture and algorithm documentation, see [DIAGRAMS.md](https://github.com/Chester929/ha_multizone_climate/blob/master/DIAGRAMS.md)
+1. Open the Multizone Climate UI
+2. Click "Add Zone"
+3. Enter zone details:
+   - Name: Zone identifier (e.g., "Bedroom")
+   - Temperature Sensor Entity ID: e.g., `sensor.bedroom_temperature`
+   - Valve Switch Entity ID: e.g., `switch.bedroom_valve`
+   - Climate Entity ID: (optional) e.g., `climate.bedroom_thermostat`
+   - Target Temperature: Desired temperature for this zone
+   - Priority: Zone priority (higher priority zones are satisfied first)
+4. Save the zone
+
+### Configuration Options
+
+In the Configuration tab, you can:
+- Set the main climate entity ID
+- Configure temperature calculation method
+- Set minimum number of valves that must remain open
+- Adjust valve actuation delays
+- Configure safety thresholds
+
+## Features
+
+- **Intelligent Zone Management**: Per-room temperature targets with automatic valve control
+- **Safety Features**: Ensures minimum valves stay open to protect HVAC system
+- **Smart Algorithms**: Priority-based zone satisfaction and optimal temperature calculation
+- **Real-time Monitoring**: Live statistics and metrics for all zones
+- **Historical Data**: Track temperature and valve activity over time
+
+## Architecture
+
+The add-on consists of three main components:
+
+1. **Logic Container (GoLang)**: Core algorithms, valve management, and safety checks
+2. **Frontend (TypeScript)**: Web-based user interface for configuration and monitoring
+3. **Redis**: State storage and message queuing
+
+All components run within the add-on and communicate via Redis.
 
 ## Support
 
-For issues and feature requests, visit: https://github.com/Chester929/ha_multizone_climate/issues
+For issues, questions, or feature requests:
+- GitHub Issues: https://github.com/Chester929/ha_multizone_climate/issues
+- Documentation: https://github.com/Chester929/ha_multizone_climate
+
+## License
+
+MIT License

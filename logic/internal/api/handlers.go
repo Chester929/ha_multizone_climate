@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
-	"github.com/chester929/ha_multizone_climate/logic/internal/homeassistant"
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
@@ -144,7 +143,7 @@ func GetZoneHandler(client *redis.Client) http.HandlerFunc {
 }
 
 // CreateZoneHandler creates a new zone
-func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
+func CreateZoneHandler(client *redis.Client, integration interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var zone map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&zone); err != nil {
@@ -268,31 +267,6 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 			}
 		}
 
-		// Auto-load data from climate entity if HA integration is enabled
-		if climateEntityID != "" && integration != nil && integration.IsEnabled() {
-			haClient := integration.GetClient()
-			climateState, err := haClient.GetState(ctx, climateEntityID)
-			if err != nil {
-				logger.Warn("Failed to load climate entity state: %v", err)
-			} else {
-				// Auto-load current temperature if not explicitly overridden by temperature sensor
-				if _, hasTempSensor := zone["temperature_sensor_entity_id"]; !hasTempSensor {
-					if currentTemp, ok := climateState.Attributes["current_temperature"].(float64); ok {
-						zone["current_temperature"] = fmt.Sprintf("%.1f", currentTemp)
-						logger.Info("Auto-loaded current temperature from climate entity: %.1f", currentTemp)
-					}
-				}
-				
-				// Auto-load target temperature if not provided
-				if _, hasTargetTemp := zone["target_temperature"]; !hasTargetTemp {
-					if targetTemp, ok := climateState.Attributes["temperature"].(float64); ok {
-						zone["target_temperature"] = fmt.Sprintf("%.1f", targetTemp)
-						logger.Info("Auto-loaded target temperature from climate entity: %.1f", targetTemp)
-					}
-				}
-			}
-		}
-
 		// Set defaults for missing fields
 		zoneData := map[string]interface{}{
 			"id":                           zoneID,
@@ -319,30 +293,6 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 			return
 		}
 
-		// Refresh entity cache after zone creation
-		if integration != nil && integration.IsEnabled() {
-			if err := integration.RefreshEntityCache(ctx); err != nil {
-				logger.Error("Failed to refresh entity cache: %v", err)
-			}
-		}
-
-		// If zone has temperature sensor, sync current temperature from HA
-		tempSensorEntity := getStringOrDefault(zone, "temperature_sensor_entity_id", "")
-		integrationAvailable := integration != nil && integration.IsEnabled()
-		if tempSensorEntity != "" && integrationAvailable {
-			haClient := integration.GetClient()
-			sensorState, err := haClient.GetState(ctx, tempSensorEntity)
-			if err != nil {
-				logger.Warn("Failed to sync temperature sensor: %v", err)
-			} else {
-				temp, err := strconv.ParseFloat(sensorState.State, 64)
-				if err == nil {
-					client.HSet(ctx, key, "current_temperature", fmt.Sprintf("%.1f", temp))
-					logger.Info("Synced current temperature from sensor: %.1f", temp)
-				}
-			}
-		}
-
 		logger.Info("Zone created successfully: %s (%s)", zoneID, name)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -355,7 +305,7 @@ func CreateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 }
 
 // UpdateZoneHandler updates a zone
-func UpdateZoneHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
+func UpdateZoneHandler(client *redis.Client, integration interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		zoneID := vars["id"]
@@ -437,24 +387,6 @@ func UpdateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 			}
 		}
 
-		// Track if target temperature is being updated
-		targetTempUpdated := false
-		if _, ok := updates["target_temperature"]; ok {
-			targetTempUpdated = true
-		}
-
-		// Track if entity IDs are being updated (need cache refresh)
-		entityIDsUpdated := false
-		if _, ok := updates["temperature_sensor_entity_id"]; ok {
-			entityIDsUpdated = true
-		}
-		if _, ok := updates["valve_switch_entity_id"]; ok {
-			entityIDsUpdated = true
-		}
-		if _, ok := updates["climate_entity_id"]; ok {
-			entityIDsUpdated = true
-		}
-
 		// Validate target temperature if provided
 		if targetTemp, ok := updates["target_temperature"].(string); ok && targetTemp != "" {
 			if err := validateTemperature(targetTemp, "Target temperature"); err != nil {
@@ -483,23 +415,6 @@ func UpdateZoneHandler(client *redis.Client, integration *homeassistant.Integrat
 		if err := client.HSet(ctx, key, updates); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		}
-
-		// If entity IDs changed, refresh the entity cache
-		if entityIDsUpdated && integration != nil && integration.IsEnabled() {
-			if err := integration.RefreshEntityCache(ctx); err != nil {
-				logger.Error("Failed to refresh entity cache: %v", err)
-			} else {
-				logger.Info("Entity cache refreshed after zone update")
-			}
-		}
-
-		// If target temperature changed, update the zone's climate entity in HA
-		if targetTempUpdated && integration != nil && integration.IsEnabled() {
-			if err := integration.SetZoneClimateTemperature(ctx, key); err != nil {
-				logger.Error("Failed to set zone climate temperature: %v", err)
-				// Don't fail the request if HA update fails
-			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -618,294 +533,6 @@ func CalculateMainTempHandler(client *redis.Client) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
-	}
-}
-
-// HAStatusHandler returns the status of Home Assistant integration
-func HAStatusHandler(integration *homeassistant.Integration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		status := map[string]interface{}{
-			"enabled":   integration.IsEnabled(),
-			"websocket": false,
-			"time":      time.Now().Format(time.RFC3339),
-		}
-
-		if integration.IsEnabled() {
-			wsClient := integration.GetWebSocketClient()
-			status["websocket"] = wsClient.IsConnected()
-		}
-
-		json.NewEncoder(w).Encode(status)
-	}
-}
-
-// HATestConnectionHandler tests the Home Assistant connection
-func HATestConnectionHandler(integration *homeassistant.Integration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		logger.Debug("Received HA test connection request from %s", r.RemoteAddr)
-		ctx := r.Context()
-
-		client := integration.GetClient()
-		err := client.Ping(ctx)
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err != nil {
-			logger.Error("HA test connection failed: %v", err)
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"connected": false,
-				"error":     err.Error(),
-			})
-			return
-		}
-
-		logger.Info("HA test connection successful")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"connected": true,
-			"message":   "Home Assistant connection successful",
-		})
-	}
-}
-
-// HASyncStatesHandler triggers a manual synchronization of all states
-func HASyncStatesHandler(integration *homeassistant.Integration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !integration.IsEnabled() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Home Assistant integration is not enabled",
-			})
-			return
-		}
-
-		ctx := r.Context()
-		err := integration.SyncAllStates(ctx)
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-			return
-		}
-
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "success",
-			"message": "States synchronized successfully",
-		})
-	}
-}
-
-// HASetValveHandler controls a valve via Home Assistant
-func HASetValveHandler(integration *homeassistant.Integration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !integration.IsEnabled() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Home Assistant integration is not enabled",
-			})
-			return
-		}
-
-		var req struct {
-			EntityID string `json:"entity_id"`
-			Open     bool   `json:"open"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Validate entity_id format
-		if !entityIDPattern.MatchString(req.EntityID) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  "invalid entity_id format, expected format: domain.entity_name",
-			})
-			return
-		}
-
-		ctx := r.Context()
-		err := integration.SetValveState(ctx, req.EntityID, req.Open)
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-			return
-		}
-
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":    "success",
-			"entity_id": req.EntityID,
-			"state":     map[string]bool{"open": req.Open},
-		})
-	}
-}
-
-// HASetMainTempHandler sets the main climate temperature via Home Assistant
-func HASetMainTempHandler(integration *homeassistant.Integration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !integration.IsEnabled() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Home Assistant integration is not enabled",
-			})
-			return
-		}
-
-		var req struct {
-			EntityID    string  `json:"entity_id"`
-			Temperature float64 `json:"temperature"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Validate entity_id format
-		if !entityIDPattern.MatchString(req.EntityID) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  "invalid entity_id format, expected format: domain.entity_name",
-			})
-			return
-		}
-
-		// Validate temperature bounds (reasonable range for HVAC systems)
-		if req.Temperature < 5.0 || req.Temperature > 35.0 {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  "temperature must be between 5°C and 35°C",
-			})
-			return
-		}
-
-		ctx := r.Context()
-		err := integration.SetMainTemperature(ctx, req.EntityID, req.Temperature)
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-			return
-		}
-
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":      "success",
-			"entity_id":   req.EntityID,
-			"temperature": req.Temperature,
-		})
-	}
-}
-
-// HAGetEntitiesHandler retrieves entities from Home Assistant
-func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Check for nil integration
-		if integration == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Home Assistant integration is not configured",
-			})
-			return
-		}
-
-		if !integration.IsEnabled() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Home Assistant integration is not enabled",
-			})
-			return
-		}
-
-		ctx := r.Context()
-
-		// Get optional domain filter from query params
-		domain := r.URL.Query().Get("domain")
-
-		// Fetch all entity states from Home Assistant
-		client := integration.GetClient()
-		states, err := client.GetStates(ctx)
-
-		if err != nil {
-			logger.Error("Failed to fetch entities from HA: %v", err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": fmt.Sprintf("Failed to fetch entities: %v", err),
-			})
-			return
-		}
-
-		// Filter and format entities
-		entities := make([]map[string]interface{}, 0)
-		for _, state := range states {
-			// Apply domain filter if specified
-			if domain != "" {
-				// Extract domain from entity_id (format: domain.entity_name)
-				parts := strings.SplitN(state.EntityID, ".", 2)
-				if len(parts) < 2 || parts[0] != domain {
-					continue
-				}
-			}
-
-			// Build entity response
-			entity := map[string]interface{}{
-				"entity_id": state.EntityID,
-				"state":     state.State,
-			}
-
-			// Add friendly name if available
-			if friendlyName, ok := state.Attributes["friendly_name"].(string); ok {
-				entity["friendly_name"] = friendlyName
-			}
-
-			// For climate entities, include additional attributes
-			if strings.HasPrefix(state.EntityID, "climate.") {
-				if currentTemp, ok := state.Attributes["current_temperature"]; ok {
-					entity["current_temperature"] = currentTemp
-				}
-				if targetTemp, ok := state.Attributes["temperature"]; ok {
-					entity["temperature"] = targetTemp
-				}
-			}
-
-			entities = append(entities, entity)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"entities": entities,
-			"count":    len(entities),
-		})
 	}
 }
 
@@ -1256,214 +883,25 @@ func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 	}
 }
 
-// GetIntegrationSettingsHandler returns the integration settings
+// GetIntegrationSettingsHandler returns empty integration settings (no integrations available)
 func GetIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
-
-		settings, err := client.HGetAll(ctx, "multizone:integrations")
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Failed to fetch integration settings",
-			})
-			return
-		}
-
-		// Apply defaults for missing values
-		if _, ok := settings["ha_websocket"]; !ok || settings["ha_websocket"] == "" {
-			settings["ha_websocket"] = "true"
-		}
-
-		// Mask sensitive fields
-		maskedSettings := make(map[string]interface{})
-		for k, v := range settings {
-			maskedSettings[k] = v
-		}
-		if token, ok := maskedSettings["ha_token"].(string); ok && token != "" {
-			maskedSettings["ha_token"] = "••••••••"
-		}
-		if password, ok := maskedSettings["mqtt_password"].(string); ok && password != "" {
-			maskedSettings["mqtt_password"] = "••••••••"
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(maskedSettings)
-	}
+return func(w http.ResponseWriter, r *http.Request) {
+// Return empty settings since all integrations have been removed
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(map[string]interface{}{})
+}
 }
 
-// UpdateIntegrationSettingsHandler updates the integration settings
+// UpdateIntegrationSettingsHandler accepts but ignores integration settings (no integrations available)
 func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var settings map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Invalid JSON format",
-			})
-			return
-		}
-
-		ctx := context.Background()
-
-		// Get existing settings to merge with update
-		existingSettings, err := client.HGetAll(ctx, "multizone:integrations")
-		if err != nil {
-			logger.Warn("Failed to load existing integration settings: %v", err)
-			existingSettings = make(map[string]string)
-		}
-
-		// Merge new settings with existing
-		mergedSettings := make(map[string]interface{})
-		for k, v := range existingSettings {
-			mergedSettings[k] = v
-		}
-		for k, v := range settings {
-			mergedSettings[k] = v
-		}
-
-		// Allowed configuration keys
-		allowedKeys := map[string]bool{
-			"ha_enabled": true, "ha_base_url": true, "ha_token": true, "ha_websocket": true,
-			"mqtt_enabled": true, "mqtt_broker": true, "mqtt_port": true, "mqtt_username": true, "mqtt_password": true,
-		}
-
-		// Validate settings structure
-		for key := range settings {
-			if !allowedKeys[key] {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Invalid setting key: " + key,
-				})
-				return
-			}
-
-			// All values must be strings
-			if _, ok := settings[key].(string); !ok {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "Setting " + key + " must be a string",
-				})
-				return
-			}
-		}
-
-		// Check if both HA and MQTT are enabled (mutual exclusion)
-		haEnabled := false
-		if val, ok := mergedSettings["ha_enabled"].(string); ok {
-			haEnabled = val == "true"
-		}
-		mqttEnabled := false
-		if val, ok := mergedSettings["mqtt_enabled"].(string); ok {
-			mqttEnabled = val == "true"
-		}
-
-		if haEnabled && mqttEnabled {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Cannot enable both Home Assistant and MQTT integrations simultaneously. Please disable one before enabling the other.",
-			})
-			return
-		}
-
-		// Validate HA settings if enabled
-		if haEnabled {
-			haBaseURL, hasBaseURL := mergedSettings["ha_base_url"].(string)
-			haToken, hasToken := mergedSettings["ha_token"].(string)
-
-			if !hasBaseURL || haBaseURL == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "HA base URL is required when HA is enabled",
-				})
-				return
-			}
-			if !hasToken || haToken == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "HA access token is required when HA is enabled",
-				})
-				return
-			}
-		} else {
-			// Don't include HA settings in the response when disabled (settings remain in Redis for easy re-enabling)
-			delete(mergedSettings, "ha_base_url")
-			delete(mergedSettings, "ha_token")
-			delete(mergedSettings, "ha_websocket")
-		}
-
-		// Validate MQTT settings if enabled
-		if mqttEnabled {
-			mqttBroker, hasBroker := mergedSettings["mqtt_broker"].(string)
-
-			if !hasBroker || mqttBroker == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "MQTT broker is required when MQTT is enabled",
-				})
-				return
-			}
-
-			// Ensure MQTT port is set; default to 1883 if omitted
-			mqttPort, hasPort := mergedSettings["mqtt_port"].(string)
-			if !hasPort || mqttPort == "" {
-				mqttPort = "1883"
-				mergedSettings["mqtt_port"] = mqttPort
-			}
-			port, err := strconv.Atoi(mqttPort)
-			if err != nil || port < 1 || port > 65535 {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": "MQTT port must be between 1 and 65535",
-				})
-				return
-			}
-		} else {
-			// Don't include MQTT settings in the response when disabled (settings remain in Redis for easy re-enabling)
-			delete(mergedSettings, "mqtt_broker")
-			delete(mergedSettings, "mqtt_port")
-			delete(mergedSettings, "mqtt_username")
-			delete(mergedSettings, "mqtt_password")
-		}
-
-		// Save settings to Redis
-		if err := client.HSet(ctx, "multizone:integrations", mergedSettings); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Failed to update integration settings",
-			})
-			return
-		}
-
-		// Check if HA-related settings changed
-		haSettingsChanged := false
-		for key := range settings {
-			if key == "ha_enabled" || key == "ha_base_url" || key == "ha_token" || key == "ha_websocket" {
-				haSettingsChanged = true
-				break
-			}
-		}
-
-		if haSettingsChanged {
-			logger.Info("HA integration settings changed. Please restart the logic container for changes to take effect.")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "updated",
-			"message": "Integration settings updated successfully",
-		})
-	}
+return func(w http.ResponseWriter, r *http.Request) {
+// Accept the request but don't do anything since integrations are removed
+w.Header().Set("Content-Type", "application/json")
+json.NewEncoder(w).Encode(map[string]interface{}{
+"status":  "ignored",
+"message": "Integration settings are not used in addon-only mode",
+})
+}
 }
 
 // GetDefaultsHandler returns default configuration values
