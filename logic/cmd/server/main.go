@@ -144,6 +144,7 @@ func main() {
 		router.HandleFunc("/api/ha/status", api.HAStatusHandler(haIntegration)).Methods("GET")
 		router.HandleFunc("/api/ha/test", api.HATestConnectionHandler(haIntegration)).Methods("GET")
 		router.HandleFunc("/api/ha/sync", api.HASyncStatesHandler(haIntegration)).Methods("POST")
+		router.HandleFunc("/api/ha/entities", api.HAGetEntitiesHandler(haIntegration)).Methods("GET")
 		router.HandleFunc("/api/ha/valve", api.HASetValveHandler(haIntegration)).Methods("POST")
 		router.HandleFunc("/api/ha/temperature", api.HASetMainTempHandler(haIntegration)).Methods("POST")
 		logger.Info("Home Assistant API endpoints registered")

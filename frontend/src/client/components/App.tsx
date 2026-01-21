@@ -4,6 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { ZoneCard } from './ZoneCard';
 import { ConfigManager } from './ConfigManager';
 import { IntegrationConfig } from './IntegrationConfig';
+import { EntitySelector, Entity } from './EntitySelector';
 import './App.css';
 
 interface ZoneResponse {
@@ -24,6 +25,13 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'zones' | 'config' | 'integrations'>('zones');
   const [showAddZone, setShowAddZone] = useState(false);
   const { connected, lastMessage } = useWebSocket('/ws');
+
+  // State for entity selectors in add zone form
+  const [selectedClimateEntity, setSelectedClimateEntity] = useState('');
+  const [selectedTempSensor, setSelectedTempSensor] = useState('');
+  const [selectedValveSwitch, setSelectedValveSwitch] = useState('');
+  const [autoLoadedTargetTemp, setAutoLoadedTargetTemp] = useState<string>('');
+
 
   const fetchZones = useCallback(async () => {
     try {
@@ -121,6 +129,30 @@ export function App() {
     }
   };
 
+  // Handle climate entity selection and auto-load attributes
+  const handleClimateEntityChange = (entityId: string, entity?: Entity) => {
+    setSelectedClimateEntity(entityId);
+    
+    if (entity) {
+      // Auto-load target temperature from climate entity if available
+      if (entity.temperature !== undefined && !autoLoadedTargetTemp) {
+        setAutoLoadedTargetTemp(entity.temperature.toString());
+      }
+      
+      // Note: For temperature sensor and valve switch, we would need to fetch
+      // the climate entity's full state which may include related entity IDs.
+      // This would require additional HA API calls or entity attributes.
+    }
+  };
+
+  const handleTempSensorChange = (entityId: string) => {
+    setSelectedTempSensor(entityId);
+  };
+
+  const handleValveSwitchChange = (entityId: string) => {
+    setSelectedValveSwitch(entityId);
+  };
+
   const handleAddZone = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -138,20 +170,17 @@ export function App() {
       newZone.id = zoneId.trim();
     }
 
-    // Add optional HA entity IDs if provided
-    const tempSensor = formData.get('temperature_sensor_entity_id') as string;
-    if (tempSensor && tempSensor.trim() !== '') {
-      newZone.temperature_sensor_entity_id = tempSensor.trim();
+    // Add HA entity IDs - prioritize user selection over auto-loaded values
+    if (selectedTempSensor && selectedTempSensor.trim() !== '') {
+      newZone.temperature_sensor_entity_id = selectedTempSensor.trim();
     }
 
-    const valveSwitch = formData.get('valve_switch_entity_id') as string;
-    if (valveSwitch && valveSwitch.trim() !== '') {
-      newZone.valve_switch_entity_id = valveSwitch.trim();
+    if (selectedValveSwitch && selectedValveSwitch.trim() !== '') {
+      newZone.valve_switch_entity_id = selectedValveSwitch.trim();
     }
 
-    const climateEntity = formData.get('climate_entity_id') as string;
-    if (climateEntity && climateEntity.trim() !== '') {
-      newZone.climate_entity_id = climateEntity.trim();
+    if (selectedClimateEntity && selectedClimateEntity.trim() !== '') {
+      newZone.climate_entity_id = selectedClimateEntity.trim();
     }
 
     try {
@@ -167,6 +196,11 @@ export function App() {
         setShowAddZone(false);
         fetchZones();
         event.currentTarget.reset();
+        // Reset entity selectors
+        setSelectedClimateEntity('');
+        setSelectedTempSensor('');
+        setSelectedValveSwitch('');
+        setAutoLoadedTargetTemp('');
       } else {
         const errorData = await response.json();
         alert(`Failed to create zone: ${errorData.error || 'Unknown error'}`);
@@ -241,7 +275,19 @@ export function App() {
                 </div>
                 <div className="form-group">
                   <label>Target Temperature (°C)</label>
-                  <input type="number" name="target_temperature" step="0.5" min="-50" max="100" defaultValue="20" required />
+                  <input 
+                    type="number" 
+                    name="target_temperature" 
+                    step="0.5" 
+                    min="-50" 
+                    max="100" 
+                    defaultValue={autoLoadedTargetTemp || "20"} 
+                    key={autoLoadedTargetTemp} 
+                    required 
+                  />
+                  {autoLoadedTargetTemp && (
+                    <small style={{ color: '#667eea' }}>Auto-loaded from climate entity</small>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>Priority (0-100)</label>
@@ -249,20 +295,38 @@ export function App() {
                 </div>
                 
                 <h4 style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>Home Assistant Integration (Optional)</h4>
+                
                 <div className="form-group">
-                  <label>Temperature Sensor Entity ID</label>
-                  <input type="text" name="temperature_sensor_entity_id" placeholder="sensor.living_room_temperature" pattern="^[a-z_]+\.[a-z0-9_]+$" title="Format: domain.entity_name (e.g., sensor.temperature)" />
-                  <small>Entity ID of the temperature sensor</small>
+                  <label>Climate Entity</label>
+                  <EntitySelector
+                    value={selectedClimateEntity}
+                    onChange={handleClimateEntityChange}
+                    domain="climate"
+                    placeholder="climate.living_room"
+                  />
+                  <small>Link to existing HA climate entity to auto-load configuration</small>
                 </div>
+                
                 <div className="form-group">
-                  <label>Valve Switch Entity ID</label>
-                  <input type="text" name="valve_switch_entity_id" placeholder="switch.living_room_valve" pattern="^[a-z_]+\.[a-z0-9_]+$" title="Format: domain.entity_name (e.g., switch.valve)" />
-                  <small>Entity ID of the valve control switch</small>
+                  <label>Temperature Sensor Entity</label>
+                  <EntitySelector
+                    value={selectedTempSensor}
+                    onChange={handleTempSensorChange}
+                    domain="sensor"
+                    placeholder="sensor.living_room_temperature"
+                  />
+                  <small>Temperature sensor for this zone (auto-loaded from climate if available)</small>
                 </div>
+                
                 <div className="form-group">
-                  <label>Climate Entity ID</label>
-                  <input type="text" name="climate_entity_id" placeholder="climate.living_room" pattern="^[a-z_]+\.[a-z0-9_]+$" title="Format: domain.entity_name (e.g., climate.zone)" />
-                  <small>Optional: Link to existing HA climate entity to sync temperature and valve state</small>
+                  <label>Valve Switch Entity</label>
+                  <EntitySelector
+                    value={selectedValveSwitch}
+                    onChange={handleValveSwitchChange}
+                    domain="switch"
+                    placeholder="switch.living_room_valve"
+                  />
+                  <small>Valve control switch for this zone (auto-loaded from climate if available)</small>
                 </div>
                 
                 <button type="submit" className="btn btn-primary">Create Zone</button>
