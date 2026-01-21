@@ -9,11 +9,8 @@ echo ""
 
 # Configuration
 LOGIC_URL="${LOGIC_URL:-http://logic-test:8080}"
-FRONTEND_URL="${FRONTEND_URL:-http://frontend-test:8099}"
 REDIS_HOST="${REDIS_HOST:-redis-test}"
 REDIS_PORT="${REDIS_PORT:-6379}"
-MQTT_BROKER="${MQTT_BROKER:-mqtt-broker-test}"
-MQTT_PORT="${MQTT_PORT:-1883}"
 
 RESULTS_DIR="/results"
 mkdir -p "$RESULTS_DIR"
@@ -79,48 +76,9 @@ else
     fail_test "Logic service not connected to Redis"
 fi
 
-# Test 3: Frontend Service Health
+# Test 3: Redis Connection
 echo ""
-echo "Test 3: Frontend Service Health Check"
-if curl -sf "$FRONTEND_URL/health" > /dev/null 2>&1; then
-    pass_test "Frontend service is responding"
-else
-    fail_test "Frontend service is not responding"
-fi
-
-# Test 3a: Frontend Serves index.html
-echo ""
-echo "Test 3a: Frontend Serves index.html"
-response=$(curl -s "$FRONTEND_URL/" -w "\n%{http_code}")
-http_code=$(echo "$response" | tail -n 1)
-body=$(echo "$response" | head -n -1)
-
-if [ "$http_code" = "200" ]; then
-    if echo "$body" | grep -q "Multizone Climate Control"; then
-        pass_test "Frontend serves index.html successfully"
-    else
-        fail_test "Frontend returned 200 but index.html content is missing"
-    fi
-else
-    fail_test "Frontend failed to serve index.html (HTTP $http_code)"
-fi
-
-# Test 3b: Frontend Serves Static Assets
-echo ""
-echo "Test 3b: Frontend Static Asset Path Test"
-# Try to access a non-existent route (should still serve index.html for SPA routing)
-response=$(curl -s "$FRONTEND_URL/some-route" -w "\n%{http_code}")
-http_code=$(echo "$response" | tail -n 1)
-
-if [ "$http_code" = "200" ]; then
-    pass_test "Frontend catch-all route serves index.html"
-else
-    fail_test "Frontend catch-all route failed (HTTP $http_code)"
-fi
-
-# Test 4: Redis Connection
-echo ""
-echo "Test 4: Redis Connection"
+echo "Test 3: Redis Connection"
 if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping | grep -q "PONG"; then
     pass_test "Redis is responding to PING"
 else
@@ -131,8 +89,8 @@ echo ""
 echo "===== API Endpoint Tests ====="
 echo ""
 
-# Test 5: List Zones Endpoint
-echo "Test 5: List Zones Endpoint"
+# Test 4: List Zones Endpoint
+echo "Test 4: List Zones Endpoint"
 response=$(curl -s "$LOGIC_URL/api/zones")
 if [ $? -eq 0 ]; then
     pass_test "Zones endpoint is accessible"
@@ -140,9 +98,9 @@ else
     fail_test "Zones endpoint is not accessible"
 fi
 
-# Test 6: Metrics Endpoint
+# Test 5: Metrics Endpoint
 echo ""
-echo "Test 6: Metrics Endpoint"
+echo "Test 5: Metrics Endpoint"
 response=$(curl -s "$LOGIC_URL/metrics")
 if echo "$response" | jq -e 'has("zones_count")' > /dev/null 2>&1; then
     pass_test "Metrics endpoint returns zones_count"
@@ -150,9 +108,9 @@ else
     fail_test "Metrics endpoint missing zones_count"
 fi
 
-# Test 7: Create Test Zone
+# Test 6: Create and Retrieve Zone
 echo ""
-echo "Test 7: Create and Retrieve Zone"
+echo "Test 6: Create and Retrieve Zone"
 zone_id="test_zone_$$"
 redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" HSET "multizone:zone:${zone_id}" \
     id "$zone_id" \
@@ -168,9 +126,9 @@ else
     fail_test "Failed to create/retrieve zone"
 fi
 
-# Test 8: Update Zone
+# Test 7: Update Zone
 echo ""
-echo "Test 8: Update Zone"
+echo "Test 7: Update Zone"
 update_response=$(curl -s -X PUT "$LOGIC_URL/api/zones/${zone_id}" \
     -H "Content-Type: application/json" \
     -d '{"target_temperature": "22.0"}')
@@ -191,8 +149,8 @@ echo ""
 echo "===== Redis Integration Tests ====="
 echo ""
 
-# Test 9: Redis Data Persistence
-echo "Test 9: Redis Data Persistence"
+# Test 8: Redis Data Persistence
+echo "Test 8: Redis Data Persistence"
 test_key="multizone:test:$$"
 test_value="integration_test_value"
 redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" SET "$test_key" "$test_value" > /dev/null
@@ -205,9 +163,9 @@ else
     fail_test "Redis data persistence failed"
 fi
 
-# Test 10: Redis Hash Operations
+# Test 9: Redis Hash Operations
 echo ""
-echo "Test 10: Redis Hash Operations"
+echo "Test 9: Redis Hash Operations"
 hash_key="multizone:test_hash:$$"
 redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" HSET "$hash_key" field1 value1 field2 value2 > /dev/null
 field1_val=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" HGET "$hash_key" field1)
@@ -220,30 +178,11 @@ else
 fi
 
 echo ""
-echo "===== MQTT Integration Tests ====="
-echo ""
-
-# Run MQTT tests using Node.js
-if [ -f "/tests/mqtt-tests.js" ]; then
-    echo "Running MQTT integration tests..."
-    cd /tests
-    node mqtt-tests.js
-    mqtt_result=$?
-    if [ $mqtt_result -eq 0 ]; then
-        pass_test "MQTT integration tests passed"
-    else
-        fail_test "MQTT integration tests failed"
-    fi
-else
-    echo "⚠ WARNING: MQTT test script not found, skipping MQTT tests"
-fi
-
-echo ""
 echo "===== End-to-End Tests ====="
 echo ""
 
-# Test 11: Full Zone Lifecycle
-echo "Test 11: Full Zone Lifecycle Test"
+# Test 10: Full Zone Lifecycle
+echo "Test 10: Full Zone Lifecycle Test"
 lifecycle_zone="lifecycle_test_$$"
 
 # Create zone

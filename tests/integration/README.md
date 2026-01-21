@@ -8,7 +8,6 @@ These integration tests verify that all system components work together correctl
 - **Service orchestration** - All containers start and communicate
 - **API functionality** - REST endpoints work end-to-end
 - **Data persistence** - Redis stores and retrieves data correctly
-- **MQTT communication** - Message broker integration works
 - **Full workflows** - Complete user scenarios function properly
 
 **Note**: These tests complement the unit tests by verifying integration between components. While unit tests verify individual components work correctly (algorithm logic, HA integration functions), integration tests verify the complete system works together.
@@ -34,7 +33,6 @@ The integration test suite validates the entire system working together, includi
 
 - **End-to-End Testing**: Complete system functionality from API to Redis
 - **Docker Compose Integration**: Service orchestration and dependencies
-- **MQTT Integration**: Message broker communication and Home Assistant discovery
 - **API Endpoint Testing**: REST API functionality and data persistence
 - **Redis Integration**: Data storage and retrieval
 
@@ -43,10 +41,7 @@ The integration test suite validates the entire system working together, includi
 The test suite uses Docker Compose to spin up isolated instances of all services:
 
 - `logic-test`: Logic/API service
-- `frontend-test`: Frontend web service
-- `mqtt-middleware-test`: MQTT middleware service
 - `redis-test`: Redis database
-- `mqtt-broker-test`: Eclipse Mosquitto MQTT broker
 - `test-runner`: Test execution container
 
 ## Prerequisites
@@ -86,11 +81,8 @@ docker-compose -f docker-compose.test.yml down -v
 ### Running Individual Test Scripts
 
 ```bash
-# Run only the bash-based integration tests
+# Run the integration tests
 docker-compose -f docker-compose.test.yml run --rm test-runner ./run-tests.sh
-
-# Run only MQTT tests
-docker-compose -f docker-compose.test.yml run --rm test-runner node tests/mqtt-tests.js
 ```
 
 ## Test Coverage
@@ -99,7 +91,6 @@ docker-compose -f docker-compose.test.yml run --rm test-runner node tests/mqtt-t
 
 - Logic service health endpoint
 - Logic service status and Redis connectivity
-- Frontend service availability
 - Redis connectivity and responsiveness
 
 ### API Endpoint Tests
@@ -117,15 +108,6 @@ docker-compose -f docker-compose.test.yml run --rm test-runner node tests/mqtt-t
 - Hash operations (HSET/HGET)
 - Key pattern matching
 - Zone data storage and retrieval
-
-### MQTT Integration Tests
-
-- MQTT broker connection
-- Topic subscription
-- Message publishing and receiving
-- MQTT to Redis data flow (via middleware)
-- Home Assistant discovery message format
-- Climate entity state topics
 
 ### End-to-End Tests
 
@@ -145,8 +127,8 @@ Example results format:
 ```json
 {
   "timestamp": "2024-01-16T19:00:00Z",
-  "total": 15,
-  "passed": 15,
+  "total": 10,
+  "passed": 10,
   "failed": 0,
   "success": true
 }
@@ -160,10 +142,7 @@ The following environment variables can be configured in `docker-compose.test.ym
 
 - `REDIS_HOST` - Redis hostname (default: redis-test)
 - `REDIS_PORT` - Redis port (default: 6379)
-- `MQTT_BROKER` - MQTT broker hostname (default: mqtt-broker-test)
-- `MQTT_PORT` - MQTT port (default: 1883)
 - `LOGIC_URL` - Logic service URL (default: http://logic-test:8080)
-- `FRONTEND_URL` - Frontend service URL (default: http://frontend-test:8099)
 
 ### Network Configuration
 
@@ -174,9 +153,7 @@ All test services run on an isolated Docker network (`multizone-test-network`) t
 Test services use non-conflicting ports:
 
 - Logic: 18080 (external) → 8080 (internal)
-- Frontend: 18099 (external) → 8099 (internal)
 - Redis: 16379 (external) → 6379 (internal)
-- MQTT: 11883 (external) → 1883 (internal)
 
 ## Adding New Tests
 
@@ -193,21 +170,6 @@ if [ test_condition ]; then
 else
     fail_test "Your Test Name"
 fi
-```
-
-### Adding MQTT Tests
-
-Edit `tests/mqtt-tests.js` and add your test to the `runTests()` function:
-
-```javascript
-// Test N: Your Test Description
-console.log('\nTest N: Your Test Description');
-try {
-    // Your test logic here
-    pass('Your Test Description');
-} catch (error) {
-    fail('Your Test Description', error);
-}
 ```
 
 ## Troubleshooting

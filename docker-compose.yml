@@ -24,24 +24,6 @@ services:
       retries: 3
       start_period: 40s
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: multizone-frontend
-    restart: unless-stopped
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - WEB_PORT=8099
-      - LOGIC_API_URL=http://logic:8080
-    ports:
-      - "8099:8099"
-    depends_on:
-      - redis
-      - logic
-
   redis:
     image: redis:7-alpine
     container_name: multizone-redis
