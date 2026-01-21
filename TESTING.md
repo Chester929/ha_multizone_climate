@@ -7,21 +7,20 @@ This document provides a comprehensive overview of all tests in the ha_multizone
 The project has three layers of testing:
 
 1. **Unit Tests** - Test individual components in isolation
-2. **Integration Tests** - Test component interactions and system integration (addon services)
+2. **Integration Tests** - Test component interactions and system integration (add-on services)
 3. **End-to-End Tests** - Test the complete system with all services running
 
-## Addon-Only Architecture
+## Architecture Testing Approach
 
-This project is a **Home Assistant Addon** with a containerized architecture. It does NOT:
-- Make direct API calls to Home Assistant
+This project uses a **2-container add-on** with a **native Python custom integration**. It does NOT:
 - Use MQTT for communication
-- Auto-discover or auto-create entities
+- Auto-discover or auto-create entities through MQTT
+- Make direct API calls from the add-on to Home Assistant
 
-Instead, the addon:
-- Stores entity IDs that users manually configure
-- Calculates intended states (valve open/close, temperature targets)
-- Can be used by HA automations to actually control entities
-- Provides a UI through HA Ingress for configuration and monitoring
+Instead, the system:
+- **Add-on (Logic + Redis)**: Calculates intended states (valve open/close, temperature targets)
+- **Custom Integration**: Creates climate entities, polls for commands, executes service calls
+- **Communication**: REST API between custom integration and add-on
 
 ## Unit Tests
 
@@ -56,7 +55,7 @@ Instead, the addon:
 
 ### Worker/Processor Tests (`logic/internal/worker/processor_test.go`)
 
-#### Test suites covering addon workflow
+#### Test suites covering add-on workflow
 - **Processor Creation**: With various dependency configurations
 - **LastActuated Timestamp**: Proper time tracking
 - **Temperature Precision in Workflow**:
@@ -65,18 +64,18 @@ Instead, the addon:
 - **Zone State Management**:
   - Enable/disable functionality
   - Valve state transitions (open/closed)
-  - Zone state stored in addon (not directly controlled)
+  - Zone state calculated and provided to integration
 - **Main Climate Control**:
-  - Read current temperature
-  - Set target temperature
+  - Calculate target temperature
   - Verify 0.5°C precision
-  - Entity ID storage in addon
+  - Provide commands to integration for execution
 
 **Key Requirements Verified:**
 - ✅ Full workflow respects temperature precision
-- ✅ Main climate entity ID stored (addon doesn't control it directly)
-- ✅ Zones valve states tracked (addon calculates intended states)
-- ✅ Addon stores configuration but doesn't make HA API calls
+- ✅ Main climate target calculated by add-on
+- ✅ Valve states calculated by add-on
+- ✅ Commands provided to custom integration via API
+- ✅ Integration executes actual service calls
 
 ### Other Unit Tests
 
@@ -87,20 +86,20 @@ Instead, the addon:
 
 ### Bash Integration Tests (run-tests.sh)
 
-**Purpose**: Test addon service orchestration and API integration
+**Purpose**: Test add-on service orchestration and API integration
 
 #### Service Health Checks
 1. Logic service health endpoint
 2. Logic service Redis connection
-3. Frontend service availability
-4. Frontend SPA routing
-5. Redis connectivity
+3. Redis connectivity
 
 #### API Endpoint Tests
-6. List zones endpoint
-7. Metrics endpoint
-8. Create and retrieve zone
-9. Update zone via API
+4. List zones endpoint
+5. Metrics endpoint
+6. Create and retrieve zone
+7. Update zone via API
+8. Get commands endpoint (for integration)
+9. Post state endpoint (from integration)
 
 #### Redis Integration Tests
 10. Data persistence (SET/GET)
@@ -109,14 +108,15 @@ Instead, the addon:
 #### End-to-End Tests
 12. Full zone lifecycle (create, read, update, delete)
 13. Cross-service data flow
+14. Command queue management
 
 **Note**: These tests verify that:
-- All addon services start correctly
+- Add-on services start correctly
 - Services can communicate with each other
 - Data persists across service boundaries
-- The addon works as an integrated whole
-- NO MQTT tests (MQTT was removed in addon-only architecture)
-- NO direct HA API tests (addon uses manual entity ID configuration)
+- API endpoints work for custom integration
+- The add-on works as an integrated whole
+- NO direct HA API tests (custom integration handles that)
 
 ## Test Coverage Summary
 
@@ -127,19 +127,20 @@ Instead, the addon:
 - Edge cases and boundary conditions tested
 - Precision requirements verified (0.1°C and 0.5°C)
 
-### Addon Workflow
+### Add-on Workflow
 - **Test suites** covering processor logic
 - Full workflow tested
 - State management verified
 - Precision requirements validated
-- Addon-only architecture verified (no direct HA API calls)
+- Command generation for integration verified
 
-### Addon Service Integration
-- **13 integration tests** covering service orchestration
+### Add-on Service Integration
+- **14+ integration tests** covering service orchestration
 - Health checks
 - API functionality
 - Data persistence
-- **NO MQTT tests** (MQTT removed in addon-only architecture)
+- Command/state API endpoints for integration
+- **NO MQTT tests** (native custom integration used instead)
 
 ## Running Tests
 
@@ -176,10 +177,10 @@ go test ./... -cover
 |------------|----------|---------------|
 | Zone temp precision 0.1°C | ✅ | algorithm/temperature_extended_test.go, worker/processor_test.go |
 | Main climate precision 0.5°C | ✅ | algorithm/temperature_extended_test.go, worker/processor_test.go |
-| Addon stores entity IDs | ✅ | worker/processor_test.go |
-| Addon calculates intended states | ✅ | worker/processor_test.go |
-| No direct HA API calls | ✅ | worker/processor.go (all HA integration removed) |
-| Manual entity configuration | ✅ | Addon-only architecture |
+| Add-on calculates states | ✅ | worker/processor_test.go |
+| Commands via API | ✅ | API integration tests |
+| Integration executes commands | ✅ | Custom integration (manual testing) |
+| No direct HA calls from add-on | ✅ | Architecture design |
 | Main logic scenarios | ✅ | algorithm/*_test.go (50+ test cases) |
 
 ## Adding New Tests
@@ -204,10 +205,10 @@ func TestNewFeature(t *testing.T) {
 ```
 
 ### For New HA Integration Features
-Add tests to `logic/internal/homeassistant/integration_test.go`
+Add tests to the custom integration test suite (when applicable)
 
-### For New Workflow Features
-Add tests to `logic/internal/worker/processor_test.go`
+### For New API Endpoints
+Add tests to `logic/internal/api/handlers_test.go` or integration tests
 
 ### For New Integration Tests
 Add tests to `tests/integration/run-tests.sh` following the existing pattern

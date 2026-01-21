@@ -22,8 +22,9 @@ Thank you for your interest in contributing to the Multizone Climate project! Th
 
 - **Docker and Docker Compose**: For running containers
 - **Go 1.21+**: For GoLang development
-- **Node.js 20+**: For TypeScript development
+- **Python 3.11+**: For custom integration development
 - **Make**: For using the Makefile commands
+- **Home Assistant**: For testing the custom integration
 
 ### Running Locally
 
@@ -46,11 +47,11 @@ cd logic
 go run cmd/server/main.go
 ```
 
-**Frontend Container (TypeScript):**
+**Custom Integration (Python):**
 ```bash
-cd frontend
-npm install
-npm run dev
+# Copy to your Home Assistant config directory
+cp -r custom_components/multizone_climate /path/to/ha/config/custom_components/
+# Restart Home Assistant to load changes
 ```
 
 ## Code Standards
@@ -91,6 +92,24 @@ async function fetchZones(): Promise<Zone[]> {
 }
 ```
 
+### Python
+
+- Follow PEP 8 style guide
+- Use type hints for function parameters and returns
+- Write docstrings for classes and methods
+- Follow Home Assistant integration guidelines
+
+**Example:**
+```python
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback
+) -> None:
+    """Set up Multizone Climate entities from a config entry."""
+    # Implementation...
+```
+
 ### Testing
 
 - **GoLang**: Write unit tests using the standard `testing` package
@@ -99,10 +118,10 @@ async function fetchZones(): Promise<Zone[]> {
   go test ./...
   ```
 
-- **Frontend**: Write tests for critical functionality
+- **Python**: Write tests for the custom integration
   ```bash
-  cd frontend
-  npm test
+  # Run Home Assistant test suite if applicable
+  pytest tests/
   ```
 
 ## Pull Request Process
@@ -120,13 +139,13 @@ async function fetchZones(): Promise<Zone[]> {
 3. **Test your changes**
    ```bash
    make test-logic
-   make test-frontend
+   # Test custom integration in Home Assistant
    ```
 
 4. **Lint your code**
    ```bash
    make lint-logic
-   make lint-frontend
+   # For Python: ruff check custom_components/multizone_climate/
    ```
 
 5. **Push to your fork**
@@ -208,9 +227,8 @@ When adding new features, consider:
 
 ### Container Responsibilities
 
-- **Logic Container**: Core algorithms, business logic, safety checks
-- **Frontend Container**: UI, user interactions, data visualization
-- **MQTT Middleware**: MQTT integration, Home Assistant discovery
+- **Logic Container**: Core algorithms, business logic, safety checks, REST API
+- **Custom Integration**: HA entities, config flow, coordinator, state synchronization
 
 ### Redis Data Organization
 
@@ -237,6 +255,7 @@ Examples:
 
 - Update README.md for user-facing changes
 - Update hassio-addon/README.md for add-on changes
+- Update custom_components/multizone_climate/README.md for integration changes
 - Add examples for new features
 
 ## Reporting Issues
