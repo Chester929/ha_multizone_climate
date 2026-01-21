@@ -15,6 +15,14 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   const [editedZone, setEditedZone] = useState(zone);
   const [sliderValue, setSliderValue] = useState(zone.target_temperature || '20');
   const { defaults } = useDefaults();
+  const [entityIdErrors, setEntityIdErrors] = useState({
+    temperature_sensor: '',
+    valve_switch: '',
+    climate: ''
+  });
+
+  // Entity ID validation pattern
+  const entityIDPattern = /^[a-z_]+\.[a-z0-9_]+$/;
 
   // Sync editedZone when zone prop changes (e.g., from WebSocket updates)
   useEffect(() => {
@@ -23,6 +31,33 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
   }, [zone]);
 
   const handleSave = () => {
+    // Validate entity IDs before saving
+    const errors = { temperature_sensor: '', valve_switch: '', climate: '' };
+    let hasErrors = false;
+
+    if (editedZone.temperature_sensor_entity_id && !entityIDPattern.test(editedZone.temperature_sensor_entity_id)) {
+      errors.temperature_sensor = 'Invalid format. Expected: domain.entity_name (e.g., sensor.temperature)';
+      hasErrors = true;
+    }
+
+    if (editedZone.valve_switch_entity_id && !entityIDPattern.test(editedZone.valve_switch_entity_id)) {
+      errors.valve_switch = 'Invalid format. Expected: domain.entity_name (e.g., switch.valve)';
+      hasErrors = true;
+    }
+
+    if (editedZone.climate_entity_id && !entityIDPattern.test(editedZone.climate_entity_id)) {
+      errors.climate = 'Invalid format. Expected: domain.entity_name (e.g., climate.zone)';
+      hasErrors = true;
+    }
+
+    if (hasErrors) {
+      setEntityIdErrors(errors);
+      return;
+    }
+
+    // Clear errors if validation passed
+    setEntityIdErrors({ temperature_sensor: '', valve_switch: '', climate: '' });
+
     // Validate target_temperature before saving
     if (editedZone.target_temperature !== undefined && editedZone.target_temperature !== null) {
       const temp = parseFloat(editedZone.target_temperature as string);

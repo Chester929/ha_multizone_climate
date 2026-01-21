@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
+	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 )
 
@@ -378,9 +380,8 @@ func (i *Integration) updateZoneClimate(ctx context.Context, entityID, state str
 		}
 
 		// Only update if the temperature changed (to avoid loops)
-		// Use a small threshold to account for floating-point precision
-		threshold := 0.1
-		if targetTemp-currentTarget > threshold || currentTarget-targetTemp > threshold {
+		// Use threshold from default configuration for consistency
+		if math.Abs(targetTemp-currentTarget) > models.DefaultTargetChangeThreshold {
 			// Update zone target temperature
 			if err := i.redisClient.HSet(ctx, zoneKey, "target_temperature", targetTemp); err != nil {
 				return err
