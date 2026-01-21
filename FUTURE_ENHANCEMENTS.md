@@ -18,24 +18,18 @@ This document tracks potential improvements and features for future development.
    - ✅ Includes distributed locking, job status tracking, and FIFO queue
    - Status: Fully implemented
 
-### MQTT Middleware
+### Custom Integration
 
-3. **✅ Make Redis database number configurable** (mqtt-middleware/src/index.js)
-   - ✅ Redis DB now configurable via `REDIS_DB` environment variable
-   - ✅ Defaults to database 0 if not specified
-   - Status: Completed
-
-### Frontend
-
-4. **✅ Add port validation** (frontend/src/server.ts)
-   - ✅ Added `parseRedisPort()` function with error handling
-   - ✅ Validates port is a valid number (1-65535)
-   - ✅ Provides meaningful error messages
-   - Status: Completed
+3. **✅ Native Python Integration** (custom_components/multizone_climate/)
+   - ✅ Config flow with entity selectors
+   - ✅ Climate entities for each zone
+   - ✅ Coordinator for command polling
+   - ✅ Event-driven temperature sync
+   - Status: Fully implemented
 
 ### Feature Enhancements
 
-5. **✅ Complete Worker Job System** (logic/internal/worker/pool.go)
+4. **✅ Complete Worker Job System** (logic/internal/worker/pool.go)
    - ✅ Implemented actual job processing logic
    - ✅ Added job types: calculate_temp, update_valves, safety_check
    - ✅ Implemented job queue (FIFO) from Redis
@@ -45,7 +39,7 @@ This document tracks potential improvements and features for future development.
 
 ### Infrastructure Enhancements
 
-6. **✅ Multi-architecture Docker Builds** (.github/workflows/docker-multiarch.yml)
+5. **✅ Multi-architecture Docker Builds** (.github/workflows/docker-multiarch.yml)
    - ✅ GitHub Actions workflow for automated multi-arch builds
    - ✅ Support for amd64, armv7, and aarch64 architectures
    - ✅ Automated push to GitHub Container Registry (GHCR)
@@ -54,10 +48,9 @@ This document tracks potential improvements and features for future development.
    - ✅ Documentation updated with GHCR usage instructions
    - Status: Fully implemented and ready for production
 
-7. **✅ Integration Tests** (tests/integration/)
+6. **✅ Integration Tests** (tests/integration/)
    - ✅ End-to-end testing suite
    - ✅ Docker Compose integration tests
-   - ✅ MQTT integration validation
    - ✅ API endpoint testing
    - ✅ Redis integration tests
    - ✅ Comprehensive test documentation
@@ -72,32 +65,29 @@ All code improvements from the initial code review have been completed. See the 
 
 ### High Priority
 
-1. **✅ Home Assistant Service API Client** (logic/internal/homeassistant/)
-   - ✅ Direct HA API integration (alternative to MQTT)
-   - ✅ Read existing entity states via HTTP API
-   - ✅ Call HA services (switch, climate control)
-   - ✅ WebSocket for real-time state updates
-   - ✅ Entity ID mapping through zone configuration
-   - ✅ Automatic state synchronization to Redis
-   - ✅ Trigger recalculation on temperature changes
-   - ✅ Comprehensive test coverage (11 tests)
-   - ✅ API endpoints for integration control
-   - Status: Fully implemented and tested
+1. **Enhanced Custom Integration Features**
+   - Advanced configuration options in config flow
+   - Statistics and metrics display in HA UI
+   - Custom lovelace cards for zone management
+   - Zone group management
+   - Status: Planned
 
-2. **✅ Real-time Temperature Monitoring** (logic/internal/homeassistant/integration.go)
-   - ✅ Subscribe to HA state changes via WebSocket
-   - ✅ Update Redis when temperature sensors change
-   - ✅ Trigger automatic recalculation on changes
-   - ✅ Update valve states based on new data
-   - ✅ Support for main climate entity updates
-   - ✅ Automatic entity type detection
-   - Status: Fully implemented and tested
+2. **Advanced Scheduling**
+   - Time-based temperature schedules per zone
+   - Different schedules for weekdays/weekends
+   - Holiday mode support
+   - Vacation mode with reduced temperatures
+   - Status: Planned
 
 ### Medium Priority
 
-3. **✅ Advanced Frontend UI** (frontend/src/client/)
-   - ✅ Migrated to React for better interactivity
-   - ✅ Added Chart.js for temperature graphs
+3. **Historical Data and Analytics**
+   - Temperature history tracking
+   - Valve activity statistics
+   - Energy consumption estimates
+   - Comfort metrics
+   - Data export capabilities
+   - Status: Partially implemented (Statistics API exists)
    - ✅ Historical data visualization with 24-hour charts
    - ✅ Real-time WebSocket updates for live data
    - ✅ Zone editing interface with CRUD operations

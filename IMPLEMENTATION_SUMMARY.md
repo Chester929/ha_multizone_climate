@@ -1,8 +1,10 @@
 # Implementation Summary - Multizone Climate Enhancements
 
+> **Note**: This document describes historical implementation work. The project has since evolved to use a 2-container add-on (Logic + Redis) with a native Python custom integration. See README.md and PROJECT_SUMMARY.md for the current architecture.
+
 ## Issues Addressed
 
-This implementation addresses the following issues from the problem statement:
+This implementation addressed the following issues from a previous problem statement:
 
 1. ✅ **Zone creation failure** - Missing POST endpoint in Go logic container
 2. ✅ **Input validations** - Comprehensive validation for all zone and integration fields
