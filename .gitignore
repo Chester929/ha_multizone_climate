@@ -39,3 +39,12 @@ Thumbs.db
 # Redis
 dump.rdb
 appendonly.aof
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+
+# Backup files
+*.backup
