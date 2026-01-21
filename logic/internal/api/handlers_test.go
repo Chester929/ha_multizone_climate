@@ -122,3 +122,79 @@ func TestGetDefaultsHandlerConsistency(t *testing.T) {
 		}
 	}
 }
+
+// TestIntegrationStateUpdateHandler tests the state update endpoint
+func TestIntegrationStateUpdateHandler(t *testing.T) {
+	t.Run("InvalidJSON", func(t *testing.T) {
+		handler := IntegrationStateUpdateHandler(nil)
+		
+		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBufferString("invalid json"))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+	
+	t.Run("MissingZoneID", func(t *testing.T) {
+		handler := IntegrationStateUpdateHandler(nil)
+		
+		payload := map[string]interface{}{
+			"current_temperature": 20.5,
+		}
+		body, _ := json.Marshal(payload)
+		
+		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+}
+
+// TestIntegrationGetCommandsHandler tests the get commands endpoint
+func TestIntegrationGetCommandsHandler(t *testing.T) {
+	t.Run("NilClient", func(t *testing.T) {
+		// Skip test if nil client causes panic - would need mock Redis for full test
+		t.Skip("Skipping test that requires Redis mock")
+	})
+}
+
+// TestIntegrationDeleteCommandsHandler tests the delete commands endpoint
+func TestIntegrationDeleteCommandsHandler(t *testing.T) {
+	t.Run("InvalidJSON", func(t *testing.T) {
+		handler := IntegrationDeleteCommandsHandler(nil)
+		
+		req := httptest.NewRequest("DELETE", "/api/integration/commands", bytes.NewBufferString("invalid json"))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+	
+	t.Run("EmptyEntityIDs", func(t *testing.T) {
+		handler := IntegrationDeleteCommandsHandler(nil)
+		
+		payload := map[string]interface{}{
+			"entity_ids": []string{},
+		}
+		body, _ := json.Marshal(payload)
+		
+		req := httptest.NewRequest("DELETE", "/api/integration/commands", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		
+		handler(w, req)
+		
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+}

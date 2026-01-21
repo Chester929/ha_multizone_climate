@@ -71,6 +71,12 @@ func main() {
 	// Configuration defaults endpoint
 	router.HandleFunc("/api/defaults", api.GetDefaultsHandler()).Methods("GET")
 
+	// Integration endpoints for Home Assistant integration
+	router.HandleFunc("/api/integration/state_update", api.IntegrationStateUpdateHandler(redisClient)).Methods("POST")
+	router.HandleFunc("/api/integration/commands", api.IntegrationGetCommandsHandler(redisClient)).Methods("GET")
+	router.HandleFunc("/api/integration/commands", api.IntegrationDeleteCommandsHandler(redisClient)).Methods("DELETE")
+	logger.Info("Integration API endpoints registered")
+
 	// Integration settings endpoints (for future use if needed)
 	router.HandleFunc("/api/integrations", api.GetIntegrationSettingsHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/api/integrations", api.UpdateIntegrationSettingsHandler(redisClient)).Methods("PUT")

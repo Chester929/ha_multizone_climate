@@ -929,3 +929,199 @@ func GetDefaultsHandler() http.HandlerFunc {
 		json.NewEncoder(w).Encode(defaults)
 	}
 }
+
+// IntegrationStateUpdateHandler handles state updates from the Home Assistant integration
+// POST /api/integration/state_update
+func IntegrationStateUpdateHandler(client *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var update struct {
+			ZoneID             string  `json:"zone_id"`
+			CurrentTemperature float64 `json:"current_temperature"`
+			TargetTemperature  float64 `json:"target_temperature,omitempty"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			logger.Error("Failed to decode state update: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid JSON payload",
+			})
+			return
+		}
+
+		// Validate required fields
+		if update.ZoneID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "zone_id is required",
+			})
+			return
+		}
+
+		ctx := r.Context()
+
+		// Check if zone exists
+		zoneKey := fmt.Sprintf("multizone:zone:%s", update.ZoneID)
+		exists, err := client.Exists(ctx, zoneKey)
+		if err != nil {
+			logger.Error("Failed to check zone existence: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Database error",
+			})
+			return
+		}
+
+		if exists == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": fmt.Sprintf("Zone %s not found", update.ZoneID),
+			})
+			return
+		}
+
+		// Update zone state in Redis
+		updates := []interface{}{
+			"current_temperature", update.CurrentTemperature,
+			"last_updated", time.Now().Format(time.RFC3339),
+		}
+
+		if update.TargetTemperature > 0 {
+			updates = append(updates, "target_temperature", update.TargetTemperature)
+		}
+
+		if err := client.HSet(ctx, zoneKey, updates...); err != nil {
+			logger.Error("Failed to update zone state: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to update zone state",
+			})
+			return
+		}
+
+		logger.Info("Integration state update: zone=%s, current_temp=%.1f°C", update.ZoneID, update.CurrentTemperature)
+
+		// Trigger temperature calculation job
+		jobData := map[string]interface{}{
+			"zone_id": update.ZoneID,
+		}
+		jobJSON, _ := json.Marshal(jobData)
+		if err := client.LPush(ctx, "multizone:jobs:calculate_temp", string(jobJSON)); err != nil {
+			logger.Error("Failed to enqueue calculation job: %v", err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "success",
+		})
+	}
+}
+
+// IntegrationGetCommandsHandler retrieves pending commands for the integration to execute
+// GET /api/integration/commands
+func IntegrationGetCommandsHandler(client *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		ctx := r.Context()
+
+		commandsKey := "multizone:commands"
+
+		// Get all commands from the hash
+		commands, err := client.HGetAll(ctx, commandsKey)
+		if err != nil && err.Error() != "redis: nil" {
+			logger.Error("Failed to retrieve commands: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to retrieve commands",
+			})
+			return
+		}
+
+		// Convert to structured response
+		type Command struct {
+			EntityID string      `json:"entity_id"`
+			Action   string      `json:"action"`
+			Value    interface{} `json:"value,omitempty"`
+		}
+
+		var commandList []Command
+
+		for entityID, commandData := range commands {
+			var cmd map[string]interface{}
+			if err := json.Unmarshal([]byte(commandData), &cmd); err != nil {
+				logger.Error("Failed to parse command for %s: %v", entityID, err)
+				continue
+			}
+
+			command := Command{
+				EntityID: entityID,
+				Action:   fmt.Sprintf("%v", cmd["action"]),
+			}
+
+			if value, ok := cmd["value"]; ok {
+				command.Value = value
+			}
+
+			commandList = append(commandList, command)
+		}
+
+		if len(commandList) > 0 {
+			logger.Info("Integration polling: returning %d commands", len(commandList))
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"commands": commandList,
+		})
+	}
+}
+
+// IntegrationDeleteCommandsHandler acknowledges execution of commands
+// DELETE /api/integration/commands
+func IntegrationDeleteCommandsHandler(client *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var request struct {
+			EntityIDs []string `json:"entity_ids"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			logger.Error("Failed to decode delete request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid JSON payload",
+			})
+			return
+		}
+
+		if len(request.EntityIDs) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "entity_ids is required",
+			})
+			return
+		}
+
+		ctx := r.Context()
+		commandsKey := "multizone:commands"
+
+		// Delete specific commands from the hash
+		if err := client.HDel(ctx, commandsKey, request.EntityIDs...); err != nil {
+			logger.Error("Failed to delete commands: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to delete commands",
+			})
+			return
+		}
+
+		logger.Info("Integration acknowledged %d commands", len(request.EntityIDs))
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "success",
+		})
+	}
+}
