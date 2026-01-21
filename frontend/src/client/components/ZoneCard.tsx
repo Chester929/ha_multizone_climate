@@ -214,7 +214,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
               <EntitySelector
                 value={editedZone.climate_entity_id || ''}
                 onChange={handleClimateEntityChange}
-                domains="climate"
+                domain="climate"
                 placeholder="climate.bedroom_thermostat"
               />
               <small style={{ fontSize: '0.85em', color: '#666', marginTop: '0.25rem', display: 'block' }}>
@@ -226,7 +226,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
               <EntitySelector
                 value={editedZone.temperature_sensor_entity_id || ''}
                 onChange={handleTempSensorChange}
-                domains="sensor"
+                domain="sensor"
                 placeholder="sensor.bedroom_temperature"
               />
               {entityIdErrors.temperature_sensor && (
@@ -238,7 +238,7 @@ export function ZoneCard({ zone, onUpdate, onDelete }: ZoneCardProps) {
               <EntitySelector
                 value={editedZone.valve_switch_entity_id || ''}
                 onChange={handleValveSwitchChange}
-                domains={['switch', 'valve']}
+                domain="switch"
                 placeholder="switch.bedroom_valve"
               />
               {entityIdErrors.valve_switch && (

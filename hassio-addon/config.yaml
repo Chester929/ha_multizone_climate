@@ -13,8 +13,6 @@ init: false
 host_network: true
 
 options:
-  main_climate_entity: ""
-  ha_token: ""
   integration:
     coordinator_interval: 30
   redis:
@@ -26,8 +24,6 @@ options:
     port: 8099
 
 schema:
-  main_climate_entity: str?
-  ha_token: password?
   integration:
     coordinator_interval: int(5-300)?
   redis:
