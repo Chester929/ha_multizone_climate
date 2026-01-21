@@ -22,12 +22,6 @@ services:
       - LOG_LEVEL=debug
     command: npm run dev
 
-  mqtt-middleware:
-    volumes:
-      - ./mqtt-middleware/src:/app/src
-    environment:
-      - LOG_LEVEL=debug
-
   redis:
     ports:
       - "6379:6379"
