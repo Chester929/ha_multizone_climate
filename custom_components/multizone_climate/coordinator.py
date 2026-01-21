@@ -16,6 +16,10 @@ _LOGGER = logging.getLogger(__name__)
 class MultizoneClimateCoordinator(DataUpdateCoordinator):
     """Coordinator to poll backend for commands and manage state updates."""
 
+    # Command retry configuration
+    MAX_COMMAND_RETRIES = 5
+    RETRY_DELAY_SECONDS = 5
+
     def __init__(self, hass: HomeAssistant, backend_url: str):
         """Initialize the coordinator."""
         # Get coordinator interval from environment variable (set by addon)
@@ -119,10 +123,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
     async def _acknowledge_commands(self, entity_ids: list[str]):
         """Acknowledge executed commands to backend with retry mechanism."""
-        max_retries = 5
-        retry_delay = 5
-        
-        for attempt in range(1, max_retries + 1):
+        for attempt in range(1, self.MAX_COMMAND_RETRIES + 1):
             try:
                 async with self.session.delete(
                     f"{self.backend_url}/api/integration/commands",
@@ -130,28 +131,25 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as response:
                     if response.status != 200:
-                        _LOGGER.warning(f"Failed to acknowledge commands (attempt {attempt}/{max_retries}): status {response.status}")
-                        if attempt < max_retries:
-                            await asyncio.sleep(retry_delay)
+                        _LOGGER.warning(f"Failed to acknowledge commands (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): status {response.status}")
+                        if attempt < self.MAX_COMMAND_RETRIES:
+                            await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                             continue
                     else:
                         _LOGGER.debug(f"Acknowledged {len(entity_ids)} commands")
                         return
             except Exception as err:
-                _LOGGER.error(f"Error acknowledging commands (attempt {attempt}/{max_retries}): {err}")
-                if attempt < max_retries:
-                    await asyncio.sleep(retry_delay)
+                _LOGGER.error(f"Error acknowledging commands (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): {err}")
+                if attempt < self.MAX_COMMAND_RETRIES:
+                    await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                     continue
         
-        # After 5 failed tries, log error and give up
-        _LOGGER.error(f"Failed to acknowledge commands after {max_retries} attempts. Commands: {entity_ids}")
+        # After max retries, log error and give up
+        _LOGGER.error(f"Failed to acknowledge commands after {self.MAX_COMMAND_RETRIES} attempts. Commands: {entity_ids}")
 
     async def push_state_update(self, zone_id: str, current_temp: float):
         """Push temperature state update to backend with retry mechanism."""
-        max_retries = 5
-        retry_delay = 5
-        
-        for attempt in range(1, max_retries + 1):
+        for attempt in range(1, self.MAX_COMMAND_RETRIES + 1):
             try:
                 async with self.session.post(
                     f"{self.backend_url}/api/integration/state_update",
@@ -160,22 +158,22 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 ) as response:
                     if response.status != 200:
                         _LOGGER.warning(
-                            f"Failed to push state update for zone {zone_id} (attempt {attempt}/{max_retries}): status {response.status}"
+                            f"Failed to push state update for zone {zone_id} (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): status {response.status}"
                         )
-                        if attempt < max_retries:
-                            await asyncio.sleep(retry_delay)
+                        if attempt < self.MAX_COMMAND_RETRIES:
+                            await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                             continue
                     else:
                         _LOGGER.debug(f"Pushed state update for zone {zone_id}: {current_temp}°C")
                         return
             except Exception as err:
-                _LOGGER.error(f"Error pushing state update for zone {zone_id} (attempt {attempt}/{max_retries}): {err}")
-                if attempt < max_retries:
-                    await asyncio.sleep(retry_delay)
+                _LOGGER.error(f"Error pushing state update for zone {zone_id} (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): {err}")
+                if attempt < self.MAX_COMMAND_RETRIES:
+                    await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                     continue
         
-        # After 5 failed tries, log error and give up
-        _LOGGER.error(f"Failed to push state update for zone {zone_id} after {max_retries} attempts")
+        # After max retries, log error and give up
+        _LOGGER.error(f"Failed to push state update for zone {zone_id} after {self.MAX_COMMAND_RETRIES} attempts")
 
     async def async_shutdown(self):
         """Cleanup on shutdown."""
