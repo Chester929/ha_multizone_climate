@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 export interface Entity {
   entity_id: string;
@@ -32,6 +32,16 @@ export function EntitySelector({
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Fetch entities from the backend
   useEffect(() => {
@@ -100,8 +110,13 @@ export function EntitySelector({
   };
 
   const handleBlur = () => {
+    // Clear any existing timeout
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+    }
+    
     // Delay hiding dropdown to allow click events to fire
-    setTimeout(() => setShowDropdown(false), 200);
+    blurTimeoutRef.current = setTimeout(() => setShowDropdown(false), 200);
   };
 
   const handleClear = () => {

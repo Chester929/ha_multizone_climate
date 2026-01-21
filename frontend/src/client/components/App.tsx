@@ -135,7 +135,8 @@ export function App() {
     
     if (entity) {
       // Auto-load target temperature from climate entity if available
-      if (entity.temperature !== undefined && !autoLoadedTargetTemp) {
+      // Only auto-load if no temperature has been set yet
+      if (entity.temperature !== undefined) {
         setAutoLoadedTargetTemp(entity.temperature.toString());
       }
       

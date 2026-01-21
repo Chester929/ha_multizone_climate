@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chester929/ha_multizone_climate/logic/internal/algorithm"
@@ -773,6 +774,16 @@ func HASetMainTempHandler(integration *homeassistant.Integration) http.HandlerFu
 // HAGetEntitiesHandler retrieves entities from Home Assistant
 func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Check for nil integration
+		if integration == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Home Assistant integration is not configured",
+			})
+			return
+		}
+
 		if !integration.IsEnabled() {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -807,17 +818,8 @@ func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFu
 			// Apply domain filter if specified
 			if domain != "" {
 				// Extract domain from entity_id (format: domain.entity_name)
-				entityDomain := ""
-				if idx := len(state.EntityID); idx > 0 {
-					for i, ch := range state.EntityID {
-						if ch == '.' {
-							entityDomain = state.EntityID[:i]
-							break
-						}
-					}
-				}
-
-				if entityDomain != domain {
+				parts := strings.SplitN(state.EntityID, ".", 2)
+				if len(parts) < 2 || parts[0] != domain {
 					continue
 				}
 			}
@@ -834,7 +836,7 @@ func HAGetEntitiesHandler(integration *homeassistant.Integration) http.HandlerFu
 			}
 
 			// For climate entities, include additional attributes
-			if len(state.EntityID) > 8 && state.EntityID[:8] == "climate." {
+			if strings.HasPrefix(state.EntityID, "climate.") {
 				if currentTemp, ok := state.Attributes["current_temperature"]; ok {
 					entity["current_temperature"] = currentTemp
 				}
