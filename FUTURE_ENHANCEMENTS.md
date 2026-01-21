@@ -81,20 +81,13 @@ All code improvements from the initial code review have been completed. See the 
 
 ### Medium Priority
 
-3. **Historical Data and Analytics**
+3. **Historical Data and Analytics** (Backend API)
    - Temperature history tracking
    - Valve activity statistics
    - Energy consumption estimates
    - Comfort metrics
-   - Data export capabilities
+   - Data export capabilities via API
    - Status: Partially implemented (Statistics API exists)
-   - ✅ Historical data visualization with 24-hour charts
-   - ✅ Real-time WebSocket updates for live data
-   - ✅ Zone editing interface with CRUD operations
-   - ✅ Configuration management UI with import/export
-   - ✅ Responsive design with mobile support
-   - ✅ Comprehensive test coverage
-   - Status: Fully implemented and tested
 
 4. **✅ Enhanced Valve Management** (logic/internal/algorithm/valve.go, logic/internal/worker/processor.go)
    - ✅ Valve actuation delay timing prevents rapid valve changes
@@ -123,22 +116,11 @@ All code improvements from the initial code review have been completed. See the 
 ### Low Priority
 
 7. **Advanced Configuration**
-   - Import/export configuration
+   - Import/export configuration via API
    - Configuration validation
    - Backup/restore functionality
    - Zone templates
    - Bulk operations
-
-8. **Mobile Optimization**
-   - Mobile-responsive design improvements
-   - Touch-friendly controls
-   - Progressive Web App (PWA)
-   - Push notifications
-
-9. **Multi-language Support**
-    - Internationalization (i18n)
-    - Language selection
-    - Translated UI and messages
 
 ## Infrastructure Enhancements
 
@@ -155,14 +137,12 @@ All code improvements from the initial code review have been completed. See the 
 
 2. **Monitoring and Observability**
    - Prometheus metrics export
-   - Grafana dashboards
    - Structured logging improvements
    - Distributed tracing
    - Error tracking (Sentry)
 
 3. **Security Enhancements**
    - TLS/SSL for Redis connections
-   - MQTT TLS support
    - API authentication/authorization
    - Rate limiting
    - Security scanning in CI/CD
@@ -246,7 +226,6 @@ All code improvements from the initial code review have been completed. See the 
 2. **Plugin System**
    - Custom algorithm plugins
    - Integration plugins
-   - UI extension points
 
 3. **Add-on Store**
    - Publish to official HA add-on store
