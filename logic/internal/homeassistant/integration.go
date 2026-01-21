@@ -330,7 +330,18 @@ func (i *Integration) updateMainClimate(ctx context.Context, entityID, state str
 		updates["current_temperature"] = currentTemp
 	}
 
+	targetTempChanged := false
 	if targetTemp, ok := attributes["temperature"].(float64); ok {
+		// Get current target temperature to check if it changed
+		mainClimateData, err := i.redisClient.HGetAll(ctx, "multizone:main_climate")
+		if err == nil {
+			if currentTargetStr, ok := mainClimateData["target_temperature"]; ok {
+				currentTarget, err := strconv.ParseFloat(currentTargetStr, 64)
+				if err == nil && math.Abs(targetTemp-currentTarget) > models.DefaultTargetChangeThreshold {
+					targetTempChanged = true
+				}
+			}
+		}
 		updates["target_temperature"] = targetTemp
 	}
 
@@ -344,6 +355,14 @@ func (i *Integration) updateMainClimate(ctx context.Context, entityID, state str
 	}
 
 	logger.Debug("Updated main climate: %s", entityID)
+
+	// Trigger recalculation if target temperature changed
+	if targetTempChanged {
+		logger.Info("Main climate target temperature changed, triggering recalculation")
+		if err := i.triggerRecalculation(ctx); err != nil {
+			logger.Error("Error triggering recalculation: %v", err)
+		}
+	}
 
 	return nil
 }

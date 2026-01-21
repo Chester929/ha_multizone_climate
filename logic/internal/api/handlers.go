@@ -1123,7 +1123,7 @@ func GetGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 }
 
 // UpdateGlobalConfigHandler updates the global configuration
-func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
+func UpdateGlobalConfigHandler(client *redis.Client, integration *homeassistant.Integration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var config map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
@@ -1137,7 +1137,8 @@ func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		// Validate main climate entity ID if provided
+		// Track if main climate entity ID changed
+		mainClimateEntityIDChanged := false
 		if mainClimateEntity, ok := config["main_climate_entity_id"].(string); ok && mainClimateEntity != "" {
 			if !entityIDPattern.MatchString(mainClimateEntity) {
 				w.Header().Set("Content-Type", "application/json")
@@ -1146,6 +1147,19 @@ func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 					"error": "Invalid main climate entity ID format, expected format: domain.entity_name",
 				})
 				return
+			}
+			
+			// Check if the entity ID actually changed
+			currentConfig, err := client.HGetAll(ctx, "multizone:config")
+			if err == nil {
+				if currentMainID, ok := currentConfig["main_climate_entity_id"]; ok {
+					if currentMainID != mainClimateEntity {
+						mainClimateEntityIDChanged = true
+					}
+				} else {
+					// No previous main climate entity, this is new
+					mainClimateEntityIDChanged = true
+				}
 			}
 		}
 
@@ -1194,6 +1208,15 @@ func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 				"error": "Failed to update configuration",
 			})
 			return
+		}
+
+		// Refresh entity cache if main climate entity ID changed
+		if mainClimateEntityIDChanged && integration != nil && integration.IsEnabled() {
+			if err := integration.RefreshEntityCache(ctx); err != nil {
+				logger.Error("Failed to refresh entity cache after main climate entity ID change: %v", err)
+			} else {
+				logger.Info("Entity cache refreshed after main climate entity ID update")
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

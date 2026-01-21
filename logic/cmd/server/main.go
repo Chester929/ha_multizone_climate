@@ -127,7 +127,7 @@ func main() {
 
 	// Global configuration endpoints
 	router.HandleFunc("/api/config", api.GetGlobalConfigHandler(redisClient)).Methods("GET")
-	router.HandleFunc("/api/config", api.UpdateGlobalConfigHandler(redisClient)).Methods("PUT")
+	router.HandleFunc("/api/config", api.UpdateGlobalConfigHandler(redisClient, haIntegration)).Methods("PUT")
 
 	// Configuration defaults endpoint
 	router.HandleFunc("/api/defaults", api.GetDefaultsHandler()).Methods("GET")
