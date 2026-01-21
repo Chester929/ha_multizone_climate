@@ -10,14 +10,13 @@
       },
       "zones": {
         "title": "Configure Zone",
-        "description": "Configure a heating/cooling zone. Select the temperature sensor and valve switch for this zone. You can add more zones later.",
+        "description": "Configure a heating/cooling zone. Select the temperature sensor and valve switch for this zone. The integration will create a climate entity for this zone.",
         "data": {
           "zone_name": "Zone Name",
           "temperature_sensor": "Temperature Sensor",
           "valve_switch": "Valve Switch (switch or valve domain)",
-          "climate_entity": "Climate Entity (optional)",
           "target_temperature": "Target Temperature",
-          "priority": "Priority (0-100)"
+          "priority": "Priority (0-100, default: 50)"
         }
       }
     },
@@ -37,8 +36,7 @@
           "main_climate_entity": "Main Climate Entity",
           "zone_name": "Zone Name",
           "temperature_sensor": "Temperature Sensor",
-          "valve_switch": "Valve Switch",
-          "climate_entity": "Climate Entity (optional)"
+          "valve_switch": "Valve Switch"
         }
       }
     }

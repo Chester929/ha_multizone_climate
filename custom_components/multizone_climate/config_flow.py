@@ -9,8 +9,7 @@ from homeassistant import config_entries
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
-from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 import homeassistant.helpers.config_validation as cv
 
@@ -82,10 +81,6 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not self.hass.states.get(user_input["valve_switch"]):
                 errors["valve_switch"] = "entity_not_found"
             
-            # Validate optional climate_entity if provided
-            if user_input.get("climate_entity") and not self.hass.states.get(user_input["climate_entity"]):
-                errors["climate_entity"] = "entity_not_found"
-            
             if not errors:
                 # Merge zone data with main climate data
                 self.data.update(user_input)
@@ -109,9 +104,6 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("valve_switch"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
                 ),
-                vol.Optional("climate_entity"): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=CLIMATE_DOMAIN),
-                ),
                 vol.Optional("target_temperature", default=20.0): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=5.0,
@@ -121,7 +113,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
-                vol.Optional("priority", default=0): selector.NumberSelector(
+                vol.Optional("priority", default=50): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0,
                         max=100,
@@ -190,12 +182,6 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     default=self.config_entry.data.get("valve_switch"),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
-                ),
-                vol.Optional(
-                    "climate_entity",
-                    default=self.config_entry.data.get("climate_entity"),
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=CLIMATE_DOMAIN),
                 ),
             }
         )

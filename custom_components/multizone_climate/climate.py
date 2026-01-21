@@ -137,7 +137,12 @@ class MultizoneClimateEntity(ClimateEntity):
             try:
                 self._attr_current_temperature = float(sensor_state.state)
             except (ValueError, TypeError):
-                pass
+                # Invalid temperature value - sensor may not be ready yet
+                _LOGGER.debug(
+                    "Invalid temperature value from %s: %s",
+                    self._temperature_sensor,
+                    sensor_state.state,
+                )
 
     async def async_will_remove_from_hass(self) -> None:
         """When entity will be removed from hass."""

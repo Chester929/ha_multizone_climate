@@ -38,14 +38,13 @@ Home Assistant custom integration for managing multizone climate control with in
 5. Follow the configuration wizard:
    - **Step 1**: Select your main climate entity
    - **Step 2**: Configure zone:
-     - Zone name
-     - Temperature sensor (filtered to temperature sensors)
-     - Valve switch (accepts switch or valve entities)
-     - Target temperature
-     - Opening offset (°C below target to open valve)
-     - Closing offset (°C above target to close valve)
-     - Priority (0-100)
-     - Is fallback valve (checkbox)
+     - Zone name (text field)
+     - Temperature sensor (entity selector - temperature sensors only)
+     - Valve switch (entity selector - accepts switch or valve entities)
+     - Target temperature (°C, default: 20.0)
+     - Priority (0-100, default: 50)
+
+   > **Note:** The integration creates a new climate entity for each zone. Opening/closing offsets and fallback valve behavior are managed internally by the backend and are not currently configurable through the UI.
 
 6. After setup, you'll see:
    - A new climate entity for the zone (`climate.multizone_{zone_name}`)

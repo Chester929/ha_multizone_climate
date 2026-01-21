@@ -1,6 +1,4 @@
 """Tests for the Multizone Climate integration."""
-import pytest
-from homeassistant.core import HomeAssistant
 
 
 # Note: Full integration tests require Home Assistant test framework

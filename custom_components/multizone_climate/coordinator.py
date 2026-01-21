@@ -43,7 +43,8 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 if response.status != 200:
                     raise UpdateFailed(f"Backend returned status {response.status}")
                 
-                commands = await response.json()
+                response_data = await response.json()
+                commands = response_data.get("commands", [])
                 
                 if not commands:
                     return {}
@@ -133,7 +134,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
             async with self._session.post(
                 f"{self.backend_url}/api/integration/state_update",
-                json={"zone_id": zone_id, "current_temp": current_temp},
+                json={"zone_id": zone_id, "current_temperature": current_temp},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:

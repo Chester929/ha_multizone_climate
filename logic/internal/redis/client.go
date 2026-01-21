@@ -107,8 +107,3 @@ func (c *Client) GetString(ctx context.Context, key string) (string, error) {
 func (c *Client) HDel(ctx context.Context, key string, fields ...string) error {
 	return c.rdb.HDel(ctx, key, fields...).Err()
 }
-
-// RDB returns the underlying Redis client for advanced operations
-func (c *Client) RDB() *redis.Client {
-	return c.rdb
-}
