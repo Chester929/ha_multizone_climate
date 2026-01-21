@@ -310,12 +310,29 @@ func (i *Integration) updateValveSwitch(ctx context.Context, entityID, state str
 		valveState = "open"
 	}
 
+	// Get current valve state to check if it changed
+	zoneData, err := i.redisClient.HGetAll(ctx, zoneKey)
+	if err == nil {
+		currentValveState, ok := zoneData["valve_state"]
+		// Only update and trigger recalculation if state actually changed
+		if ok && currentValveState == valveState {
+			// State hasn't changed, no update needed
+			return nil
+		}
+	}
+
 	// Update the zone's valve state
 	if err := i.redisClient.HSet(ctx, zoneKey, "valve_state", valveState); err != nil {
 		return err
 	}
 
-	logger.Debug("Updated valve state: %s -> %s", zoneKey, valveState)
+	logger.Info("Updated valve state from HA: %s -> %s", zoneKey, valveState)
+
+	// Trigger recalculation when valve state changes
+	// This ensures the system reacts to manual valve changes in HA
+	if err := i.triggerRecalculation(ctx); err != nil {
+		logger.Error("Error triggering recalculation after valve state change: %v", err)
+	}
 
 	return nil
 }
@@ -561,6 +578,19 @@ func (i *Integration) SetMainTemperature(ctx context.Context, entityID string, t
 		return fmt.Errorf("integration not started")
 	}
 
+	// Get current temperature from HA to avoid unnecessary updates
+	state, err := i.client.GetState(ctx, entityID)
+	if err == nil {
+		if currentTemp, ok := state.Attributes["temperature"].(float64); ok {
+			// Only update if change exceeds threshold to prevent loops and excessive API calls
+			if math.Abs(temperature-currentTemp) < models.DefaultTargetChangeThreshold {
+				logger.Debug("Main climate temperature change below threshold, skipping HA update: %s (%.1f°C -> %.1f°C)", 
+					entityID, currentTemp, temperature)
+				return nil
+			}
+		}
+	}
+
 	return i.client.SetTemperature(ctx, entityID, temperature)
 }
 
@@ -590,6 +620,19 @@ func (i *Integration) SetZoneClimateTemperature(ctx context.Context, zoneKey str
 	targetTemp, err := strconv.ParseFloat(targetTempStr, 64)
 	if err != nil {
 		return err
+	}
+
+	// Get current temperature from HA to avoid unnecessary updates
+	state, err := i.client.GetState(ctx, climateEntityID)
+	if err == nil {
+		if currentTemp, ok := state.Attributes["temperature"].(float64); ok {
+			// Only update if change exceeds threshold to prevent loops and excessive API calls
+			if math.Abs(targetTemp-currentTemp) < models.DefaultTargetChangeThreshold {
+				logger.Debug("Zone climate temperature change below threshold, skipping HA update: %s (%.1f°C -> %.1f°C)", 
+					climateEntityID, currentTemp, targetTemp)
+				return nil
+			}
+		}
 	}
 
 	// Set temperature on the zone's climate entity

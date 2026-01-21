@@ -12,6 +12,32 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/logger"
 )
 
+// retryWithBackoff retries a function with exponential backoff
+func retryWithBackoff(ctx context.Context, maxRetries int, initialDelay time.Duration, operation func() error) error {
+	var lastErr error
+	delay := initialDelay
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := operation(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				logger.Debug("Retry attempt %d/%d failed: %v, retrying in %v", attempt+1, maxRetries, err, delay)
+				select {
+				case <-time.After(delay):
+					// Continue to next attempt
+					delay *= 2 // Exponential backoff
+				case <-ctx.Done():
+					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("operation failed after %d attempts: %w", maxRetries, lastErr)
+}
+
 // Client represents a Home Assistant API client
 type Client struct {
 	baseURL    string
@@ -115,45 +141,47 @@ func (c *Client) GetStates(ctx context.Context) ([]EntityState, error) {
 	return states, nil
 }
 
-// CallService calls a Home Assistant service
+// CallService calls a Home Assistant service with retry logic
 func (c *Client) CallService(ctx context.Context, call *ServiceCall) error {
-	url := fmt.Sprintf("%s/api/services/%s/%s", c.baseURL, call.Domain, call.Service)
+	return retryWithBackoff(ctx, 3, 500*time.Millisecond, func() error {
+		url := fmt.Sprintf("%s/api/services/%s/%s", c.baseURL, call.Domain, call.Service)
 
-	// Prepare request body
-	requestBody := make(map[string]interface{})
-	if call.Data != nil {
-		requestBody["service_data"] = call.Data
-	}
-	if call.Target != nil {
-		requestBody["target"] = call.Target
-	}
+		// Prepare request body
+		requestBody := make(map[string]interface{})
+		if call.Data != nil {
+			requestBody["service_data"] = call.Data
+		}
+		if call.Target != nil {
+			requestBody["target"] = call.Target
+		}
 
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
+		jsonBody, err := json.Marshal(requestBody)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request: %w", err)
+		}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to call service: %w", err)
-	}
-	defer resp.Body.Close()
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to call service: %w", err)
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
-	}
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		}
 
-	logger.Debug("Service call successful: %s.%s", call.Domain, call.Service)
-	return nil
+		logger.Debug("Service call successful: %s.%s", call.Domain, call.Service)
+		return nil
+	})
 }
 
 // TurnOnSwitch turns on a switch entity
