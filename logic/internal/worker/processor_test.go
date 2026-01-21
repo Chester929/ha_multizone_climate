@@ -114,8 +114,9 @@ func (m *mockHAIntegration) SetZoneEnabled(ctx context.Context, entityID string,
 }
 
 func TestProcessorWithMockedDependencies(t *testing.T) {
-	// Note: Mock dependencies are defined above but not used in this test
-	// as we're testing the processor creation with nil dependencies
+	// Note: Mock dependencies (mockRedisClient and mockHAIntegration) are defined above
+	// for future use when implementing actual HTTP API calls for the HA integration.
+	// Currently testing the processor creation with nil dependencies.
 	var haIntegration *homeassistant.Integration
 	
 	processor := NewProcessor(nil, haIntegration)
