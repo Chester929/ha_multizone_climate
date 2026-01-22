@@ -16,10 +16,24 @@ bashio::log.info "Coordinator interval: ${COORDINATOR_INTERVAL}s"
 
 # Auto-install custom component
 CUSTOM_COMPONENTS_DIR="/config/custom_components"
-COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/multizone_climate"
+COMPONENT_NAME="multizone_climate"
+COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/${COMPONENT_NAME}"
 VERSION_FILE="${COMPONENT_DIR}/.installed_version"
-ADDON_VERSION="2.0.0"
 
+# Read version from manifest.json
+if [ ! -f "/app/custom_components/${COMPONENT_NAME}/manifest.json" ]; then
+    bashio::log.error "Custom component manifest.json not found!"
+    exit 1
+fi
+
+ADDON_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "/app/custom_components/${COMPONENT_NAME}/manifest.json" | cut -d'"' -f4)
+
+if [ -z "${ADDON_VERSION}" ]; then
+    bashio::log.error "Could not read version from manifest.json"
+    exit 1
+fi
+
+bashio::log.info "Custom component version: ${ADDON_VERSION}"
 bashio::log.info "Checking custom component installation..."
 
 # Create custom_components directory if it doesn't exist
@@ -56,7 +70,7 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     fi
     
     # Copy custom component files
-    cp -r /app/custom_components/multizone_climate "${CUSTOM_COMPONENTS_DIR}/"
+    cp -r "/app/custom_components/${COMPONENT_NAME}" "${CUSTOM_COMPONENTS_DIR}/"
     
     # Write version file
     echo "${ADDON_VERSION}" > "${VERSION_FILE}"
