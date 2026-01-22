@@ -116,4 +116,4 @@ logger:
 
 ## Version
 
-**2.0.0** - Full integration with backend coordination, entity selectors, and climate platform
+**0.1.0** - Full integration with backend coordination, entity selectors, and climate platform
