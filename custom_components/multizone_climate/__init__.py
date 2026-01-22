@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import MultizoneClimateCoordinator
+from .core import RedisClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,13 +24,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
     backend_url = f"http://localhost:{backend_port}"
 
-    # Create coordinator
+    # Get Redis configuration from environment variables
+    # NOTE: Redis client is used by platform code but should be replaced
+    # with backend API calls in future refactoring
+    redis_host = os.environ.get("REDIS_HOST", "localhost")
+    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    redis_password = os.environ.get("REDIS_PASSWORD")
+
+    # Create and connect Redis client
+    redis_client = RedisClient(
+        host=redis_host,
+        port=redis_port,
+        password=redis_password,
+    )
+    await redis_client.connect()
+
+    # Create coordinator that communicates with backend API
     coordinator = MultizoneClimateCoordinator(hass, backend_url)
 
-    # Store coordinator and config in hass.data
+    # Store coordinator, redis_client and config in hass.data
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
+        "redis_client": redis_client,  # TODO: Remove when platforms use API
         "config": entry.data,
     }
 
@@ -40,6 +57,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    # Unload platforms
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    if unload_ok:
+        # Cleanup coordinator
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+        await coordinator.async_shutdown()
+
+        # Cleanup redis client
+        redis_client = hass.data[DOMAIN][entry.entry_id]["redis_client"]
+        await redis_client.disconnect()
+
+        # Remove data
+        hass.data[DOMAIN].pop(entry.entry_id)
+
+    return unload_ok
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
