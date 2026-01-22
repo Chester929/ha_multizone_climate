@@ -1,5 +1,7 @@
 # Migration to Addon-Only Architecture
 
+> **Latest Update (v0.1.0)**: The addon now automatically installs the custom integration component to `/config/custom_components/` on startup, eliminating manual file copying. See hassio-addon/README.md for current installation instructions.
+
 > **Note**: This document describes a historical migration from MQTT/WebSocket API to an add-on-only architecture with a frontend. The project has since evolved further to use a 2-container add-on (Logic + Redis) with a native Python custom integration. See README.md for the current architecture.
 
 ## Summary

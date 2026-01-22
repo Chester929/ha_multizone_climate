@@ -12,7 +12,11 @@ This add-on provides intelligent management of multiple heating/cooling zones in
 2. Install the "Multizone Climate" add-on
 3. Configure the add-on (see Configuration section below)
 4. Start the add-on
-5. Install the Multizone Climate custom integration:
+5. **The custom integration is automatically installed!**
+   - The add-on copies the integration files to `/config/custom_components/` on first start
+   - Check the add-on logs to confirm installation
+6. Restart Home Assistant to load the integration
+7. Configure zones:
    - Go to Settings → Devices & Services
    - Click "Add Integration"
    - Search for "Multizone Climate"
@@ -42,8 +46,8 @@ redis:
 ```
 
 - **mode**: Use bundled Redis (default) or connect to external Redis server
-- **host**: Redis host address (only for external mode)
-- **port**: Redis port (only for external mode)  
+- **host**: Redis host address (required when mode is external)
+- **port**: Redis port (default: 6379, used when mode is external)  
 - **password**: Redis authentication password (optional)
 
 ### Logic

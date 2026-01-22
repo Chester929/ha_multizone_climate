@@ -1,5 +1,5 @@
 name: "Multizone Climate"
-version: "2.0.0"
+version: "0.1.0"
 slug: multizone_climate
 description: "Advanced multi-zone HVAC management - Home Assistant add-on for intelligent zone control"
 arch:
@@ -41,5 +41,3 @@ ports_description:
   8080/tcp: "Backend API"
 
 ingress: false
-
-image: "ghcr.io/chester929/ha-multizone-climate-{arch}"

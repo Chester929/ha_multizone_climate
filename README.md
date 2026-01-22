@@ -138,21 +138,17 @@ Native Python integration providing the user interface and entity management:
    - Go to the **Info** tab
    - Click **START**
    - Wait for the add-on to start successfully
-   - Check the **Log** tab to verify everything is running
+   - The add-on will automatically install the custom integration to `/config/custom_components/`
+   - Check the **Log** tab to verify:
+     - "Custom component installed successfully!" message appears
+     - Containers are running properly
 
-### Step 2: Install the Custom Integration
+5. **Restart Home Assistant**:
+   - Go to **Settings** → **System** → **Restart**
+   - After restart, the Multizone Climate integration will be available
+   - No manual file copying required!
 
-**Method A: Manual Installation**
-
-1. Download the `custom_components/multizone_climate` folder from this repository
-2. Copy it to your Home Assistant `config/custom_components/` directory
-3. Restart Home Assistant
-
-**Method B: HACS (Future)**
-
-HACS support is planned for future releases. Currently, use manual installation.
-
-### Step 3: Configure Zones
+### Step 2: Configure Zones
 
 1. **Add Integration**:
    - Go to **Settings** → **Devices & Services**
@@ -166,7 +162,7 @@ HACS support is planned for future releases. Currently, use manual installation.
    - This is your existing thermostat that controls the whole HVAC system
    - Click **SUBMIT**
 
-3. **Configure First Zone** (Step 2):
+2. **Configure First Zone** (Step 2):
    - **Zone Name**: Enter a descriptive name (e.g., "Bedroom")
    - **Temperature Sensor**: Select the temperature sensor for this room
      - Entity selector shows only temperature sensors
@@ -179,19 +175,19 @@ HACS support is planned for future releases. Currently, use manual installation.
      - Higher priority zones get preference during heating/cooling
    - Click **SUBMIT**
 
-4. **Add More Zones** (Optional):
+3. **Add More Zones** (Optional):
    - After submitting the first zone, you'll be prompted to add another zone
    - Click **SUBMIT** to add more zones, or **FINISH** when done
    - Repeat for each room you want to control
 
-5. **Verify Setup**:
+4. **Verify Setup**:
    - Go to **Settings** → **Devices & Services** → **Multizone Climate**
    - You should see:
      - One device: "Multizone Climate"
      - Climate entities: One per zone (e.g., `climate.multizone_bedroom`)
      - All entities grouped under the same device
 
-### Step 4: Use Your Zones
+### Step 3: Use Your Zones
 
 Each zone now has a climate entity that you can:
 
