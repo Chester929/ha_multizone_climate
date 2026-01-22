@@ -41,5 +41,3 @@ ports_description:
   8080/tcp: "Backend API"
 
 ingress: false
-
-image: "ghcr.io/chester929/ha-multizone-climate-{arch}"

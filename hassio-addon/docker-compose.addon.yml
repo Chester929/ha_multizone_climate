@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  logic:
+    image: ghcr.io/chester929/multizone-logic:latest
+    container_name: multizone-logic
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - REDIS_HOST=127.0.0.1
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - HTTP_PORT=${BACKEND_PORT:-8080}
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: multizone-redis
+    restart: unless-stopped
+    network_mode: host
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}
+    volumes:
+      - /data/redis:/data

@@ -14,6 +14,59 @@ bashio::log.info "Log level: ${LOG_LEVEL}"
 bashio::log.info "Backend port: ${BACKEND_PORT}"
 bashio::log.info "Coordinator interval: ${COORDINATOR_INTERVAL}s"
 
+# Auto-install custom component
+CUSTOM_COMPONENTS_DIR="/config/custom_components"
+COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/multizone_climate"
+VERSION_FILE="${COMPONENT_DIR}/.installed_version"
+ADDON_VERSION="2.0.0"
+
+bashio::log.info "Checking custom component installation..."
+
+# Create custom_components directory if it doesn't exist
+if [ ! -d "${CUSTOM_COMPONENTS_DIR}" ]; then
+    bashio::log.info "Creating custom_components directory..."
+    mkdir -p "${CUSTOM_COMPONENTS_DIR}"
+fi
+
+# Check if component needs installation/update
+INSTALL_NEEDED=false
+if [ ! -d "${COMPONENT_DIR}" ]; then
+    bashio::log.info "Custom component not found, will install..."
+    INSTALL_NEEDED=true
+elif [ ! -f "${VERSION_FILE}" ]; then
+    bashio::log.info "Version file not found, will reinstall..."
+    INSTALL_NEEDED=true
+else
+    INSTALLED_VERSION=$(cat "${VERSION_FILE}")
+    if [ "${INSTALLED_VERSION}" != "${ADDON_VERSION}" ]; then
+        bashio::log.info "Custom component version mismatch (${INSTALLED_VERSION} != ${ADDON_VERSION}), will update..."
+        INSTALL_NEEDED=true
+    else
+        bashio::log.info "Custom component already installed (v${INSTALLED_VERSION})"
+    fi
+fi
+
+# Install/update custom component if needed
+if [ "${INSTALL_NEEDED}" = true ]; then
+    bashio::log.info "Installing custom component v${ADDON_VERSION}..."
+    
+    # Remove old version if exists
+    if [ -d "${COMPONENT_DIR}" ]; then
+        rm -rf "${COMPONENT_DIR}"
+    fi
+    
+    # Copy custom component files
+    cp -r /app/custom_components/multizone_climate "${CUSTOM_COMPONENTS_DIR}/"
+    
+    # Write version file
+    echo "${ADDON_VERSION}" > "${VERSION_FILE}"
+    
+    bashio::log.info "Custom component installed successfully!"
+    bashio::log.warning "Please restart Home Assistant for the integration to be available"
+else
+    bashio::log.info "Custom component installation up to date"
+fi
+
 # Export environment variables
 export REDIS_PASSWORD="${REDIS_PASSWORD}"
 export LOG_LEVEL="${LOG_LEVEL}"
