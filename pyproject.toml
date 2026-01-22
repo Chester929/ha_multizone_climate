@@ -59,6 +59,9 @@ disable = [
     "unused-argument",
     "unnecessary-pass",
     "import-error",
+    "logging-fstring-interpolation",
+    "raise-missing-from",
+    "line-too-long",
 ]
 
 [tool.pylint.FORMAT]
