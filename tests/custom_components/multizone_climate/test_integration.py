@@ -1,6 +1,5 @@
 """Tests for the Multizone Climate integration."""
 
-
 # Note: Full integration tests require Home Assistant test framework
 # and pytest-homeassistant-custom-component package
 # These are placeholder tests to validate basic structure
@@ -9,7 +8,7 @@
 def test_domain_constant():
     """Test that DOMAIN is correctly defined."""
     from custom_components.multizone_climate.const import DOMAIN
-    
+
     assert DOMAIN == "multizone_climate"
 
 

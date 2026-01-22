@@ -74,7 +74,7 @@ func (p *Processor) ProcessCalculateTemp(ctx context.Context, params map[string]
 	if shouldUpdate {
 		result["new_target"] = newTarget
 		logger.Info("Calculated new target temperature: %.1f°C (was %.1f°C)", newTarget, mainClimate.TargetTemperature)
-		
+
 		// Note: In addon-only mode, the addon doesn't directly control HA entities
 		// The calculated temperature is stored and can be used by automation or manual adjustment
 	} else {
@@ -135,7 +135,7 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 		// Log the intended operation
 		logger.Debug("Intended valve operation: %s to %s for zone %s (priority: %d)",
 			zone.ValveSwitchEntity, op.Operation, zone.ID, zone.Priority)
-		
+
 		// Record valve activity in statistics
 		if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, zone.ValveState, time.Now()); err != nil {
 			logger.Warn("Failed to record valve activity: %v", err)
@@ -173,12 +173,12 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 			// Update zone state and set LastActuated timestamp
 			zone.ValveState = "open"
 			setLastActuated(zone)
-			
+
 			// Record valve activity
 			if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
 				logger.Warn("Failed to record valve activity: %v", err)
 			}
-			
+
 			if err := p.saveZone(ctx, zone); err != nil {
 				logger.Warn("Failed to save zone state: %v", err)
 			}
@@ -193,11 +193,11 @@ func (p *Processor) ProcessUpdateValves(ctx context.Context, params map[string]i
 	}
 
 	return map[string]interface{}{
-		"planned_open":     len(openOps),
-		"planned_close":    len(closeOps),
-		"executed":         len(executedOps),
-		"applied":          appliedCount,
-		"fallback_opened":  len(minValvesToOpen),
+		"planned_open":    len(openOps),
+		"planned_close":   len(closeOps),
+		"executed":        len(executedOps),
+		"applied":         appliedCount,
+		"fallback_opened": len(minValvesToOpen),
 	}, nil
 }
 
@@ -265,12 +265,12 @@ func (p *Processor) ProcessSafetyCheck(ctx context.Context, params map[string]in
 				openedCount++
 				zone.ValveState = "open"
 				setLastActuated(zone)
-				
+
 				// Record valve activity
 				if err := p.statsTracker.RecordValveActivity(ctx, zone.ID, "open", time.Now()); err != nil {
 					logger.Warn("Failed to record valve activity: %v", err)
 				}
-				
+
 				if err := p.saveZone(ctx, zone); err != nil {
 					logger.Error("Failed to persist safety fallback valve state for zone %s: %v", zone.ID, err)
 				}
@@ -502,8 +502,8 @@ func (p *Processor) loadMainClimate(ctx context.Context) (*models.MainClimateSta
 	}
 
 	climate := &models.MainClimateState{
-		EntityID: data["entity_id"],
-		HVACMode: data["hvac_mode"],
+		EntityID:   data["entity_id"],
+		HVACMode:   data["hvac_mode"],
 		HVACAction: data["hvac_action"],
 	}
 

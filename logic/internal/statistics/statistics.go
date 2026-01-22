@@ -20,7 +20,7 @@ type Tracker struct {
 func NewTracker(redisClient *redis.Client) *Tracker {
 	storage := NewStorage(redisClient)
 	metrics := NewMetricsCalculator(storage)
-	
+
 	return &Tracker{
 		redisClient: redisClient,
 		storage:     storage,
@@ -80,41 +80,41 @@ func (t *Tracker) GetAllZonesComfortSummary(ctx context.Context, hours int) (map
 	if err != nil {
 		return nil, err
 	}
-	
+
 	summary := make(map[string]*ComfortMetrics)
 	for _, key := range zoneKeys {
 		// Extract zone ID from key (multizone:zone:zoneID)
 		zoneID := strings.TrimPrefix(key, "multizone:zone:")
-		
+
 		metrics, err := t.GetComfortMetrics(ctx, zoneID, hours)
 		if err != nil {
 			continue // Skip zones with errors
 		}
-		
+
 		summary[zoneID] = metrics
 	}
-	
+
 	return summary, nil
 }
 
 // TrackZoneUpdate tracks a zone state update
 func (t *Tracker) TrackZoneUpdate(ctx context.Context, zone *models.ZoneState) error {
 	timestamp := time.Now()
-	
+
 	// Record temperature
 	if err := t.RecordTemperature(ctx, zone.ID, zone.CurrentTemperature, timestamp); err != nil {
 		return err
 	}
-	
+
 	// Record valve state
 	if err := t.RecordValveActivity(ctx, zone.ID, zone.ValveState, timestamp); err != nil {
 		return err
 	}
-	
+
 	// Record satisfaction
 	if err := t.RecordZoneSatisfaction(ctx, zone.ID, zone.Satisfaction, timestamp); err != nil {
 		return err
 	}
-	
+
 	return nil
 }

@@ -4,21 +4,21 @@ import "time"
 
 // ZoneState represents the state of a heating zone
 type ZoneState struct {
-	ID                      string    `json:"id"`
-	Name                    string    `json:"name"`
-	Enabled                 bool      `json:"enabled"`
-	TemperatureSensorEntity string    `json:"temperature_sensor_entity_id"`
-	ValveSwitchEntity       string    `json:"valve_switch_entity_id"`
-	ClimateEntity           string    `json:"climate_entity_id"` // Optional: Link to existing HA climate entity
-	CurrentTemperature      float64   `json:"current_temperature"`
-	TargetTemperature       float64   `json:"target_temperature"`
-	Satisfaction            string    `json:"satisfaction"` // "underheated", "satisfied", "overheated"
-	ValveState              string    `json:"valve_state"`  // "open", "closed"
-	TemperatureRising       bool      `json:"temperature_rising"`
-	TemperatureFalling      bool      `json:"temperature_falling"`
-	TargetChangeThreshold   float64   `json:"target_change_threshold"`
-	OpeningOffset           float64   `json:"opening_offset"`
-	ClosingOffset           float64   `json:"closing_offset"`
+	ID                      string     `json:"id"`
+	Name                    string     `json:"name"`
+	Enabled                 bool       `json:"enabled"`
+	TemperatureSensorEntity string     `json:"temperature_sensor_entity_id"`
+	ValveSwitchEntity       string     `json:"valve_switch_entity_id"`
+	ClimateEntity           string     `json:"climate_entity_id"` // Optional: Link to existing HA climate entity
+	CurrentTemperature      float64    `json:"current_temperature"`
+	TargetTemperature       float64    `json:"target_temperature"`
+	Satisfaction            string     `json:"satisfaction"` // "underheated", "satisfied", "overheated"
+	ValveState              string     `json:"valve_state"`  // "open", "closed"
+	TemperatureRising       bool       `json:"temperature_rising"`
+	TemperatureFalling      bool       `json:"temperature_falling"`
+	TargetChangeThreshold   float64    `json:"target_change_threshold"`
+	OpeningOffset           float64    `json:"opening_offset"`
+	ClosingOffset           float64    `json:"closing_offset"`
 	IsFallbackValve         bool       `json:"is_fallback_valve"`
 	Priority                int        `json:"priority"`
 	LastUpdated             time.Time  `json:"last_updated"`

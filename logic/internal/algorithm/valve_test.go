@@ -13,10 +13,10 @@ func TestCanActuateValve(t *testing.T) {
 	recent := now.Add(-2 * time.Second)
 
 	tests := []struct {
-		name            string
-		zone            models.ZoneState
-		actuationDelay  int
-		expectedCanAct  bool
+		name           string
+		zone           models.ZoneState
+		actuationDelay int
+		expectedCanAct bool
 	}{
 		{
 			name: "Never actuated before",
@@ -173,10 +173,10 @@ func TestSortZonesByPriority(t *testing.T) {
 
 func TestCheckMinimumValvesByPriority(t *testing.T) {
 	tests := []struct {
-		name           string
-		zones          []models.ZoneState
-		minValvesOpen  int
-		expectedCount  int
+		name            string
+		zones           []models.ZoneState
+		minValvesOpen   int
+		expectedCount   int
 		highestPriority bool
 	}{
 		{
@@ -185,8 +185,8 @@ func TestCheckMinimumValvesByPriority(t *testing.T) {
 				{ID: "zone1", Enabled: true, ValveState: "open", Priority: 1},
 				{ID: "zone2", Enabled: true, ValveState: "open", Priority: 2},
 			},
-			minValvesOpen:  1,
-			expectedCount:  0,
+			minValvesOpen:   1,
+			expectedCount:   0,
 			highestPriority: false,
 		},
 		{
@@ -196,8 +196,8 @@ func TestCheckMinimumValvesByPriority(t *testing.T) {
 				{ID: "zone2", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 5},
 				{ID: "zone3", Enabled: true, ValveState: "closed", IsFallbackValve: false, Priority: 3},
 			},
-			minValvesOpen:  1,
-			expectedCount:  1,
+			minValvesOpen:   1,
+			expectedCount:   1,
 			highestPriority: true,
 		},
 		{
@@ -207,8 +207,8 @@ func TestCheckMinimumValvesByPriority(t *testing.T) {
 				{ID: "zone2", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 2},
 				{ID: "zone3", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 3},
 			},
-			minValvesOpen:  2,
-			expectedCount:  2,
+			minValvesOpen:   2,
+			expectedCount:   2,
 			highestPriority: true,
 		},
 		{
@@ -218,8 +218,8 @@ func TestCheckMinimumValvesByPriority(t *testing.T) {
 				{ID: "zone2", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 3},
 				{ID: "zone3", Enabled: true, ValveState: "closed", IsFallbackValve: true, Priority: 1},
 			},
-			minValvesOpen:  2,
-			expectedCount:  1,
+			minValvesOpen:   2,
+			expectedCount:   1,
 			highestPriority: true,
 		},
 	}
@@ -260,10 +260,10 @@ func TestPlanValveOperations(t *testing.T) {
 	future := now.Add(10 * time.Second)
 
 	tests := []struct {
-		name              string
-		zones             []models.ZoneState
-		actuationDelay    int
-		expectedOpenCount int
+		name               string
+		zones              []models.ZoneState
+		actuationDelay     int
+		expectedOpenCount  int
 		expectedCloseCount int
 	}{
 		{
@@ -282,8 +282,8 @@ func TestPlanValveOperations(t *testing.T) {
 					Priority:     3,
 				},
 			},
-			actuationDelay:    5,
-			expectedOpenCount: 1,
+			actuationDelay:     5,
+			expectedOpenCount:  1,
 			expectedCloseCount: 1,
 		},
 		{
@@ -296,8 +296,8 @@ func TestPlanValveOperations(t *testing.T) {
 					ValveLockExpiration: &future,
 				},
 			},
-			actuationDelay:    5,
-			expectedOpenCount: 0,
+			actuationDelay:     5,
+			expectedOpenCount:  0,
 			expectedCloseCount: 0,
 		},
 		{
@@ -310,8 +310,8 @@ func TestPlanValveOperations(t *testing.T) {
 					LastActuated: &now,
 				},
 			},
-			actuationDelay:    5,
-			expectedOpenCount: 0,
+			actuationDelay:     5,
+			expectedOpenCount:  0,
 			expectedCloseCount: 0,
 		},
 		{
@@ -325,8 +325,8 @@ func TestPlanValveOperations(t *testing.T) {
 					Priority:     1,
 				},
 			},
-			actuationDelay:    5,
-			expectedOpenCount: 1,
+			actuationDelay:     5,
+			expectedOpenCount:  1,
 			expectedCloseCount: 0,
 		},
 	}

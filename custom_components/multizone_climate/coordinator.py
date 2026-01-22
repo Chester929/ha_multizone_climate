@@ -1,4 +1,5 @@
 """Data coordinator for Multizone Climate integration."""
+
 import asyncio
 import logging
 from datetime import timedelta
@@ -52,10 +53,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             ) as response:
                 if response.status != 200:
                     raise UpdateFailed(f"Backend returned status {response.status}")
-                
+
                 response_data = await response.json()
                 commands = response_data.get("commands", [])
-                
+
                 if not commands:
                     return {}
 
@@ -77,7 +78,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                         executed_entities.append(entity_id)
                         _LOGGER.info(f"Executed {action} on {entity_id}")
                     except Exception as err:
-                        _LOGGER.error(f"Failed to execute command on {entity_id}: {err}")
+                        _LOGGER.error(
+                            f"Failed to execute command on {entity_id}: {err}"
+                        )
 
                 # Acknowledge executed commands
                 if executed_entities:
@@ -131,7 +134,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as response:
                     if response.status != 200:
-                        _LOGGER.warning(f"Failed to acknowledge commands (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): status {response.status}")
+                        _LOGGER.warning(
+                            f"Failed to acknowledge commands (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): status {response.status}"
+                        )
                         if attempt < self.MAX_COMMAND_RETRIES:
                             await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                             continue
@@ -139,13 +144,17 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                         _LOGGER.debug(f"Acknowledged {len(entity_ids)} commands")
                         return
             except Exception as err:
-                _LOGGER.error(f"Error acknowledging commands (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): {err}")
+                _LOGGER.error(
+                    f"Error acknowledging commands (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): {err}"
+                )
                 if attempt < self.MAX_COMMAND_RETRIES:
                     await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                     continue
-        
+
         # After max retries, log error and give up
-        _LOGGER.error(f"Failed to acknowledge commands after {self.MAX_COMMAND_RETRIES} attempts. Commands: {entity_ids}")
+        _LOGGER.error(
+            f"Failed to acknowledge commands after {self.MAX_COMMAND_RETRIES} attempts. Commands: {entity_ids}"
+        )
 
     async def push_state_update(self, zone_id: str, current_temp: float):
         """Push temperature state update to backend with retry mechanism."""
@@ -164,16 +173,22 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                             await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                             continue
                     else:
-                        _LOGGER.debug(f"Pushed state update for zone {zone_id}: {current_temp}°C")
+                        _LOGGER.debug(
+                            f"Pushed state update for zone {zone_id}: {current_temp}°C"
+                        )
                         return
             except Exception as err:
-                _LOGGER.error(f"Error pushing state update for zone {zone_id} (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): {err}")
+                _LOGGER.error(
+                    f"Error pushing state update for zone {zone_id} (attempt {attempt}/{self.MAX_COMMAND_RETRIES}): {err}"
+                )
                 if attempt < self.MAX_COMMAND_RETRIES:
                     await asyncio.sleep(self.RETRY_DELAY_SECONDS)
                     continue
-        
+
         # After max retries, log error and give up
-        _LOGGER.error(f"Failed to push state update for zone {zone_id} after {self.MAX_COMMAND_RETRIES} attempts")
+        _LOGGER.error(
+            f"Failed to push state update for zone {zone_id} after {self.MAX_COMMAND_RETRIES} attempts"
+        )
 
     async def async_shutdown(self):
         """Cleanup on shutdown."""

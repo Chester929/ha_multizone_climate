@@ -1,4 +1,5 @@
 """Climate platform for Multizone Climate integration."""
+
 import logging
 
 from homeassistant.components.climate import ClimateEntity
@@ -51,7 +52,7 @@ async def async_setup_entry(
         "priority": priority,
         "is_fallback_valve": is_fallback,
     }
-    
+
     try:
         async with coordinator.session.post(
             f"{coordinator.backend_url}/api/zones",

@@ -1,4 +1,5 @@
 """The Multizone Climate integration."""
+
 from __future__ import annotations
 
 import logging
@@ -21,10 +22,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get backend port from environment variable (set by addon)
     backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
     backend_url = f"http://localhost:{backend_port}"
-    
+
     # Create coordinator
     coordinator = MultizoneClimateCoordinator(hass, backend_url)
-    
+
     # Store coordinator and config in hass.data
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -50,7 +51,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Cleanup coordinator
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         await coordinator.async_shutdown()
-        
+
         # Remove data
         hass.data[DOMAIN].pop(entry.entry_id)
 
