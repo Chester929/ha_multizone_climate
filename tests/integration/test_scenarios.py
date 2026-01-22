@@ -73,9 +73,7 @@ class TestEndToEndScenarios:
         hass.services = MagicMock()
         hass.services.async_call = AsyncMock()
         hass.states = MagicMock()
-        hass.states.get = MagicMock(
-            return_value=MagicMock(state="20.0", attributes={})
-        )
+        hass.states.get = MagicMock(return_value=MagicMock(state="20.0", attributes={}))
         return hass
 
     @pytest.fixture

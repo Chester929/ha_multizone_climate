@@ -884,23 +884,23 @@ func UpdateGlobalConfigHandler(client *redis.Client) http.HandlerFunc {
 
 // GetIntegrationSettingsHandler returns empty integration settings (no integrations available)
 func GetIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-// Return empty settings since all integrations have been removed
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(map[string]interface{}{})
-}
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Return empty settings since all integrations have been removed
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{})
+	}
 }
 
 // UpdateIntegrationSettingsHandler accepts but ignores integration settings (no integrations available)
 func UpdateIntegrationSettingsHandler(client *redis.Client) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-// Accept the request but don't do anything since integrations are removed
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(map[string]interface{}{
-"status":  "ignored",
-"message": "Integration settings are not used in addon-only mode",
-})
-}
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Accept the request but don't do anything since integrations are removed
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "ignored",
+			"message": "Integration settings are not used in addon-only mode",
+		})
+	}
 }
 
 // GetDefaultsHandler returns default configuration values

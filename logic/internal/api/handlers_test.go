@@ -154,30 +154,30 @@ func TestGetDefaultsHandlerConsistency(t *testing.T) {
 func TestIntegrationStateUpdateHandler(t *testing.T) {
 	t.Run("InvalidJSON", func(t *testing.T) {
 		handler := IntegrationStateUpdateHandler(nil)
-		
+
 		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBufferString("invalid json"))
 		w := httptest.NewRecorder()
-		
+
 		handler(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
 		}
 	})
-	
+
 	t.Run("MissingZoneID", func(t *testing.T) {
 		handler := IntegrationStateUpdateHandler(nil)
-		
+
 		payload := map[string]interface{}{
 			"current_temperature": 20.5,
 		}
 		body, _ := json.Marshal(payload)
-		
+
 		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBuffer(body))
 		w := httptest.NewRecorder()
-		
+
 		handler(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
 		}
@@ -296,30 +296,30 @@ func TestIntegrationStateUpdateHandler(t *testing.T) {
 func TestIntegrationDeleteCommandsHandler(t *testing.T) {
 	t.Run("InvalidJSON", func(t *testing.T) {
 		handler := IntegrationDeleteCommandsHandler(nil)
-		
+
 		req := httptest.NewRequest("DELETE", "/api/integration/commands", bytes.NewBufferString("invalid json"))
 		w := httptest.NewRecorder()
-		
+
 		handler(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
 		}
 	})
-	
+
 	t.Run("EmptyEntityIDs", func(t *testing.T) {
 		handler := IntegrationDeleteCommandsHandler(nil)
-		
+
 		payload := map[string]interface{}{
 			"entity_ids": []string{},
 		}
 		body, _ := json.Marshal(payload)
-		
+
 		req := httptest.NewRequest("DELETE", "/api/integration/commands", bytes.NewBuffer(body))
 		w := httptest.NewRecorder()
-		
+
 		handler(w, req)
-		
+
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
 		}
@@ -623,4 +623,3 @@ func TestIntegrationGetCommandsHandler(t *testing.T) {
 		}
 	})
 }
-

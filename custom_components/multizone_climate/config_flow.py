@@ -1,4 +1,5 @@
 """Config flow for Multizone Climate integration."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -76,15 +77,15 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Validate temperature_sensor entity exists
             if not self.hass.states.get(user_input["temperature_sensor"]):
                 errors["temperature_sensor"] = "entity_not_found"
-            
+
             # Validate valve_switch entity exists
             if not self.hass.states.get(user_input["valve_switch"]):
                 errors["valve_switch"] = "entity_not_found"
-            
+
             if not errors:
                 # Merge zone data with main climate data
                 self.data.update(user_input)
-                
+
                 # Create the config entry
                 return self.async_create_entry(
                     title=f"Multizone Climate ({user_input.get('zone_name', 'Zone 1')})",
@@ -104,7 +105,9 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("valve_switch"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
                 ),
-                vol.Optional("target_temperature", default=20.0): selector.NumberSelector(
+                vol.Optional(
+                    "target_temperature", default=20.0
+                ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=5.0,
                         max=35.0,

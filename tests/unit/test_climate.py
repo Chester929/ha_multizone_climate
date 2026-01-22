@@ -146,9 +146,7 @@ class TestZoneClimateEntity:
         """Create mock hass."""
         hass = MagicMock()
         hass.states = MagicMock()
-        hass.states.get = MagicMock(
-            return_value=MagicMock(state="19.5", attributes={})
-        )
+        hass.states.get = MagicMock(return_value=MagicMock(state="19.5", attributes={}))
         return hass
 
     def test_zone_climate_entity_properties(

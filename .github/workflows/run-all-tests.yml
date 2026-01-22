@@ -134,7 +134,7 @@ jobs:
           EOF
 
       - name: Start services
-        run: docker-compose up -d
+        run: docker compose up -d
 
       - name: Wait for services to be ready
         run: |
@@ -147,11 +147,11 @@ jobs:
 
       - name: Show logs
         if: failure()
-        run: docker-compose logs
+        run: docker compose logs
 
       - name: Stop services
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
 
   test-summary:
     name: Test Summary

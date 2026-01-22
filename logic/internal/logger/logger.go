@@ -23,7 +23,7 @@ const (
 
 var (
 	currentLevel LogLevel = INFO
-	levelNames   = map[LogLevel]string{
+	levelNames            = map[LogLevel]string{
 		DEBUG: "DEBUG",
 		INFO:  "INFO",
 		WARN:  "WARN",
@@ -76,7 +76,7 @@ func logMessage(level LogLevel, format string, args ...interface{}) {
 
 	// Check if we should use colors (when output is a terminal)
 	useColors := isTerminal()
-	
+
 	var prefix string
 	if useColors {
 		prefix = fmt.Sprintf("%s[%s]%s", levelColors[level], levelNames[level], colorReset)

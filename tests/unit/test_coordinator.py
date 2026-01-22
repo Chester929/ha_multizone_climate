@@ -68,9 +68,7 @@ class TestMultizoneClimateCoordinator:
             - Redis client stored
             - Cached data initialized
         """
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         assert coordinator.redis_client == mock_redis
         assert coordinator.update_interval == timedelta(seconds=15)
@@ -86,9 +84,7 @@ class TestMultizoneClimateCoordinator:
             - Fetches main climate state from Redis
             - Returns updated data
         """
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         data = await coordinator._async_update_data()
 
@@ -109,9 +105,7 @@ class TestMultizoneClimateCoordinator:
         """
         mock_redis.get_zone_ids = AsyncMock(return_value=[])
 
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         data = await coordinator._async_update_data()
 
@@ -138,9 +132,7 @@ class TestMultizoneClimateCoordinator:
             }
         )
 
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         data = await coordinator._async_update_data()
 
@@ -156,9 +148,7 @@ class TestMultizoneClimateCoordinator:
             - Data stored in _cached_data
             - Entities can access cached data
         """
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         await coordinator._async_update_data()
 
@@ -179,9 +169,7 @@ class TestMultizoneClimateCoordinator:
             side_effect=Exception("Redis connection failed")
         )
 
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
@@ -193,12 +181,8 @@ class TestMultizoneClimateCoordinator:
         Expected:
             - Different intervals create different update schedules
         """
-        coordinator_15 = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
-        coordinator_30 = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=30
-        )
+        coordinator_15 = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
+        coordinator_30 = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=30)
 
         assert coordinator_15.update_interval == timedelta(seconds=15)
         assert coordinator_30.update_interval == timedelta(seconds=30)
@@ -221,9 +205,7 @@ class TestMultizoneClimateCoordinator:
             }.get(zone_id)
         )
 
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         data = await coordinator._async_update_data()
 
@@ -232,9 +214,7 @@ class TestMultizoneClimateCoordinator:
         assert "bedroom" in data["zones"]
         assert "kitchen" not in data["zones"]
 
-    async def test_coordinator_job_executor_initialization(
-        self, mock_hass, mock_redis
-    ):
+    async def test_coordinator_job_executor_initialization(self, mock_hass, mock_redis):
         """
         Test that coordinator initializes job executors.
 
@@ -242,9 +222,7 @@ class TestMultizoneClimateCoordinator:
             - Job executors dict initialized
             - Ready to execute jobs
         """
-        coordinator = MultizoneClimateCoordinator(
-            mock_hass, mock_redis, interval=15
-        )
+        coordinator = MultizoneClimateCoordinator(mock_hass, mock_redis, interval=15)
 
         assert hasattr(coordinator, "_job_executors")
         assert isinstance(coordinator._job_executors, dict)

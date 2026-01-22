@@ -25,26 +25,26 @@ type EnergyMetrics struct {
 
 // ComfortMetrics represents comfort metrics for a zone
 type ComfortMetrics struct {
-	ZoneID                 string  `json:"zone_id"`
-	SatisfiedPercentage    float64 `json:"satisfied_percentage"`
-	UnderheatedPercentage  float64 `json:"underheated_percentage"`
-	OverheatedPercentage   float64 `json:"overheated_percentage"`
-	AverageTemperature     float64 `json:"average_temperature"`
-	TemperatureStdDev      float64 `json:"temperature_std_dev"`
-	ComfortScore           float64 `json:"comfort_score"` // 0-100, higher is better
-	TimeRange              int     `json:"time_range_hours"`
+	ZoneID                string  `json:"zone_id"`
+	SatisfiedPercentage   float64 `json:"satisfied_percentage"`
+	UnderheatedPercentage float64 `json:"underheated_percentage"`
+	OverheatedPercentage  float64 `json:"overheated_percentage"`
+	AverageTemperature    float64 `json:"average_temperature"`
+	TemperatureStdDev     float64 `json:"temperature_std_dev"`
+	ComfortScore          float64 `json:"comfort_score"` // 0-100, higher is better
+	TimeRange             int     `json:"time_range_hours"`
 }
 
 // PerformanceMetrics represents system performance metrics
 type PerformanceMetrics struct {
-	TempCalculationAvgMs   float64 `json:"temp_calculation_avg_ms"`
-	ValveUpdateAvgMs       float64 `json:"valve_update_avg_ms"`
-	SafetyCheckAvgMs       float64 `json:"safety_check_avg_ms"`
-	TempCalculationCount   int     `json:"temp_calculation_count"`
-	ValveUpdateCount       int     `json:"valve_update_count"`
-	SafetyCheckCount       int     `json:"safety_check_count"`
-	TotalExecutions        int     `json:"total_executions"`
-	TimeRange              int     `json:"time_range_hours"`
+	TempCalculationAvgMs float64 `json:"temp_calculation_avg_ms"`
+	ValveUpdateAvgMs     float64 `json:"valve_update_avg_ms"`
+	SafetyCheckAvgMs     float64 `json:"safety_check_avg_ms"`
+	TempCalculationCount int     `json:"temp_calculation_count"`
+	ValveUpdateCount     int     `json:"valve_update_count"`
+	SafetyCheckCount     int     `json:"safety_check_count"`
+	TotalExecutions      int     `json:"total_executions"`
+	TimeRange            int     `json:"time_range_hours"`
 }
 
 // NewMetricsCalculator creates a new metrics calculator
@@ -61,25 +61,25 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(activities) == 0 {
 		return &EnergyMetrics{
 			ZoneID:    zoneID,
 			TimeRange: hours,
 		}, nil
 	}
-	
+
 	// Sort activities by timestamp
 	sort.Slice(activities, func(i, j int) bool {
 		return activities[i].Timestamp.Before(activities[j].Timestamp)
 	})
-	
+
 	var totalRuntimeSeconds float64
 	var cycleCount int
 	var openTimes []float64
-	
+
 	var lastOpenTime *time.Time
-	
+
 	for i, activity := range activities {
 		if activity.State == "open" {
 			if lastOpenTime == nil {
@@ -95,7 +95,7 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 			openTimes = append(openTimes, runtime/60) // Convert to minutes
 			lastOpenTime = nil
 		}
-		
+
 		// If this is the last activity and valve is still open
 		if i == len(activities)-1 && lastOpenTime != nil {
 			runtime := time.Now().Sub(*lastOpenTime).Seconds()
@@ -103,14 +103,14 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 			openTimes = append(openTimes, runtime/60)
 		}
 	}
-	
+
 	totalRuntimeHours := totalRuntimeSeconds / 3600
 	totalPeriodHours := float64(hours)
 	openPercentage := (totalRuntimeHours / totalPeriodHours) * 100
-	
+
 	// Estimate energy consumption (assuming 100W per valve when open)
 	estimatedEnergyKWh := totalRuntimeHours * 0.1 // 100W = 0.1kW
-	
+
 	// Calculate average open time
 	var averageOpenTime float64
 	if len(openTimes) > 0 {
@@ -120,7 +120,7 @@ func (m *MetricsCalculator) CalculateEnergyMetrics(ctx context.Context, zoneID s
 		}
 		averageOpenTime = sum / float64(len(openTimes))
 	}
-	
+
 	return &EnergyMetrics{
 		ZoneID:             zoneID,
 		TotalRuntimeHours:  totalRuntimeHours,
@@ -139,24 +139,24 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get temperature history
 	temperatures, err := m.storage.GetTemperatureHistory(ctx, zoneID, hours)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	metrics := &ComfortMetrics{
 		ZoneID:    zoneID,
 		TimeRange: hours,
 	}
-	
+
 	// Calculate satisfaction percentages
 	if len(satisfactions) > 0 {
 		satisfiedCount := 0
 		underheatedCount := 0
 		overheatedCount := 0
-		
+
 		for _, s := range satisfactions {
 			switch s.Satisfaction {
 			case "satisfied":
@@ -167,13 +167,13 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 				overheatedCount++
 			}
 		}
-		
+
 		total := float64(len(satisfactions))
 		metrics.SatisfiedPercentage = (float64(satisfiedCount) / total) * 100
 		metrics.UnderheatedPercentage = (float64(underheatedCount) / total) * 100
 		metrics.OverheatedPercentage = (float64(overheatedCount) / total) * 100
 	}
-	
+
 	// Calculate temperature statistics
 	if len(temperatures) > 0 {
 		sum := 0.0
@@ -181,7 +181,7 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 			sum += t.Temperature
 		}
 		metrics.AverageTemperature = sum / float64(len(temperatures))
-		
+
 		// Calculate standard deviation
 		varianceSum := 0.0
 		for _, t := range temperatures {
@@ -191,15 +191,15 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 		variance := varianceSum / float64(len(temperatures))
 		metrics.TemperatureStdDev = math.Sqrt(variance)
 	}
-	
+
 	// Calculate comfort score (0-100)
 	// Higher satisfaction percentage = higher score
 	// Lower temperature variance = higher score
 	satisfactionWeight := 0.7
 	stabilityWeight := 0.3
-	
+
 	satisfactionScore := metrics.SatisfiedPercentage
-	
+
 	// Stability score based on temperature std dev
 	// Lower std dev = more stable = higher score
 	// Assume std dev > 2.0 is poor, 0 is perfect
@@ -210,9 +210,9 @@ func (m *MetricsCalculator) CalculateComfortMetrics(ctx context.Context, zoneID 
 			stabilityScore = 0
 		}
 	}
-	
+
 	metrics.ComfortScore = (satisfactionScore * satisfactionWeight) + (stabilityScore * stabilityWeight)
-	
+
 	return metrics, nil
 }
 
@@ -221,7 +221,7 @@ func (m *MetricsCalculator) CalculatePerformanceMetrics(ctx context.Context, hou
 	metrics := &PerformanceMetrics{
 		TimeRange: hours,
 	}
-	
+
 	// Get execution history for each algorithm type
 	tempCalcs, err := m.storage.GetAlgorithmExecutionHistory(ctx, "calculate_temp", hours)
 	if err == nil && len(tempCalcs) > 0 {
@@ -232,7 +232,7 @@ func (m *MetricsCalculator) CalculatePerformanceMetrics(ctx context.Context, hou
 		metrics.TempCalculationAvgMs = float64(sum) / float64(len(tempCalcs))
 		metrics.TempCalculationCount = len(tempCalcs)
 	}
-	
+
 	valveUpdates, err := m.storage.GetAlgorithmExecutionHistory(ctx, "update_valves", hours)
 	if err == nil && len(valveUpdates) > 0 {
 		sum := int64(0)
@@ -242,7 +242,7 @@ func (m *MetricsCalculator) CalculatePerformanceMetrics(ctx context.Context, hou
 		metrics.ValveUpdateAvgMs = float64(sum) / float64(len(valveUpdates))
 		metrics.ValveUpdateCount = len(valveUpdates)
 	}
-	
+
 	safetyChecks, err := m.storage.GetAlgorithmExecutionHistory(ctx, "safety_check", hours)
 	if err == nil && len(safetyChecks) > 0 {
 		sum := int64(0)
@@ -252,8 +252,8 @@ func (m *MetricsCalculator) CalculatePerformanceMetrics(ctx context.Context, hou
 		metrics.SafetyCheckAvgMs = float64(sum) / float64(len(safetyChecks))
 		metrics.SafetyCheckCount = len(safetyChecks)
 	}
-	
+
 	metrics.TotalExecutions = metrics.TempCalculationCount + metrics.ValveUpdateCount + metrics.SafetyCheckCount
-	
+
 	return metrics, nil
 }
