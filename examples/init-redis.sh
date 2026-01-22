@@ -10,15 +10,15 @@ REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 
 echo "Initializing Redis with example zone configuration..."
 
-# Build redis-cli command
-REDIS_CLI="redis-cli -h $REDIS_HOST -p $REDIS_PORT"
+# Build redis-cli command arguments
+REDIS_ARGS=(-h "$REDIS_HOST" -p "$REDIS_PORT")
 if [ -n "$REDIS_PASSWORD" ]; then
-    REDIS_CLI="$REDIS_CLI -a $REDIS_PASSWORD"
+    REDIS_ARGS+=(-a "$REDIS_PASSWORD")
 fi
 
 # Set global configuration
 echo "Setting global configuration..."
-$REDIS_CLI HSET multizone:config \
+redis-cli "${REDIS_ARGS[@]}" HSET multizone:config \
     main_climate_entity_id "climate.main_thermostat" \
     main_target_all_zones_satisfied "0.5" \
     use_average_mode "false" \
@@ -32,12 +32,12 @@ $REDIS_CLI HSET multizone:config \
 
 # Add zones to the list
 echo "Adding zones to list..."
-$REDIS_CLI DEL multizone:zones
-$REDIS_CLI RPUSH multizone:zones "bedroom" "living_room" "kitchen" "bathroom"
+redis-cli "${REDIS_ARGS[@]}" DEL multizone:zones
+redis-cli "${REDIS_ARGS[@]}" RPUSH multizone:zones "bedroom" "living_room" "kitchen" "bathroom"
 
 # Configure bedroom zone
 echo "Configuring bedroom zone..."
-$REDIS_CLI HSET multizone:zone:bedroom \
+redis-cli "${REDIS_ARGS[@]}" HSET multizone:zone:bedroom \
     id "bedroom" \
     name "Bedroom" \
     enabled "true" \
@@ -57,7 +57,7 @@ $REDIS_CLI HSET multizone:zone:bedroom \
 
 # Configure living room zone
 echo "Configuring living room zone..."
-$REDIS_CLI HSET multizone:zone:living_room \
+redis-cli "${REDIS_ARGS[@]}" HSET multizone:zone:living_room \
     id "living_room" \
     name "Living Room" \
     enabled "true" \
@@ -77,7 +77,7 @@ $REDIS_CLI HSET multizone:zone:living_room \
 
 # Configure kitchen zone
 echo "Configuring kitchen zone..."
-$REDIS_CLI HSET multizone:zone:kitchen \
+redis-cli "${REDIS_ARGS[@]}" HSET multizone:zone:kitchen \
     id "kitchen" \
     name "Kitchen" \
     enabled "true" \
@@ -97,7 +97,7 @@ $REDIS_CLI HSET multizone:zone:kitchen \
 
 # Configure bathroom zone
 echo "Configuring bathroom zone..."
-$REDIS_CLI HSET multizone:zone:bathroom \
+redis-cli "${REDIS_ARGS[@]}" HSET multizone:zone:bathroom \
     id "bathroom" \
     name "Bathroom" \
     enabled "false" \
@@ -117,7 +117,7 @@ $REDIS_CLI HSET multizone:zone:bathroom \
 
 # Set main climate state
 echo "Setting main climate state..."
-$REDIS_CLI HSET multizone:main_climate \
+redis-cli "${REDIS_ARGS[@]}" HSET multizone:main_climate \
     entity_id "climate.main_thermostat" \
     current_temperature "20.8" \
     target_temperature "21.0" \
