@@ -120,7 +120,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [go-tests, build-containers]
+    needs: [build-containers]
 
     steps:
       - name: Checkout repository
