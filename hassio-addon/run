@@ -21,14 +21,16 @@ COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/${COMPONENT_NAME}"
 VERSION_FILE="${COMPONENT_DIR}/.installed_version"
 
 # Read version from manifest.json
-if [ ! -f "/app/custom_components/${COMPONENT_NAME}/manifest.json" ]; then
-    bashio::log.error "Custom component manifest.json not found!"
+MANIFEST_PATH="/app/custom_components/${COMPONENT_NAME}/manifest.json"
+if [ ! -f "${MANIFEST_PATH}" ]; then
+    bashio::log.error "Custom component manifest.json not found at ${MANIFEST_PATH}!"
     exit 1
 fi
 
-ADDON_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "/app/custom_components/${COMPONENT_NAME}/manifest.json" | cut -d'"' -f4)
+# Use jq for reliable JSON parsing
+ADDON_VERSION=$(jq -r '.version' "${MANIFEST_PATH}" 2>/dev/null)
 
-if [ -z "${ADDON_VERSION}" ]; then
+if [ -z "${ADDON_VERSION}" ] || [ "${ADDON_VERSION}" = "null" ]; then
     bashio::log.error "Could not read version from manifest.json"
     exit 1
 fi

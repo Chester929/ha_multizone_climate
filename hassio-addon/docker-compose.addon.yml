@@ -1,11 +1,15 @@
 version: '3.8'
 
+# Note: This docker-compose file is used by the Home Assistant addon
+# to orchestrate the logic and redis containers. It uses host networking
+# to allow seamless communication with Home Assistant's API and services.
+
 services:
   logic:
     image: ghcr.io/chester929/multizone-logic:latest
     container_name: multizone-logic
     restart: unless-stopped
-    network_mode: host
+    network_mode: host  # Required for addon to access HA services
     environment:
       - REDIS_HOST=127.0.0.1
       - REDIS_PORT=6379
@@ -19,7 +23,7 @@ services:
     image: redis:7-alpine
     container_name: multizone-redis
     restart: unless-stopped
-    network_mode: host
+    network_mode: host  # Required for logic container to connect on localhost
     command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}
     volumes:
       - /data/redis:/data
