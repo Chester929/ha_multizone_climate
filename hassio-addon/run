@@ -9,7 +9,27 @@ LOG_LEVEL=$(bashio::config 'logic.log_level')
 COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
 BACKEND_PORT=$(bashio::config 'integration.backend_port')
 
+# Redis connection settings
+if [ "${REDIS_MODE}" = "external" ]; then
+    REDIS_HOST=$(bashio::config 'redis.host')
+    REDIS_PORT=$(bashio::config 'redis.port')
+    
+    if [ -z "${REDIS_HOST}" ]; then
+        bashio::log.error "External Redis mode requires redis.host to be configured"
+        exit 1
+    fi
+    
+    # Use default port if not specified
+    REDIS_PORT=${REDIS_PORT:-6379}
+else
+    # Bundled mode uses localhost
+    REDIS_HOST="127.0.0.1"
+    REDIS_PORT="6379"
+fi
+
 bashio::log.info "Redis mode: ${REDIS_MODE}"
+bashio::log.info "Redis host: ${REDIS_HOST}"
+bashio::log.info "Redis port: ${REDIS_PORT}"
 bashio::log.info "Log level: ${LOG_LEVEL}"
 bashio::log.info "Backend port: ${BACKEND_PORT}"
 bashio::log.info "Coordinator interval: ${COORDINATOR_INTERVAL}s"
@@ -84,6 +104,9 @@ else
 fi
 
 # Export environment variables
+export REDIS_MODE="${REDIS_MODE}"
+export REDIS_HOST="${REDIS_HOST}"
+export REDIS_PORT="${REDIS_PORT}"
 export REDIS_PASSWORD="${REDIS_PASSWORD}"
 export LOG_LEVEL="${LOG_LEVEL}"
 export COORDINATOR_INTERVAL="${COORDINATOR_INTERVAL}"
@@ -93,7 +116,14 @@ export BACKEND_PORT="${BACKEND_PORT}"
 bashio::log.info "Starting containers..."
 cd /app
 
-docker-compose up -d
+# Start containers based on Redis mode
+if [ "${REDIS_MODE}" = "bundled" ]; then
+    bashio::log.info "Starting with bundled Redis..."
+    COMPOSE_PROFILES=bundled docker-compose up -d
+else
+    bashio::log.info "Using external Redis at ${REDIS_HOST}:${REDIS_PORT}..."
+    docker-compose up -d logic
+fi
 
 bashio::log.info "Multizone Climate Add-on started successfully"
 bashio::log.info "Configure zones through Home Assistant integration UI"

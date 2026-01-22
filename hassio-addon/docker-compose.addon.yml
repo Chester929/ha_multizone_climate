@@ -11,13 +11,11 @@ services:
     restart: unless-stopped
     network_mode: host  # Required for addon to access HA services
     environment:
-      - REDIS_HOST=127.0.0.1
-      - REDIS_PORT=6379
+      - REDIS_HOST=${REDIS_HOST:-127.0.0.1}
+      - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - HTTP_PORT=${BACKEND_PORT:-8080}
-    depends_on:
-      - redis
 
   redis:
     image: redis:7-alpine
@@ -27,3 +25,5 @@ services:
     command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}
     volumes:
       - /data/redis:/data
+    profiles:
+      - bundled

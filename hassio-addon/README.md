@@ -46,8 +46,8 @@ redis:
 ```
 
 - **mode**: Use bundled Redis (default) or connect to external Redis server
-- **host**: Redis host address (only for external mode)
-- **port**: Redis port (only for external mode)  
+- **host**: Redis host address (required when mode is external)
+- **port**: Redis port (default: 6379, used when mode is external)  
 - **password**: Redis authentication password (optional)
 
 ### Logic
