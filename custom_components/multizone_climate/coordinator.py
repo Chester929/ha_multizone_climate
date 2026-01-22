@@ -194,3 +194,15 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         """Cleanup on shutdown."""
         if self.session:
             await self.session.close()
+
+    def get_config(self) -> dict | None:
+        """Get configuration from coordinator data."""
+        if self.data:
+            return self.data.get("config")
+        return None
+
+    def get_main_climate_data(self) -> dict | None:
+        """Get main climate data from coordinator data."""
+        if self.data:
+            return self.data.get("main_climate")
+        return None
