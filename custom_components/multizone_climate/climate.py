@@ -1,18 +1,19 @@
 """Climate platform for Multizone Climate integration."""
 
 import logging
+from typing import Any
 
-from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import (
+from homeassistant.components.climate import ClimateEntity  # type: ignore[import-not-found]
+from homeassistant.components.climate.const import (  # type: ignore[import-not-found]
     ClimateEntityFeature,
     HVACMode,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.config_entries import ConfigEntry  # type: ignore[import-not-found]
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature  # type: ignore[import-not-found]
+from homeassistant.core import HomeAssistant, callback, Event  # type: ignore[import-not-found]
+from homeassistant.helpers.device_registry import DeviceInfo  # type: ignore[import-not-found]
+from homeassistant.helpers.entity_platform import AddEntitiesCallback  # type: ignore[import-not-found]
+from homeassistant.helpers.event import async_track_state_change_event  # type: ignore[import-not-found]
 
 from .const import DOMAIN
 from .coordinator import MultizoneClimateCoordinator
@@ -114,7 +115,7 @@ class MultizoneClimateEntity(ClimateEntity):
         self._closing_offset = closing_offset
         self._priority = priority
         self._is_fallback = is_fallback
-        self._attr_current_temperature = None
+        self._attr_current_temperature: float | None = None
         self._attr_hvac_mode = HVACMode.HEAT
         self._unsubscribe_sensor = None
 
@@ -133,7 +134,7 @@ class MultizoneClimateEntity(ClimateEntity):
 
         # Subscribe to temperature sensor state changes
         @callback
-        def temperature_sensor_state_listener(event):
+        def temperature_sensor_state_listener(event: Event) -> None:
             """Handle temperature sensor state changes."""
             new_state = event.data.get("new_state")
             if new_state is None or new_state.state in ("unknown", "unavailable"):
@@ -141,6 +142,8 @@ class MultizoneClimateEntity(ClimateEntity):
 
             try:
                 temperature = float(new_state.state)
+                if self._attr_current_temperature is None:
+                    self._attr_current_temperature = 0.0
                 self._attr_current_temperature = temperature
                 self.async_write_ha_state()
 
@@ -180,7 +183,7 @@ class MultizoneClimateEntity(ClimateEntity):
         """Return the name of the entity."""
         return self._zone_name
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:

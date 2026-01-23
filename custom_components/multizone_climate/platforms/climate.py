@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, Literal, cast
 import logging
 
-from homeassistant.components.climate import (
+from homeassistant.components.climate import (  # type: ignore[import-not-found]
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
     HVACAction,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import dt as dt_util
+from homeassistant.config_entries import ConfigEntry  # type: ignore[import-not-found]
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature  # type: ignore[import-not-found]
+from homeassistant.core import HomeAssistant, callback  # type: ignore[import-not-found]
+from homeassistant.helpers.entity_platform import AddEntitiesCallback  # type: ignore[import-not-found]
+from homeassistant.util import dt as dt_util  # type: ignore[import-not-found]
 
 from ..const import (
     DOMAIN,
@@ -166,7 +166,7 @@ class MainClimateDevice(ClimateEntity):
     @property
     def temperature_unit(self) -> str:
         """Return the unit of measurement."""
-        return UnitOfTemperature.CELSIUS
+        return str(UnitOfTemperature.CELSIUS)
 
     @property
     def current_temperature(self) -> float | None:
@@ -178,7 +178,8 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            return data.get("current_temperature")
+            temp = data.get("current_temperature")
+            return float(temp) if temp is not None else None
         return None
 
     @property
@@ -191,7 +192,8 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            return data.get("target_temperature")
+            temp = data.get("target_temperature")
+            return float(temp) if temp is not None else None
         return None
 
     @property
@@ -374,7 +376,7 @@ class ZoneClimateEntity(ClimateEntity):
     @property
     def name(self) -> str:
         """Return the name of the entity."""
-        return self._name
+        return str(self._name)
 
     @property
     def unique_id(self) -> str:
@@ -394,7 +396,7 @@ class ZoneClimateEntity(ClimateEntity):
     @property
     def temperature_unit(self) -> str:
         """Return the unit of measurement."""
-        return UnitOfTemperature.CELSIUS
+        return str(UnitOfTemperature.CELSIUS)
 
     @property
     def current_temperature(self) -> float | None:
@@ -414,7 +416,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Zone target temperature
         """
-        return self._target_temperature
+        return float(self._target_temperature) if self._target_temperature is not None else None
 
     @property
     def target_temperature_step(self) -> float:
@@ -424,7 +426,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Step size for target temperature changes
         """
-        return self._target_change_threshold
+        return float(self._target_change_threshold)
 
     @property
     def min_temp(self) -> float:
@@ -465,7 +467,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             int: Supported features flags
         """
-        return ClimateEntityFeature.TARGET_TEMPERATURE
+        return int(ClimateEntityFeature.TARGET_TEMPERATURE)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """
@@ -602,18 +604,18 @@ class ZoneClimateEntity(ClimateEntity):
         main_climate_data = self.coordinator.get_main_climate_data()
         # Default to heating if main climate data unavailable
         # This is safe as zones will not be actively managed when HVAC is off
-        hvac_action = HVAC_ACTION_HEATING
+        hvac_action: Literal["heating", "cooling", "off"] = "heating"
 
         if main_climate_data:
-            hvac_action_str = main_climate_data.get(
-                "hvac_action", HVAC_ACTION_HEATING
-            ).lower()
+            hvac_action_str = str(main_climate_data.get(
+                "hvac_action", "heating"
+            )).lower()
             if hvac_action_str in ("cooling", "cool"):
-                hvac_action = HVAC_ACTION_COOLING
+                hvac_action = "cooling"
             elif hvac_action_str in ("off", "idle"):
-                hvac_action = HVAC_ACTION_OFF
+                hvac_action = "off"
             else:
-                hvac_action = HVAC_ACTION_HEATING
+                hvac_action = "heating"
 
         # Call state machine
         new_state, temp_direction = self._state_machine.update_state(

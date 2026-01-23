@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 import os
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry  # type: ignore[import-not-found]
+from homeassistant.const import Platform  # type: ignore[import-not-found]
+from homeassistant.core import HomeAssistant  # type: ignore[import-not-found]
 
 from .const import DOMAIN
 from .coordinator import MultizoneClimateCoordinator
@@ -76,4 +76,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Remove data
         hass.data[DOMAIN].pop(entry.entry_id)
 
-    return unload_ok
+    return bool(unload_ok)

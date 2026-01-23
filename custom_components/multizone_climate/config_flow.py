@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
+import voluptuous as vol  # type: ignore[import-not-found]
 
-from homeassistant import config_entries
-from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
-from homeassistant.core import callback
-from homeassistant.helpers import selector
-import homeassistant.helpers.config_validation as cv
+from homeassistant import config_entries  # type: ignore[import-not-found]
+from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN  # type: ignore[import-not-found]
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN  # type: ignore[import-not-found]
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN  # type: ignore[import-not-found]
+from homeassistant.core import callback  # type: ignore[import-not-found]
+from homeassistant.helpers import selector  # type: ignore[import-not-found]
+import homeassistant.helpers.config_validation as cv  # type: ignore[import-not-found]
 
 from .const import DOMAIN
 
@@ -25,7 +25,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for Multizone Climate."""
 
     VERSION = 1

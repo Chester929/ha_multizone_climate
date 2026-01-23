@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-import redis.asyncio as aioredis
+import redis.asyncio as aioredis  # type: ignore[import-not-found]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -434,7 +434,7 @@ class RedisClient:
             job_json = await self._redis.rpop(queue_key)
 
             if job_json:
-                job_data = json.loads(job_json)
+                job_data: dict[str, Any] = json.loads(job_json)
                 _LOGGER.debug("Dequeued job type %s", job_type)
                 return job_data
 

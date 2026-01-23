@@ -141,6 +141,10 @@ class UpdateValvesJob(BaseJob):
         action_type = action.get("action")
         delay = action.get("delay", 0)
 
+        if not valve_id or not action_type:
+            _LOGGER.warning("Invalid valve action: missing valve_id or action")
+            return
+
         if delay > 0:
             # Schedule action with delay
             _LOGGER.debug(
@@ -152,12 +156,12 @@ class UpdateValvesJob(BaseJob):
             self.hass.loop.call_later(
                 delay,
                 lambda: self.hass.async_create_task(
-                    self._execute_valve_service_call(valve_id, action_type)
+                    self._execute_valve_service_call(str(valve_id), str(action_type))
                 ),
             )
         else:
             # Execute immediately
-            await self._execute_valve_service_call(valve_id, action_type)
+            await self._execute_valve_service_call(str(valve_id), str(action_type))
 
     async def _execute_valve_service_call(
         self, valve_id: str, action_type: str

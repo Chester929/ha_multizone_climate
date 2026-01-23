@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 import logging
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.components.switch import SwitchEntity  # type: ignore[import-not-found]
+from homeassistant.config_entries import ConfigEntry  # type: ignore[import-not-found]
+from homeassistant.core import HomeAssistant, callback  # type: ignore[import-not-found]
+from homeassistant.helpers.entity_platform import AddEntitiesCallback  # type: ignore[import-not-found]
 
 from ..const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP
 
@@ -74,7 +74,7 @@ class MultizoneEnableSwitch(SwitchEntity):
         config = self.coordinator.get_config()
         if not config:
             return False
-        return config.get("multizone_enabled", False)
+        return bool(config.get("multizone_enabled", False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """
