@@ -137,11 +137,14 @@ class MultizoneTemperatureSensor(SensorEntity):
         main_climate = self.coordinator.data.get("main_climate", {})
 
         if self.sensor_type == "main_current_temperature":
-            return float(main_climate.get("current_temperature")) if main_climate.get("current_temperature") is not None else None
+            value = main_climate.get("current_temperature")
+            return float(value) if value is not None else None
         if self.sensor_type == "main_target_temperature":
-            return float(main_climate.get("target_temperature")) if main_climate.get("target_temperature") is not None else None
+            value = main_climate.get("target_temperature")
+            return float(value) if value is not None else None
         if self.sensor_type == "outdoor_temperature":
-            return float(main_climate.get("outdoor_temperature")) if main_climate.get("outdoor_temperature") is not None else None
+            value = main_climate.get("outdoor_temperature")
+            return float(value) if value is not None else None
 
         return None
 
