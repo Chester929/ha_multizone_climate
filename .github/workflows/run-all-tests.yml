@@ -45,7 +45,6 @@ jobs:
           pylint custom_components
 
       - name: Run mypy (type checking)
-        continue-on-error: true
         run: |
           mypy custom_components
 
