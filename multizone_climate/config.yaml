@@ -1,0 +1,43 @@
+name: "Multizone Climate"
+version: "0.1.0"
+slug: multizone_climate
+description: "Advanced multi-zone HVAC management - Home Assistant add-on for intelligent zone control"
+arch:
+  - amd64
+  - armv7
+  - aarch64
+url: "https://github.com/Chester929/ha_multizone_climate"
+startup: services
+boot: auto
+init: false
+host_network: true
+
+options:
+  integration:
+    coordinator_interval: 30
+    backend_port: 8080
+  redis:
+    mode: bundled
+    password: ""
+  logic:
+    log_level: "info"
+
+schema:
+  integration:
+    coordinator_interval: int(5-300)?
+    backend_port: port?
+  redis:
+    mode: list(bundled|external)
+    host: str?
+    port: port?
+    password: password?
+  logic:
+    log_level: list(debug|info|warning|error)
+
+ports:
+  8080/tcp: 8080
+
+ports_description:
+  8080/tcp: "Backend API"
+
+ingress: false
