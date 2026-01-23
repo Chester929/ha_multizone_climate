@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 import logging
 
-from homeassistant.components.binary_sensor import BinarySensorEntity  # type: ignore[import-not-found]
-from homeassistant.config_entries import ConfigEntry  # type: ignore[import-not-found]
-from homeassistant.core import HomeAssistant  # type: ignore[import-not-found]
-from homeassistant.helpers.entity_platform import AddEntitiesCallback  # type: ignore[import-not-found]
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 _LOGGER = logging.getLogger(__name__)
 

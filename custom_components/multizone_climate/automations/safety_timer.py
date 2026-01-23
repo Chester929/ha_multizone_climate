@@ -6,7 +6,7 @@ from typing import Any
 import logging
 from datetime import timedelta, datetime
 
-from homeassistant.helpers.event import async_track_time_interval  # type: ignore[import-not-found]
+from homeassistant.helpers.event import async_track_time_interval
 
 _LOGGER = logging.getLogger(__name__)
 

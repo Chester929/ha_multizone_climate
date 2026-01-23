@@ -6,8 +6,8 @@ from typing import Any
 import logging
 import asyncio
 
-from homeassistant.core import Event, callback  # type: ignore[import-not-found]
-from homeassistant.helpers.event import async_track_state_change_event  # type: ignore[import-not-found]
+from homeassistant.core import Event, callback
+from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
 

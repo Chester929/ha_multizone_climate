@@ -4,11 +4,10 @@ import asyncio
 import logging
 from datetime import timedelta
 import os
-from typing import Any
 
-import aiohttp  # type: ignore[import-not-found]
-from homeassistant.core import HomeAssistant  # type: ignore[import-not-found]
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed  # type: ignore[import-not-found]
+import aiohttp
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
 
@@ -44,7 +43,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         timeout = aiohttp.ClientTimeout(total=10)
         self.session = aiohttp.ClientSession(timeout=timeout)
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self):
         """Fetch commands from backend and execute them."""
         try:
             # Get pending commands from backend
@@ -94,7 +93,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         except Exception as err:
             raise UpdateFailed(f"Unexpected error: {err}")
 
-    async def _execute_command(self, entity_id: str, action: str, value: Any) -> None:
+    async def _execute_command(self, entity_id: str, action: str, value):
         """Execute a command on a Home Assistant entity."""
         if not isinstance(entity_id, str) or "." not in entity_id:
             _LOGGER.warning(f"Invalid entity_id format for command: {entity_id}")
@@ -125,7 +124,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         else:
             _LOGGER.warning(f"Unknown action {action} for entity {entity_id}")
 
-    async def _acknowledge_commands(self, entity_ids: list[str]) -> None:
+    async def _acknowledge_commands(self, entity_ids: list[str]):
         """Acknowledge executed commands to backend with retry mechanism."""
         for attempt in range(1, self.MAX_COMMAND_RETRIES + 1):
             try:
@@ -157,7 +156,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             f"Failed to acknowledge commands after {self.MAX_COMMAND_RETRIES} attempts. Commands: {entity_ids}"
         )
 
-    async def push_state_update(self, zone_id: str, current_temp: float) -> None:
+    async def push_state_update(self, zone_id: str, current_temp: float):
         """Push temperature state update to backend with retry mechanism."""
         for attempt in range(1, self.MAX_COMMAND_RETRIES + 1):
             try:
@@ -191,21 +190,19 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             f"Failed to push state update for zone {zone_id} after {self.MAX_COMMAND_RETRIES} attempts"
         )
 
-    async def async_shutdown(self) -> None:
+    async def async_shutdown(self):
         """Cleanup on shutdown."""
         if self.session:
             await self.session.close()
 
-    def get_config(self) -> dict[Any, Any] | None:
+    def get_config(self) -> dict | None:
         """Get configuration from coordinator data."""
         if self.data:
-            config = self.data.get("config")
-            return dict(config) if config else None
+            return self.data.get("config")
         return None
 
-    def get_main_climate_data(self) -> dict[Any, Any] | None:
+    def get_main_climate_data(self) -> dict | None:
         """Get main climate data from coordinator data."""
         if self.data:
-            data = self.data.get("main_climate")
-            return dict(data) if data else None
+            return self.data.get("main_climate")
         return None

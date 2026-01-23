@@ -5,15 +5,15 @@ from __future__ import annotations
 from typing import Any
 import logging
 
-from homeassistant.components.sensor import (  # type: ignore[import-not-found]
+from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry  # type: ignore[import-not-found]
-from homeassistant.const import UnitOfTemperature  # type: ignore[import-not-found]
-from homeassistant.core import HomeAssistant, callback  # type: ignore[import-not-found]
-from homeassistant.helpers.entity_platform import AddEntitiesCallback  # type: ignore[import-not-found]
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTemperature
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ..const import DOMAIN
 
@@ -136,11 +136,11 @@ class MultizoneTemperatureSensor(SensorEntity):
         main_climate = self.coordinator.data.get("main_climate", {})
 
         if self.sensor_type == "main_current_temperature":
-            return float(main_climate.get("current_temperature")) if main_climate.get("current_temperature") is not None else None
+            return main_climate.get("current_temperature")
         if self.sensor_type == "main_target_temperature":
-            return float(main_climate.get("target_temperature")) if main_climate.get("target_temperature") is not None else None
+            return main_climate.get("target_temperature")
         if self.sensor_type == "outdoor_temperature":
-            return float(main_climate.get("outdoor_temperature")) if main_climate.get("outdoor_temperature") is not None else None
+            return main_climate.get("outdoor_temperature")
 
         return None
 
@@ -283,8 +283,7 @@ class ZoneTemperatureSensor(SensorEntity):
         if not zone_data:
             return None
 
-        value = zone_data.get(self.sensor_type)
-        return float(value) if value is not None else None
+        return zone_data.get(self.sensor_type)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -352,11 +351,9 @@ class ZoneTextSensor(SensorEntity):
             return None
 
         if self.sensor_type == "satisfaction":
-            value = zone_data.get("satisfaction_state")
-            return str(value) if value is not None else None
+            return zone_data.get("satisfaction_state")
         if self.sensor_type == "valve_state":
-            value = zone_data.get("valve_state")
-            return str(value) if value is not None else None
+            return zone_data.get("valve_state")
         if self.sensor_type == "direction":
             # Determine direction from temperature_rising and temperature_falling
             if zone_data.get("temperature_rising"):

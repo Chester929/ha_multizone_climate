@@ -94,7 +94,6 @@ class ZoneSatisfactionStateMachine:
         )
 
         # Apply state machine logic based on HVAC mode
-        new_state: SatisfactionState
         if hvac_mode == "off":
             new_state = "unknown"
         elif hvac_mode == "heating":
