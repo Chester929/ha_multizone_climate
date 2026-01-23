@@ -10,7 +10,7 @@ vendor/
 
 # Documentation
 *.md
-!hassio-addon/README.md
+!multizone_climate/README.md
 diagrams.pdf
 
 # Tests and examples
@@ -31,7 +31,7 @@ Thumbs.db
 *.env.local
 docker-compose.yml
 docker-compose.*.yml
-!hassio-addon/docker-compose.addon.yml
+!multizone_climate/docker-compose.addon.yml
 
 # Logic source (not needed, using pre-built image)
 logic/

@@ -14,8 +14,8 @@ RUN apk add --no-cache \
 COPY --chown=root:root custom_components /app/custom_components
 
 # Copy docker-compose and run script
-COPY --chown=root:root hassio-addon/docker-compose.addon.yml /app/docker-compose.yml
-COPY --chown=root:root hassio-addon/run /app/run
+COPY --chown=root:root multizone_climate/docker-compose.addon.yml /app/docker-compose.yml
+COPY --chown=root:root multizone_climate/run /app/run
 
 # Make run script executable
 RUN chmod a+x /app/run
