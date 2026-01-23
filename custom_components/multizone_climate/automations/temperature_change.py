@@ -69,7 +69,7 @@ class TemperatureChangeAutomation:
             )
 
     @callback
-    def _handle_temperature_change(self, event: Event) -> None:
+    def _handle_temperature_change(self, event: Event[Any]) -> None:  # type: ignore[type-arg]
         """
         Handle temperature sensor state change.
 

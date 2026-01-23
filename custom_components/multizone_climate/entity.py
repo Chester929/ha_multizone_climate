@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
@@ -10,7 +13,7 @@ from .const import DOMAIN
 class MultizoneClimateEntity(Entity):
     """Base entity for Multizone Climate integration."""
 
-    def __init__(self, coordinator: any, unique_id_suffix: str) -> None:
+    def __init__(self, coordinator: Any, unique_id_suffix: str) -> None:
         """
         Initialize base entity.
 
@@ -22,20 +25,20 @@ class MultizoneClimateEntity(Entity):
         self._attr_unique_id = f"{DOMAIN}_{unique_id_suffix}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """
         Return device information.
 
         Returns:
-            dict: Device information for grouping entities
+            DeviceInfo: Device information for grouping entities
         """
         # TODO: Return device info for entity grouping
-        return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
-            "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, "multizone_climate_main")},
+            name="Multizone Climate",
+            manufacturer="Chester929",
+            model="Multizone Climate Controller",
+        )
 
     @property
     def should_poll(self) -> bool:

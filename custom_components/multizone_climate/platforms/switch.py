@@ -8,6 +8,7 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ..const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP
@@ -54,14 +55,14 @@ class MultizoneEnableSwitch(SwitchEntity):
         self._attr_should_poll = False
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
-        return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
-            "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, "multizone_climate_main")},
+            name="Multizone Climate",
+            manufacturer="Chester929",
+            model="Multizone Climate Controller",
+        )
 
     @property
     def is_on(self) -> bool:
@@ -74,7 +75,8 @@ class MultizoneEnableSwitch(SwitchEntity):
         config = self.coordinator.get_config()
         if not config:
             return False
-        return config.get("multizone_enabled", False)
+        value = config.get("multizone_enabled", False)
+        return bool(value)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """

@@ -36,7 +36,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Handle the initial step - Main Climate Configuration."""
         errors: dict[str, str] = {}
 
@@ -69,7 +69,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_zones(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Handle zone configuration step."""
         errors: dict[str, str] = {}
 
@@ -157,7 +157,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="", data=user_input)  # type: ignore[return-value]
 
         options_schema = vol.Schema(
             {
@@ -189,7 +189,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             }
         )
 
-        return self.async_show_form(
+        return self.async_show_form(  # type: ignore[return-value]
             step_id="init",
             data_schema=options_schema,
         )

@@ -1,6 +1,7 @@
 """Climate platform for Multizone Climate integration."""
 
 import logging
+from typing import Any
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
@@ -32,8 +33,19 @@ async def async_setup_entry(
     # Extract zone configuration
     zone_name = config_data.get("zone_name", "Zone")
     zone_id = config_entry.entry_id  # Use config entry ID as zone ID
-    temperature_sensor = config_data.get("temperature_sensor")
-    valve_switch = config_data.get("valve_switch")
+    temperature_sensor_raw = config_data.get("temperature_sensor")
+    valve_switch_raw = config_data.get("valve_switch")
+    
+    # Validate required fields
+    if not temperature_sensor_raw or not isinstance(temperature_sensor_raw, str):
+        _LOGGER.error("Invalid or missing temperature_sensor in config")
+        return
+    if not valve_switch_raw or not isinstance(valve_switch_raw, str):
+        _LOGGER.error("Invalid or missing valve_switch in config")
+        return
+    
+    temperature_sensor: str = temperature_sensor_raw
+    valve_switch: str = valve_switch_raw
     target_temp = config_data.get("target_temperature", 20.0)
     opening_offset = config_data.get("opening_offset", 0.5)
     closing_offset = config_data.get("closing_offset", 0.5)
@@ -116,7 +128,7 @@ class MultizoneClimateEntity(ClimateEntity):
         self._is_fallback = is_fallback
         self._attr_current_temperature = None
         self._attr_hvac_mode = HVACMode.HEAT
-        self._unsubscribe_sensor = None
+        self._unsubscribe_sensor: Any = None
 
         # Set unique ID and device info
         self._attr_unique_id = f"multizone_climate_{zone_id}"
@@ -133,7 +145,7 @@ class MultizoneClimateEntity(ClimateEntity):
 
         # Subscribe to temperature sensor state changes
         @callback
-        def temperature_sensor_state_listener(event):
+        def temperature_sensor_state_listener(event: Any) -> None:
             """Handle temperature sensor state changes."""
             new_state = event.data.get("new_state")
             if new_state is None or new_state.state in ("unknown", "unavailable"):
@@ -180,7 +192,7 @@ class MultizoneClimateEntity(ClimateEntity):
         """Return the name of the entity."""
         return self._zone_name
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:

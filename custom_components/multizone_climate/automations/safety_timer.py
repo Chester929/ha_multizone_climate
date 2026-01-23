@@ -31,7 +31,7 @@ class SafetyTimerAutomation:
         self.hass = hass
         self.redis_client = redis_client
         self.safety_check_job = safety_check_job
-        self._cancel_timer = None
+        self._cancel_timer: Any = None
 
     async def setup(self, interval: int) -> None:
         """

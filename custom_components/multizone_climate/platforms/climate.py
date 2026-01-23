@@ -15,6 +15,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
@@ -36,6 +37,7 @@ from ..const import (
     JOB_TYPE_UPDATE_VALVES,
 )
 from ..core import ZoneSatisfactionStateMachine
+from ..core.satisfaction import HVACMode as SatisfactionHVACMode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,7 +80,7 @@ async def async_setup_entry(
         config_entry=config_entry,
     )
 
-    entities = [main_climate]
+    entities: list[ClimateEntity] = [main_climate]
 
     # Fetch zones from Redis
     zone_ids = await redis_client.get_zone_ids()
@@ -154,14 +156,14 @@ class MainClimateDevice(ClimateEntity):
         return f"{DOMAIN}_main_{self._config_entry.entry_id}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
-        return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": "Multizone Climate",
-            "manufacturer": "Multizone Climate",
-            "model": "Main Controller",
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._config_entry.entry_id)},
+            name="Multizone Climate",
+            manufacturer="Multizone Climate",
+            model="Main Controller",
+        )
 
     @property
     def temperature_unit(self) -> str:
@@ -178,7 +180,8 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            return data.get("current_temperature")
+            value = data.get("current_temperature")
+            return float(value) if value is not None else None
         return None
 
     @property
@@ -191,7 +194,8 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            return data.get("target_temperature")
+            value = data.get("target_temperature")
+            return float(value) if value is not None else None
         return None
 
     @property
@@ -254,15 +258,15 @@ class MainClimateDevice(ClimateEntity):
         return HVACAction.IDLE
 
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> ClimateEntityFeature:
         """
         Return the supported features.
 
         Returns:
-            int: Feature flags (read-only, no target temperature control)
+            ClimateEntityFeature: Feature flags (read-only, no target temperature control)
         """
         # Main climate is read-only - control via main thermostat entity
-        return 0
+        return ClimateEntityFeature(0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -374,7 +378,7 @@ class ZoneClimateEntity(ClimateEntity):
     @property
     def name(self) -> str:
         """Return the name of the entity."""
-        return self._name
+        return str(self._name)
 
     @property
     def unique_id(self) -> str:
@@ -382,14 +386,14 @@ class ZoneClimateEntity(ClimateEntity):
         return f"{DOMAIN}_zone_{self.zone_id}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
-        return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": "Multizone Climate",
-            "manufacturer": "Multizone Climate",
-            "model": "Main Controller",
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._config_entry.entry_id)},
+            name="Multizone Climate",
+            manufacturer="Multizone Climate",
+            model="Main Controller",
+        )
 
     @property
     def temperature_unit(self) -> str:
@@ -404,7 +408,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Current temperature from zone sensor
         """
-        return self._current_temperature
+        return float(self._current_temperature) if self._current_temperature is not None else None
 
     @property
     def target_temperature(self) -> float | None:
@@ -414,7 +418,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Zone target temperature
         """
-        return self._target_temperature
+        return float(self._target_temperature) if self._target_temperature is not None else None
 
     @property
     def target_temperature_step(self) -> float:
@@ -424,7 +428,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Step size for target temperature changes
         """
-        return self._target_change_threshold
+        return float(self._target_change_threshold)
 
     @property
     def min_temp(self) -> float:
@@ -458,12 +462,12 @@ class ZoneClimateEntity(ClimateEntity):
         return [HVACMode.HEAT]
 
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> ClimateEntityFeature:
         """
         Return the list of supported features.
 
         Returns:
-            int: Supported features flags
+            ClimateEntityFeature: Supported features flags
         """
         return ClimateEntityFeature.TARGET_TEMPERATURE
 
@@ -602,18 +606,18 @@ class ZoneClimateEntity(ClimateEntity):
         main_climate_data = self.coordinator.get_main_climate_data()
         # Default to heating if main climate data unavailable
         # This is safe as zones will not be actively managed when HVAC is off
-        hvac_action = HVAC_ACTION_HEATING
+        hvac_action: SatisfactionHVACMode = "heating"
 
         if main_climate_data:
             hvac_action_str = main_climate_data.get(
                 "hvac_action", HVAC_ACTION_HEATING
             ).lower()
             if hvac_action_str in ("cooling", "cool"):
-                hvac_action = HVAC_ACTION_COOLING
+                hvac_action = "cooling"
             elif hvac_action_str in ("off", "idle"):
-                hvac_action = HVAC_ACTION_OFF
+                hvac_action = "off"
             else:
-                hvac_action = HVAC_ACTION_HEATING
+                hvac_action = "heating"
 
         # Call state machine
         new_state, temp_direction = self._state_machine.update_state(
