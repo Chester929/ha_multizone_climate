@@ -249,7 +249,8 @@ ha_multizone_climate/
 ├── logic/                       # Go logic container
 ├── custom_components/           # Python custom integration
 │   └── multizone_climate/      # Integration code
-├── hassio-addon/               # HA add-on config
+├── multizone_climate/          # HA add-on directory (at root)
+├── repository.yaml             # HA add-on repository metadata
 ├── examples/                   # Sample configs
 ├── .github/workflows/          # CI/CD
 └── docs/                       # Documentation

@@ -483,10 +483,12 @@ ha_multizone_climate/
 │       ├── config_flow.py # Configuration wizard
 │       ├── coordinator.py # Data coordinator
 │       └── manifest.json
-├── hassio-addon/          # HA add-on config
+├── multizone_climate/     # HA add-on directory (at root for HA Supervisor)
 │   ├── config.yaml
+│   ├── Dockerfile
 │   ├── run
 │   └── README.md
+├── repository.yaml        # HA add-on repository metadata
 ├── docker-compose.yml
 ├── .env.example
 ├── DIAGRAMS.md           # Architecture diagrams
