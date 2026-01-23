@@ -16,6 +16,7 @@ jobs:
     name: Python Tests
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: true
       matrix:
         python-version: ["3.11", "3.12"]
 
