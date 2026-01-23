@@ -254,7 +254,7 @@ Examples:
 ### User Documentation
 
 - Update README.md for user-facing changes
-- Update hassio-addon/README.md for add-on changes
+- Update multizone_climate/README.md for add-on changes
 - Update custom_components/multizone_climate/README.md for integration changes
 - Add examples for new features
 

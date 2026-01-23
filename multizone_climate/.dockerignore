@@ -1,0 +1,51 @@
+# Build artifacts and dependencies
+node_modules/
+*.log
+.git/
+.github/
+.gitignore
+dist/
+build/
+vendor/
+
+# Documentation
+*.md
+!multizone_climate/README.md
+diagrams.pdf
+
+# Tests and examples
+tests/
+examples/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Environment and config files
+.env
+*.env.local
+docker-compose.yml
+docker-compose.*.yml
+!multizone_climate/docker-compose.addon.yml
+
+# Logic source (not needed, using pre-built image)
+logic/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+
+# Package manager files
+package.json
+package-lock.json
+go.mod
+go.sum
+Makefile
+puppeteer-config.json
