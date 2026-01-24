@@ -38,9 +38,6 @@ docker-compose.dev.yml
 docker-compose.ghcr.yml
 /docker-compose.*.yml
 
-# Logic source (not needed, using pre-built image)
-logic/
-
 # Python cache
 **/__pycache__/
 **/*.pyc
@@ -49,16 +46,16 @@ logic/
 .coverage
 htmlcov/
 
-# Package manager files
-package.json
-package-lock.json
-go.mod
-go.sum
-Makefile
-puppeteer-config.json
-pyproject.toml
-requirements.txt
-requirements_dev.txt
+# Package manager files (root level only, keep logic/go.mod and logic/go.sum)
+/package.json
+/package-lock.json
+/go.mod
+/go.sum
+/Makefile
+/puppeteer-config.json
+/pyproject.toml
+/requirements.txt
+/requirements_dev.txt
 
 # Repository config
 repository.json
