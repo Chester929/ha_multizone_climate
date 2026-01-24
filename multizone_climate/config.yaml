@@ -24,7 +24,7 @@ options:
 
 schema:
   integration:
-    coordinator_interval: int(5-300)?
+    coordinator_interval: int(5,300)?
     backend_port: port?
   redis:
     mode: list(bundled|external)
