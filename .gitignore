@@ -22,7 +22,8 @@ vendor/
 
 # IDE
 .idea/
-.vscode/
+# .vscode/ - keeping tasks.json for development setup
+.vscode/*.code-workspace
 *.swp
 *.swo
 *~

@@ -1,0 +1,61 @@
+{
+  "name": "Multizone Climate Add-on Development",
+  "image": "ghcr.io/home-assistant/devcontainer:2-addons",
+  "appPort": ["7123:8123", "7357:4357"],
+  "postStartCommand": "bash devcontainer_bootstrap",
+  "runArgs": ["-e", "GIT_EDITOR=code --wait", "--privileged"],
+  "workspaceFolder": "/mnt/supervisor/addons/local/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
+  "containerEnv": {
+    "WORKSPACE_DIRECTORY": "${containerWorkspaceFolder}"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "timonwong.shellcheck",
+        "esbenp.prettier-vscode",
+        "golang.go",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "visualstudioexptteam.vscodeintellicode"
+      ],
+      "settings": {
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/usr/bin/zsh"
+          }
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "editor.formatOnPaste": false,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "files.trimTrailingWhitespace": true,
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.provider": "black",
+        "python.analysis.typeCheckingMode": "basic",
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          }
+        },
+        "[yaml]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "go.useLanguageServer": true,
+        "go.formatTool": "gofmt",
+        "go.lintTool": "staticcheck"
+      }
+    }
+  },
+  "mounts": [
+    "type=volume,target=/var/lib/docker",
+    "type=volume,target=/mnt/supervisor"
+  ]
+}
