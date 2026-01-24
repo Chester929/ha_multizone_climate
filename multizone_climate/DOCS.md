@@ -760,7 +760,6 @@ Images are published to GitHub Container Registry (GHCR).
 - **GitHub Repository**: https://github.com/Chester929/ha_multizone_climate
 - **Issues**: https://github.com/Chester929/ha_multizone_climate/issues
 - **Architecture Diagrams**: [DIAGRAMS.md](https://github.com/Chester929/ha_multizone_climate/blob/main/DIAGRAMS.md)
-- **Contributing**: [CONTRIBUTING.md](https://github.com/Chester929/ha_multizone_climate/blob/main/CONTRIBUTING.md)
 
 ---
 

@@ -14,7 +14,7 @@ configuration:
     description: "Připojení a konfigurace Redis"
   redis.mode:
     name: "Redis režim"
-    description: "Použít vestavěný Redis kontejner nebo se připojit k externímu Redis serveru"
+    description: "Použít vestavený Redis kontejner nebo se připojit k externímu Redis serveru"
   redis.host:
     name: "Redis hostitel"
     description: "Název hostitele nebo IP adresa Redis serveru (vyžadováno, když je režim externí)"
