@@ -1,6 +1,0 @@
-{
-  "name": "Multizone Climate",
-  "render_readme": true,
-  "domains": ["climate", "sensor", "switch", "binary_sensor"],
-  "homeassistant": "2024.1.0"
-}
