@@ -38,15 +38,15 @@ jobs:
 
       - name: Run black (code formatting check)
         run: |
-          black --check custom_components tests
+          black --check multizone_climate/custom_components tests
 
       - name: Run pylint
         run: |
-          pylint custom_components
+          pylint multizone_climate/custom_components
 
       - name: Run mypy (type checking)
         run: |
-          mypy custom_components
+          mypy multizone_climate/custom_components
 
       - name: Run pytest
         run: |
