@@ -64,6 +64,32 @@ if [ ! -d "${CUSTOM_COMPONENTS_DIR}" ]; then
     mkdir -p "${CUSTOM_COMPONENTS_DIR}"
 fi
 
+# Function to compare semantic versions
+# Returns 0 if version1 > version2, 1 otherwise
+version_greater_than() {
+    local v1=$1
+    local v2=$2
+    
+    # Split versions into arrays
+    IFS='.' read -ra V1 <<< "$v1"
+    IFS='.' read -ra V2 <<< "$v2"
+    
+    # Compare major, minor, patch
+    for i in 0 1 2; do
+        local num1=${V1[$i]:-0}
+        local num2=${V2[$i]:-0}
+        
+        if [ "$num1" -gt "$num2" ]; then
+            return 0
+        elif [ "$num1" -lt "$num2" ]; then
+            return 1
+        fi
+    done
+    
+    # Versions are equal
+    return 1
+}
+
 # Check if component needs installation/update
 INSTALL_NEEDED=false
 if [ ! -d "${COMPONENT_DIR}" ]; then
@@ -74,9 +100,11 @@ elif [ ! -f "${VERSION_FILE}" ]; then
     INSTALL_NEEDED=true
 else
     INSTALLED_VERSION=$(cat "${VERSION_FILE}")
-    if [ "${INSTALLED_VERSION}" != "${ADDON_VERSION}" ]; then
-        bashio::log.info "Custom component version mismatch (${INSTALLED_VERSION} != ${ADDON_VERSION}), will update..."
+    if version_greater_than "${ADDON_VERSION}" "${INSTALLED_VERSION}"; then
+        bashio::log.info "Custom component version upgrade available (${INSTALLED_VERSION} -> ${ADDON_VERSION}), will update..."
         INSTALL_NEEDED=true
+    elif [ "${INSTALLED_VERSION}" != "${ADDON_VERSION}" ]; then
+        bashio::log.warning "Installed version ${INSTALLED_VERSION} is newer than addon version ${ADDON_VERSION}, skipping installation"
     else
         bashio::log.info "Custom component already installed (v${INSTALLED_VERSION})"
     fi
@@ -103,30 +131,7 @@ else
     bashio::log.info "Custom component installation up to date"
 fi
 
-# Export environment variables
-export REDIS_MODE="${REDIS_MODE}"
-export REDIS_HOST="${REDIS_HOST}"
-export REDIS_PORT="${REDIS_PORT}"
-export REDIS_PASSWORD="${REDIS_PASSWORD}"
-export LOG_LEVEL="${LOG_LEVEL}"
-export COORDINATOR_INTERVAL="${COORDINATOR_INTERVAL}"
-export BACKEND_PORT="${BACKEND_PORT}"
-
-# Start services using docker-compose
-bashio::log.info "Starting containers..."
-cd /app
-
-# Start containers based on Redis mode
-if [ "${REDIS_MODE}" = "bundled" ]; then
-    bashio::log.info "Starting with bundled Redis..."
-    COMPOSE_PROFILES=bundled docker-compose up -d
-else
-    bashio::log.info "Using external Redis at ${REDIS_HOST}:${REDIS_PORT}..."
-    docker-compose up -d logic
-fi
-
-bashio::log.info "Multizone Climate Add-on started successfully"
+bashio::log.info "Multizone Climate Add-on initialization complete"
+bashio::log.info "Services will be started by s6-overlay"
 bashio::log.info "Configure zones through Home Assistant integration UI"
 
-# Keep the script running
-tail -f /dev/null

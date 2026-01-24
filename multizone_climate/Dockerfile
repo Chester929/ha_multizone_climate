@@ -1,26 +1,41 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
+
+# Build stage for Go logic
+FROM golang:1.21-alpine AS logic-builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apk add --no-cache git
+
+# Copy logic source (context is repo root)
+COPY logic/go.mod logic/go.sum ./
+RUN go mod download
+
+COPY logic/ ./
+
+# Build the Go application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o multizone-logic ./cmd/server
+
+# Final stage
 FROM ${BUILD_FROM}
 
 # Install required packages
-# Note: Docker CLI and docker-compose are required to orchestrate
-# the logic and redis containers that make up this addon
+# Redis for data storage, jq for JSON parsing, bash for scripts
 RUN apk add --no-cache \
-    docker-cli \
-    docker-compose \
+    redis \
     jq \
-    bash
+    bash \
+    ca-certificates
 
-# Copy custom component files
-COPY --chown=root:root custom_components /app/custom_components
+# Copy the Go logic binary from builder
+COPY --from=logic-builder /build/multizone-logic /usr/local/bin/
 
-# Copy docker-compose and run script
-COPY --chown=root:root docker-compose.addon.yml /app/docker-compose.yml
-COPY --chown=root:root run /app/run
+# Copy custom component files (context is repo root)
+COPY --chown=root:root multizone_climate/custom_components /app/custom_components
 
-# Make run script executable
-RUN chmod a+x /app/run
+# Copy s6 service definitions (context is repo root)
+COPY --chown=root:root multizone_climate/rootfs /
 
 # Set working directory
 WORKDIR /app
-
-CMD ["/app/run"]
