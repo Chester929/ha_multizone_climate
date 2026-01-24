@@ -1,5 +1,5 @@
 name: "Multizone Climate"
-version: "0.1.1"
+version: "0.1.2"
 slug: multizone_climate
 description: "Advanced multi-zone HVAC management - Home Assistant add-on for intelligent zone control"
 arch:
@@ -24,7 +24,7 @@ options:
 
 schema:
   integration:
-    coordinator_interval: int(5-300)?
+    coordinator_interval: int(5,300)?
     backend_port: port?
   redis:
     mode: list(bundled|external)
