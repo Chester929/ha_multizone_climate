@@ -14,20 +14,14 @@ A Home Assistant integration for managing multi-zone climate control with coordi
 
 ## Installation
 
-### Via HACS (Recommended)
+This integration works only together with the Multizone Climate Add-on. Install the add-on first, which will automatically install the custom integration.
 
-1. Open HACS
-2. Go to Integrations
-3. Click the 3-dot menu and select "Custom repositories"
-4. Add `https://github.com/Chester929/ha_multizone_climate`
-5. Category: Integration
-6. Click "Add"
-7. Find "Multizone Climate" and install
+### Install via Add-on (Required)
 
-### Manual
-
-1. Copy `custom_components/multizone_climate` to your HA config directory
-2. Restart Home Assistant
+1. Add the repository: `https://github.com/Chester929/ha_multizone_climate`
+2. Install the "Multizone Climate" add-on
+3. Start the add-on - it will automatically install the integration to `/config/custom_components/`
+4. Restart Home Assistant
 
 ## Configuration
 
@@ -38,7 +32,7 @@ A Home Assistant integration for managing multi-zone climate control with coordi
 
 ## Requirements
 
-- Redis server (install via Add-on Store for Supervisor users)
+- Multizone Climate Add-on (required)
 - Main HVAC climate entity
 - Temperature sensors for each zone
 - Valve switches for each zone
