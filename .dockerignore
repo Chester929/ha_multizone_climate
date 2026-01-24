@@ -36,8 +36,7 @@ Thumbs.db
 docker-compose.yml
 docker-compose.dev.yml
 docker-compose.ghcr.yml
-docker-compose.*.yml
-!multizone_climate/docker-compose.addon.yml
+/docker-compose.*.yml
 
 # Logic source (not needed, using pre-built image)
 logic/
