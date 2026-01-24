@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurace Redis",
+        "description": "Nakonfigurujte připojení Redis pro Multizone Climate",
+        "data": {
+          "redis_host": "Redis Host",
+          "redis_port": "Redis Port",
+          "redis_password": "Redis Heslo (volitelné)",
+          "redis_db": "Redis Databáze",
+          "redis_key_prefix": "Redis Prefix Klíčů"
+        }
+      },
+      "main_climate": {
+        "title": "Hlavní Klimatizační Entita",
+        "description": "Vyberte hlavní termostatickou entitu HVAC",
+        "data": {
+          "main_climate_entity_id": "Hlavní Klimatizační Entita"
+        }
+      },
+      "automation_config": {
+        "title": "Konfigurace Automatizace",
+        "description": "Nakonfigurujte parametry automatizace multizone",
+        "data": {
+          "use_average_mode": "Použít Průměrný Režim",
+          "main_target_all_zones_satisfied": "Hlavní Cíl Když Všechny Zóny Spokojené (%)",
+          "min_valves_open": "Minimální Počet Otevřených Ventilů",
+          "main_min_temp": "Hlavní Minimální Teplota",
+          "main_max_temp": "Hlavní Maximální Teplota",
+          "main_change_threshold": "Hlavní Práh Změny",
+          "valve_actuation_delay": "Zpoždění Ovládání Ventilů (sekundy)",
+          "coordinator_interval": "Interval Koordinátora (sekundy)",
+          "satisfaction_eps": "Epsilon Spokojenosti"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodařilo se připojit k Redis",
+      "invalid_auth": "Neplatné ověření Redis",
+      "unknown": "Došlo k neočekávané chybě"
+    },
+    "abort": {
+      "already_configured": "Integrace je již nakonfigurována"
+    }
+  }
+}
