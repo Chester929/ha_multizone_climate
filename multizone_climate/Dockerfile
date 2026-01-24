@@ -8,11 +8,11 @@ WORKDIR /build
 # Install build dependencies
 RUN apk add --no-cache git
 
-# Copy logic source (context is repo root)
-COPY logic/go.mod logic/go.sum ./
+# Copy logic source (from addon directory)
+COPY ./logic/go.mod ./logic/go.sum ./
 RUN go mod download
 
-COPY logic/ ./
+COPY ./logic/ ./
 
 # Build the Go application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o multizone-logic ./cmd/server
@@ -31,11 +31,11 @@ RUN apk add --no-cache \
 # Copy the Go logic binary from builder
 COPY --from=logic-builder /build/multizone-logic /usr/local/bin/
 
-# Copy custom component files (context is repo root)
-COPY --chown=root:root multizone_climate/custom_components /app/custom_components
+# Copy custom component files (from addon directory)
+COPY --chown=root:root ./custom_components /app/custom_components
 
-# Copy s6 service definitions (context is repo root)
-COPY --chown=root:root multizone_climate/rootfs /
+# Copy s6 service definitions (from addon directory)
+COPY --chown=root:root ./rootfs /
 
 # Set working directory
 WORKDIR /app
