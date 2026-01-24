@@ -102,7 +102,7 @@
     {
       "label": "Format Python Code",
       "type": "shell",
-      "command": "black custom_components/ tests/",
+      "command": "black multizone_climate/custom_components/ tests/",
       "group": {
         "kind": "none",
         "isDefault": false

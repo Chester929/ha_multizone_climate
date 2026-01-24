@@ -1,5 +1,12 @@
 """Test fixtures for Multizone Climate integration."""
 
+import sys
+from pathlib import Path
+
+# Add the multizone_climate directory to the Python path so we can import custom_components
+multizone_climate_path = Path(__file__).parent.parent / "multizone_climate"
+sys.path.insert(0, str(multizone_climate_path))
+
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
