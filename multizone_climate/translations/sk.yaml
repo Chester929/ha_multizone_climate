@@ -1,0 +1,36 @@
+configuration:
+  integration:
+    name: "Nastavenia integrácie"
+    description: "Nastavenia pripojenia vlastnej integrácie"
+  integration.coordinator_interval:
+    name: "Interval koordinátora"
+    description: "Ako často (v sekundách) integrácia dotazuje backend na príkazy na vykonanie. Nižšie hodnoty poskytujú rýchlejšiu odozvu, ale zvyšujú zaťaženie systému."
+  integration.backend_port:
+    name: "Backend port"
+    description: "Číslo portu pre backend API server. Uistite sa, že tento port nie je používaný inými službami."
+  
+  redis:
+    name: "Nastavenia Redis"
+    description: "Pripojenie a konfigurácia Redis"
+  redis.mode:
+    name: "Redis režim"
+    description: "Použiť zabudovaný Redis kontajner alebo sa pripojiť k externému Redis serveru"
+  redis.host:
+    name: "Redis hostiteľ"
+    description: "Názov hostiteľa alebo IP adresa Redis serveru (vyžadované, keď je režim externý)"
+  redis.port:
+    name: "Redis port"
+    description: "Číslo portu Redis serveru (vyžadované, keď je režim externý)"
+  redis.password:
+    name: "Redis heslo"
+    description: "Heslo pre autentifikáciu Redis (voliteľné, odporúčané pre externé servery)"
+  
+  logic:
+    name: "Nastavenia logiky"
+    description: "Konfigurácia kontajnera backend logiky"
+  logic.log_level:
+    name: "Úroveň logovania"
+    description: "Úroveň podrobnosti logovania. Použite 'debug' pre podrobné riešenie problémov, 'info' pre normálnu prevádzku."
+
+network:
+  8080/tcp: "Backend API port pre komunikáciu medzi doplnkom a vlastnou integráciou"

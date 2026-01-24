@@ -1,0 +1,36 @@
+configuration:
+  integration:
+    name: "Integration Settings"
+    description: "Settings for the custom integration connection"
+  integration.coordinator_interval:
+    name: "Coordinator Interval"
+    description: "How often (in seconds) the integration polls for commands to execute. Lower values provide faster response but increase system load."
+  integration.backend_port:
+    name: "Backend Port"
+    description: "Port number for the backend API server. Ensure this port is not used by other services."
+  
+  redis:
+    name: "Redis Settings"
+    description: "Redis connection and configuration"
+  redis.mode:
+    name: "Redis Mode"
+    description: "Use bundled Redis container or connect to external Redis server"
+  redis.host:
+    name: "Redis Host"
+    description: "Redis server hostname or IP address (required when mode is external)"
+  redis.port:
+    name: "Redis Port"
+    description: "Redis server port number (required when mode is external)"
+  redis.password:
+    name: "Redis Password"
+    description: "Redis authentication password (optional, recommended for external servers)"
+  
+  logic:
+    name: "Logic Settings"
+    description: "Backend logic container configuration"
+  logic.log_level:
+    name: "Log Level"
+    description: "Logging verbosity level. Use 'debug' for detailed troubleshooting, 'info' for normal operation."
+
+network:
+  8080/tcp: "Backend API port for communication between add-on and custom integration"
