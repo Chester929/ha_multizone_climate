@@ -1,0 +1,59 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Start Multizone Climate Logic Service
+# ==============================================================================
+
+# Get configuration
+REDIS_MODE=$(bashio::config 'redis.mode')
+REDIS_PASSWORD=$(bashio::config 'redis.password')
+LOG_LEVEL=$(bashio::config 'logic.log_level')
+BACKEND_PORT=$(bashio::config 'integration.backend_port')
+
+# Redis connection settings
+if [ "${REDIS_MODE}" = "external" ]; then
+    REDIS_HOST=$(bashio::config 'redis.host')
+    REDIS_PORT=$(bashio::config 'redis.port')
+    
+    if [ -z "${REDIS_HOST}" ]; then
+        bashio::log.error "External Redis mode requires redis.host to be configured"
+        exit 1
+    fi
+    
+    # Use default port if not specified
+    REDIS_PORT=${REDIS_PORT:-6379}
+else
+    # Bundled mode uses localhost
+    REDIS_HOST="127.0.0.1"
+    REDIS_PORT="6379"
+fi
+
+bashio::log.info "Starting logic service..."
+bashio::log.info "Redis: ${REDIS_HOST}:${REDIS_PORT}"
+bashio::log.info "Log level: ${LOG_LEVEL}"
+bashio::log.info "Backend port: ${BACKEND_PORT}"
+
+# Wait for Redis to be ready
+if [ "${REDIS_MODE}" = "bundled" ]; then
+    bashio::log.info "Waiting for bundled Redis to be ready..."
+    for i in {1..30}; do
+        if redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} ${REDIS_PASSWORD:+-a ${REDIS_PASSWORD}} ping > /dev/null 2>&1; then
+            bashio::log.info "Redis is ready!"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            bashio::log.error "Redis failed to start within 30 seconds"
+            exit 1
+        fi
+        sleep 1
+    done
+fi
+
+# Export environment variables for the logic service
+export REDIS_HOST="${REDIS_HOST}"
+export REDIS_PORT="${REDIS_PORT}"
+export REDIS_PASSWORD="${REDIS_PASSWORD}"
+export LOG_LEVEL="${LOG_LEVEL}"
+export HTTP_PORT="${BACKEND_PORT}"
+
+# Run the logic service
+exec multizone-logic

@@ -1,0 +1,29 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Start Redis server
+# ==============================================================================
+
+REDIS_MODE=$(bashio::config 'redis.mode')
+
+# Only run bundled Redis if configured
+if [ "${REDIS_MODE}" != "bundled" ]; then
+    bashio::log.info "Using external Redis, bundled Redis will not start"
+    exec sleep infinity
+fi
+
+REDIS_PASSWORD=$(bashio::config 'redis.password')
+
+bashio::log.info "Starting bundled Redis server..."
+
+# Prepare Redis arguments
+REDIS_ARGS="--appendonly yes --dir /data/redis"
+
+if [ -n "${REDIS_PASSWORD}" ]; then
+    REDIS_ARGS="${REDIS_ARGS} --requirepass ${REDIS_PASSWORD}"
+fi
+
+# Ensure data directory exists
+mkdir -p /data/redis
+
+# Run Redis
+exec redis-server ${REDIS_ARGS}
