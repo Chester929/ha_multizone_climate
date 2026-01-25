@@ -61,7 +61,6 @@ async def async_setup_entry(
                     f"Failed to register zone {zone_name} with backend: status {response.status}, error: {error_text}"
                 )
             else:
-                response_data = await response.json()
                 _LOGGER.info(
                     f"Zone {zone_name} registered successfully with backend (ID: {zone_id})"
                 )
