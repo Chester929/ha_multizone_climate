@@ -2,15 +2,6 @@
 
 bashio::log.info "Starting Multizone Climate Add-on initialization..."
 
-# Get configuration options
-REDIS_MODE=$(bashio::config 'redis.mode')
-REDIS_PASSWORD=$(bashio::config 'redis.password')
-LOG_LEVEL=$(bashio::config 'logic.log_level')
-COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
-BACKEND_PORT=$(bashio::config 'integration.backend_port')
-
-bashio::log.info "Configuration loaded - Redis mode: ${REDIS_MODE}, Log level: ${LOG_LEVEL}"
-
 # Auto-install custom component
 # Try /config/custom_components first, fallback to /homeassistant/custom_components
 if [ -d "/config" ]; then

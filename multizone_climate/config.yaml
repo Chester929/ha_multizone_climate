@@ -42,4 +42,7 @@ ports:
 ports_description:
   8080/tcp: "Backend API"
 
+map:
+  - homeassistant_config:rw
+
 ingress: false
