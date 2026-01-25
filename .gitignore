@@ -50,3 +50,6 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Compiled Go binaries in logic directory
+multizone_climate/logic/server
