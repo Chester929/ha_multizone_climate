@@ -98,14 +98,23 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     
     # Remove old version if exists
     if [ -d "${COMPONENT_DIR}" ]; then
-        rm -rf "${COMPONENT_DIR}"
+        rm -rf "${COMPONENT_DIR}" || {
+            bashio::log.error "Failed to remove old component directory ${COMPONENT_DIR}"
+            exit 1
+        }
     fi
     
     # Copy custom component files
-    cp -r "/app/custom_components/${COMPONENT_NAME}" "${CUSTOM_COMPONENTS_DIR}/"
+    cp -r "/app/custom_components/${COMPONENT_NAME}" "${CUSTOM_COMPONENTS_DIR}/" || {
+        bashio::log.error "Failed to copy custom component files to ${CUSTOM_COMPONENTS_DIR}/"
+        exit 1
+    }
     
     # Write version file
-    echo "${ADDON_VERSION}" > "${VERSION_FILE}"
+    echo "${ADDON_VERSION}" > "${VERSION_FILE}" || {
+        bashio::log.error "Failed to write version file ${VERSION_FILE}"
+        exit 1
+    }
     
     bashio::log.info "Custom component installed successfully to ${COMPONENT_DIR}!"
     bashio::log.warning "Please restart Home Assistant for the integration to be available"
