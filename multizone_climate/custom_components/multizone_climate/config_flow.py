@@ -186,6 +186,69 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
                 ),
+                vol.Optional(
+                    "target_temperature", 
+                    default=self.config_entry.data.get("target_temperature", 20.0)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5.0,
+                        max=35.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "priority", 
+                    default=self.config_entry.data.get("priority", 50)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "opening_offset",
+                    default=self.config_entry.data.get("opening_offset", 0.3)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "closing_offset",
+                    default=self.config_entry.data.get("closing_offset", 0.3)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "target_change_threshold",
+                    default=self.config_entry.data.get("target_change_threshold", 0.1)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "is_fallback_valve",
+                    default=self.config_entry.data.get("is_fallback_valve", False)
+                ): cv.boolean,
             }
         )
 

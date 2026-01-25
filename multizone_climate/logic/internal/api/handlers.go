@@ -266,6 +266,54 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			}
 		}
 
+		// Validate opening_offset if provided
+		if openingOffset, ok := zone["opening_offset"].(string); ok && openingOffset != "" {
+			if err := validateTemperatureOffset(openingOffset, "Opening offset"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate closing_offset if provided
+		if closingOffset, ok := zone["closing_offset"].(string); ok && closingOffset != "" {
+			if err := validateTemperatureOffset(closingOffset, "Closing offset"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate target_change_threshold if provided
+		if targetChangeThreshold, ok := zone["target_change_threshold"].(string); ok && targetChangeThreshold != "" {
+			if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate is_fallback_valve if provided
+		if isFallbackValve, ok := zone["is_fallback_valve"].(string); ok && isFallbackValve != "" {
+			if err := validateBoolean(isFallbackValve, "Is fallback valve"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
 		// Set defaults for missing fields
 		zoneData := map[string]interface{}{
 			"id":                           zoneID,
@@ -279,6 +327,10 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			"temperature_sensor_entity_id": getStringOrDefault(zone, "temperature_sensor_entity_id", ""),
 			"valve_switch_entity_id":       getStringOrDefault(zone, "valve_switch_entity_id", ""),
 			"climate_entity_id":            getStringOrDefault(zone, "climate_entity_id", ""),
+			"opening_offset":               getStringOrDefault(zone, "opening_offset", "0.3"),
+			"closing_offset":               getStringOrDefault(zone, "closing_offset", "0.3"),
+			"target_change_threshold":      getStringOrDefault(zone, "target_change_threshold", "0.1"),
+			"is_fallback_valve":            getStringOrDefault(zone, "is_fallback_valve", "false"),
 		}
 
 		// Save zone to Redis
@@ -410,6 +462,54 @@ func UpdateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			}
 		}
 
+		// Validate opening_offset if provided
+		if openingOffset, ok := updates["opening_offset"].(string); ok && openingOffset != "" {
+			if err := validateTemperatureOffset(openingOffset, "Opening offset"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate closing_offset if provided
+		if closingOffset, ok := updates["closing_offset"].(string); ok && closingOffset != "" {
+			if err := validateTemperatureOffset(closingOffset, "Closing offset"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate target_change_threshold if provided
+		if targetChangeThreshold, ok := updates["target_change_threshold"].(string); ok && targetChangeThreshold != "" {
+			if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate is_fallback_valve if provided
+		if isFallbackValve, ok := updates["is_fallback_valve"].(string); ok && isFallbackValve != "" {
+			if err := validateBoolean(isFallbackValve, "Is fallback valve"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
 		// Update zone in Redis
 		if err := client.HSet(ctx, key, updates); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -506,6 +606,23 @@ func validatePriority(priorityStr string) error {
 	priority, err := strconv.Atoi(priorityStr)
 	if err != nil || priority < 0 || priority > 100 {
 		return fmt.Errorf("priority must be between 0 and 100")
+	}
+	return nil
+}
+
+// Helper function to validate temperature offset range (opening/closing offsets)
+func validateTemperatureOffset(offsetStr string, fieldName string) error {
+	offset, err := strconv.ParseFloat(offsetStr, 64)
+	if err != nil || offset < 0.0 || offset > 5.0 {
+		return fmt.Errorf("%s must be between 0.0 and 5.0", fieldName)
+	}
+	return nil
+}
+
+// Helper function to validate boolean string
+func validateBoolean(boolStr string, fieldName string) error {
+	if boolStr != "true" && boolStr != "false" {
+		return fmt.Errorf("%s must be either 'true' or 'false'", fieldName)
 	}
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/chester929/ha_multizone_climate/logic/internal/models"
 	"github.com/chester929/ha_multizone_climate/logic/internal/redis"
 	redisv8 "github.com/go-redis/redis/v8"
+	"github.com/gorilla/mux"
 )
 
 // newTestRedisClient creates a test redis client connected to miniredis
@@ -622,4 +623,295 @@ func TestIntegrationGetCommandsHandler(t *testing.T) {
 			t.Errorf("Expected no value field, got %v", command["value"])
 		}
 	})
+}
+
+// TestCreateZoneWithAdvancedParameters tests creating a zone with all advanced parameters
+func TestCreateZoneWithAdvancedParameters(t *testing.T) {
+	client, mr, cleanup := newTestRedisClient(t)
+	defer cleanup()
+
+	handler := CreateZoneHandler(client, nil)
+
+	zoneID := "test-zone-advanced"
+	payload := map[string]interface{}{
+		"id":                       zoneID,
+		"name":                     "Advanced Test Zone",
+		"opening_offset":           "0.5",
+		"closing_offset":           "0.4",
+		"target_change_threshold":  "0.2",
+		"is_fallback_valve":        "true",
+		"target_temperature":       "21.5",
+		"temperature_sensor_entity_id": "sensor.test_temp",
+		"valve_switch_entity_id":   "switch.test_valve",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest("POST", "/api/zones", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
+	}
+
+	// Verify all advanced parameters were saved to Redis correctly
+	zoneKey := "multizone:zone:" + zoneID
+
+	openingOffset := mr.HGet(zoneKey, "opening_offset")
+	if openingOffset != "0.5" {
+		t.Errorf("Expected opening_offset '0.5', got '%s'", openingOffset)
+	}
+
+	closingOffset := mr.HGet(zoneKey, "closing_offset")
+	if closingOffset != "0.4" {
+		t.Errorf("Expected closing_offset '0.4', got '%s'", closingOffset)
+	}
+
+	targetChangeThreshold := mr.HGet(zoneKey, "target_change_threshold")
+	if targetChangeThreshold != "0.2" {
+		t.Errorf("Expected target_change_threshold '0.2', got '%s'", targetChangeThreshold)
+	}
+
+	isFallbackValve := mr.HGet(zoneKey, "is_fallback_valve")
+	if isFallbackValve != "true" {
+		t.Errorf("Expected is_fallback_valve 'true', got '%s'", isFallbackValve)
+	}
+
+	// Verify other fields were also saved correctly
+	name := mr.HGet(zoneKey, "name")
+	if name != "Advanced Test Zone" {
+		t.Errorf("Expected name 'Advanced Test Zone', got '%s'", name)
+	}
+
+	targetTemp := mr.HGet(zoneKey, "target_temperature")
+	if targetTemp != "21.5" {
+		t.Errorf("Expected target_temperature '21.5', got '%s'", targetTemp)
+	}
+}
+
+// TestCreateZoneWithDefaultAdvancedParameters tests creating a zone without advanced parameters
+func TestCreateZoneWithDefaultAdvancedParameters(t *testing.T) {
+	client, mr, cleanup := newTestRedisClient(t)
+	defer cleanup()
+
+	handler := CreateZoneHandler(client, nil)
+
+	zoneID := "test-zone-defaults"
+	payload := map[string]interface{}{
+		"id":   zoneID,
+		"name": "Default Parameters Zone",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest("POST", "/api/zones", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
+	}
+
+	// Verify defaults are applied (0.3, 0.3, 0.1, false)
+	zoneKey := "multizone:zone:" + zoneID
+
+	openingOffset := mr.HGet(zoneKey, "opening_offset")
+	if openingOffset != "0.3" {
+		t.Errorf("Expected default opening_offset '0.3', got '%s'", openingOffset)
+	}
+
+	closingOffset := mr.HGet(zoneKey, "closing_offset")
+	if closingOffset != "0.3" {
+		t.Errorf("Expected default closing_offset '0.3', got '%s'", closingOffset)
+	}
+
+	targetChangeThreshold := mr.HGet(zoneKey, "target_change_threshold")
+	if targetChangeThreshold != "0.1" {
+		t.Errorf("Expected default target_change_threshold '0.1', got '%s'", targetChangeThreshold)
+	}
+
+	isFallbackValve := mr.HGet(zoneKey, "is_fallback_valve")
+	if isFallbackValve != "false" {
+		t.Errorf("Expected default is_fallback_valve 'false', got '%s'", isFallbackValve)
+	}
+}
+
+// TestUpdateZoneAdvancedParameters tests updating existing zone's advanced parameters
+func TestUpdateZoneAdvancedParameters(t *testing.T) {
+	client, mr, cleanup := newTestRedisClient(t)
+	defer cleanup()
+
+	// Create a test zone first
+	zoneID := "test-zone-update"
+	zoneKey := "multizone:zone:" + zoneID
+	mr.HSet(zoneKey, "name", "Test Zone")
+	mr.HSet(zoneKey, "opening_offset", "0.3")
+	mr.HSet(zoneKey, "closing_offset", "0.3")
+	mr.HSet(zoneKey, "target_change_threshold", "0.1")
+	mr.HSet(zoneKey, "is_fallback_valve", "false")
+
+	handler := UpdateZoneHandler(client, nil)
+
+	// Update the advanced parameters
+	updates := map[string]interface{}{
+		"opening_offset":          "0.6",
+		"closing_offset":          "0.7",
+		"target_change_threshold": "0.15",
+		"is_fallback_valve":       "true",
+	}
+	body, _ := json.Marshal(updates)
+
+	req := httptest.NewRequest("PUT", "/api/zones/"+zoneID, bytes.NewBuffer(body))
+	// Simulate mux.Vars by creating a context with the zone ID
+	req = mux.SetURLVars(req, map[string]string{"id": zoneID})
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	// Verify changes in Redis
+	openingOffset := mr.HGet(zoneKey, "opening_offset")
+	if openingOffset != "0.6" {
+		t.Errorf("Expected updated opening_offset '0.6', got '%s'", openingOffset)
+	}
+
+	closingOffset := mr.HGet(zoneKey, "closing_offset")
+	if closingOffset != "0.7" {
+		t.Errorf("Expected updated closing_offset '0.7', got '%s'", closingOffset)
+	}
+
+	targetChangeThreshold := mr.HGet(zoneKey, "target_change_threshold")
+	if targetChangeThreshold != "0.15" {
+		t.Errorf("Expected updated target_change_threshold '0.15', got '%s'", targetChangeThreshold)
+	}
+
+	isFallbackValve := mr.HGet(zoneKey, "is_fallback_valve")
+	if isFallbackValve != "true" {
+		t.Errorf("Expected updated is_fallback_valve 'true', got '%s'", isFallbackValve)
+	}
+
+	// Verify original name wasn't changed
+	name := mr.HGet(zoneKey, "name")
+	if name != "Test Zone" {
+		t.Errorf("Expected name to remain 'Test Zone', got '%s'", name)
+	}
+}
+
+// TestCreateZoneInvalidAdvancedParameters tests validation failures for advanced parameters
+func TestCreateZoneInvalidAdvancedParameters(t *testing.T) {
+	testCases := []struct {
+		name          string
+		payload       map[string]interface{}
+		expectedError string
+	}{
+		{
+			name: "NegativeOpeningOffset",
+			payload: map[string]interface{}{
+				"name":           "Test Zone",
+				"opening_offset": "-0.5",
+			},
+			expectedError: "Opening offset must be between 0.0 and 5.0",
+		},
+		{
+			name: "TooLargeOpeningOffset",
+			payload: map[string]interface{}{
+				"name":           "Test Zone",
+				"opening_offset": "6.0",
+			},
+			expectedError: "Opening offset must be between 0.0 and 5.0",
+		},
+		{
+			name: "InvalidOpeningOffsetNotANumber",
+			payload: map[string]interface{}{
+				"name":           "Test Zone",
+				"opening_offset": "not-a-number",
+			},
+			expectedError: "Opening offset must be between 0.0 and 5.0",
+		},
+		{
+			name: "NegativeClosingOffset",
+			payload: map[string]interface{}{
+				"name":           "Test Zone",
+				"closing_offset": "-0.3",
+			},
+			expectedError: "Closing offset must be between 0.0 and 5.0",
+		},
+		{
+			name: "TooLargeClosingOffset",
+			payload: map[string]interface{}{
+				"name":           "Test Zone",
+				"closing_offset": "10.0",
+			},
+			expectedError: "Closing offset must be between 0.0 and 5.0",
+		},
+		{
+			name: "NegativeTargetChangeThreshold",
+			payload: map[string]interface{}{
+				"name":                    "Test Zone",
+				"target_change_threshold": "-0.1",
+			},
+			expectedError: "Target change threshold must be between 0.0 and 5.0",
+		},
+		{
+			name: "TooLargeTargetChangeThreshold",
+			payload: map[string]interface{}{
+				"name":                    "Test Zone",
+				"target_change_threshold": "5.5",
+			},
+			expectedError: "Target change threshold must be between 0.0 and 5.0",
+		},
+		{
+			name: "InvalidIsFallbackValveNotBoolean",
+			payload: map[string]interface{}{
+				"name":              "Test Zone",
+				"is_fallback_valve": "yes",
+			},
+			expectedError: "Is fallback valve must be either 'true' or 'false'",
+		},
+		{
+			name: "InvalidIsFallbackValveNumber",
+			payload: map[string]interface{}{
+				"name":              "Test Zone",
+				"is_fallback_valve": "1",
+			},
+			expectedError: "Is fallback valve must be either 'true' or 'false'",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, _, cleanup := newTestRedisClient(t)
+			defer cleanup()
+
+			handler := CreateZoneHandler(client, nil)
+
+			body, _ := json.Marshal(tc.payload)
+			req := httptest.NewRequest("POST", "/api/zones", bytes.NewBuffer(body))
+			w := httptest.NewRecorder()
+
+			handler(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
+			}
+
+			var response map[string]interface{}
+			if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
+
+			errorMsg, ok := response["error"].(string)
+			if !ok {
+				t.Fatalf("Expected error message in response, got: %v", response)
+			}
+
+			if errorMsg != tc.expectedError {
+				t.Errorf("Expected error '%s', got '%s'", tc.expectedError, errorMsg)
+			}
+		})
+	}
 }
