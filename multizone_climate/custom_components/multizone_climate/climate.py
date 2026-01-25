@@ -40,6 +40,13 @@ async def async_setup_entry(
     priority = config_data.get("priority", 50)
     is_fallback = config_data.get("is_fallback_valve", False)
 
+    # Prepare control parameters for valve logic
+    control_params = {
+        "opening_offset": str(opening_offset),
+        "closing_offset": str(closing_offset),
+        "is_fallback_valve": is_fallback,
+    }
+    
     # Register zone with backend
     zone_config = {
         "id": zone_id,
@@ -48,9 +55,7 @@ async def async_setup_entry(
         "valve_switch_entity_id": valve_switch,
         "target_temperature": str(target_temp),
         "priority": str(priority),
-        "opening_offset": str(opening_offset),
-        "closing_offset": str(closing_offset),
-        "is_fallback_valve": is_fallback,
+        **control_params,  # Include control parameters
     }
 
     try:
@@ -68,18 +73,12 @@ async def async_setup_entry(
                     f"Zone {zone_name} registered successfully with backend (ID: {zone_id})"
                 )
                 
-                # Update zone with additional parameters that CreateZoneHandler doesn't store
+                # Update zone with control parameters that CreateZoneHandler doesn't store
                 # but are needed by the worker processor for valve control logic
-                zone_updates = {
-                    "opening_offset": str(opening_offset),
-                    "closing_offset": str(closing_offset),
-                    "is_fallback_valve": is_fallback,
-                }
-                
                 try:
                     async with coordinator.session.put(
                         f"{coordinator.backend_url}/api/zones/{zone_id}",
-                        json=zone_updates,
+                        json=control_params,
                     ) as update_response:
                         if update_response.status != 200:
                             update_error = await update_response.text()
