@@ -7,7 +7,7 @@ This directory contains the s6-overlay service definitions for the Multizone Cli
 ### init (oneshot)
 - **Type**: oneshot (runs once at startup)
 - **Purpose**: Initializes the add-on and installs the custom component
-- **Location**: `/config/custom_components/multizone_climate` (or `/homeassistant/custom_components` as fallback)
+- **Location**: `/homeassistant/custom_components/multizone_climate` (or `/config/custom_components` as fallback)
 - **Dependencies**: None (runs first)
 
 ### redis (longrun)

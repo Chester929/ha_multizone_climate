@@ -142,9 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Custom Component Installation** - Fixed issue where custom component was not automatically installed to `/config/custom_components/`
+- **Custom Component Installation** - Fixed issue where custom component was not automatically installed to `/homeassistant/custom_components/`
   - Moved installation logic from standalone `run` script to s6-overlay `init` oneshot service
-  - Added fallback path support: tries `/config/custom_components`, falls back to `/homeassistant/custom_components`
+  - Added path detection with modern standard priority: tries `/homeassistant/custom_components`, falls back to `/config/custom_components`
+  - Added `map: homeassistant_config:rw` to config.yaml to request access to Home Assistant directory
   - Configured proper service dependencies (init runs before logic and redis services)
   - Installation now executes reliably during add-on startup
 
