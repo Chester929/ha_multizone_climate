@@ -40,14 +40,14 @@ redis-cli: ## Connect to Redis CLI
 	docker compose exec redis redis-cli
 
 test-logic: ## Run Go tests
-	cd logic && go test ./...
+	cd multizone_climate/logic && go test ./...
 
 lint-logic: ## Lint Go code
-	cd logic && go vet ./...
-	cd logic && gofmt -l .
+	cd multizone_climate/logic && go vet ./...
+	cd multizone_climate/logic && gofmt -l .
 
 dev-logic: ## Run logic container in development mode
-	cd logic && go run cmd/server/main.go
+	cd multizone_climate/logic && go run cmd/server/main.go
 
 init-env: ## Create .env file from example
 	cp .env.example .env

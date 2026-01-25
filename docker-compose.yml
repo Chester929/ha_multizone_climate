@@ -3,7 +3,7 @@ version: '3.8'
 services:
   logic:
     build:
-      context: ./logic
+      context: ./multizone_climate/logic
       dockerfile: Dockerfile
     container_name: multizone-logic
     restart: unless-stopped
