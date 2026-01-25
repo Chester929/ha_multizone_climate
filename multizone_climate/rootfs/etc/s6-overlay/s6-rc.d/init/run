@@ -3,14 +3,14 @@
 bashio::log.info "Starting Multizone Climate Add-on initialization..."
 
 # Auto-install custom component
-# Try /config/custom_components first, fallback to /homeassistant/custom_components
-if [ -d "/config" ]; then
-    CUSTOM_COMPONENTS_DIR="/config/custom_components"
-elif [ -d "/homeassistant" ]; then
+# Try /homeassistant/custom_components first (modern HA standard), fallback to /config/custom_components
+if [ -d "/homeassistant" ]; then
     CUSTOM_COMPONENTS_DIR="/homeassistant/custom_components"
-    bashio::log.info "Using /homeassistant path for custom components"
+elif [ -d "/config" ]; then
+    CUSTOM_COMPONENTS_DIR="/config/custom_components"
+    bashio::log.info "Using /config path for custom components (legacy mount)"
 else
-    bashio::log.error "Neither /config nor /homeassistant directory found!"
+    bashio::log.error "Neither /homeassistant nor /config directory found!"
     exit 1
 fi
 
@@ -26,11 +26,10 @@ if [ ! -f "${MANIFEST_PATH}" ]; then
 fi
 
 # Use jq for reliable JSON parsing
-ADDON_VERSION=$(jq -r '.version' "${MANIFEST_PATH}" 2>&1)
+ADDON_VERSION=$(jq -r '.version' "${MANIFEST_PATH}")
 
 if [ -z "${ADDON_VERSION}" ] || [ "${ADDON_VERSION}" = "null" ]; then
     bashio::log.error "Could not read version from manifest.json at ${MANIFEST_PATH}"
-    bashio::log.error "JQ output: ${ADDON_VERSION}"
     exit 1
 fi
 
@@ -82,7 +81,7 @@ elif [ ! -f "${VERSION_FILE}" ]; then
     bashio::log.info "Version file not found, will reinstall..."
     INSTALL_NEEDED=true
 else
-    INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>&1) || {
+    INSTALLED_VERSION=$(cat "${VERSION_FILE}") || {
         bashio::log.warning "Failed to read version file ${VERSION_FILE}, will reinstall"
         INSTALL_NEEDED=true
     }
