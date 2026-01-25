@@ -12,11 +12,30 @@ if [ "${REDIS_MODE}" != "bundled" ]; then
 fi
 
 REDIS_PASSWORD=$(bashio::config 'redis.password')
+REDIS_PORT=$(bashio::config 'redis.bundled_port')
 
-bashio::log.info "Starting bundled Redis server..."
+# Use default port if not specified
+REDIS_PORT=${REDIS_PORT:-6380}
+
+bashio::log.info "Starting bundled Redis server on port ${REDIS_PORT}..."
+
+# Check if Redis is already running on the configured port
+bashio::log.info "Checking if Redis is already running on port ${REDIS_PORT}..."
+if redis-cli -h 127.0.0.1 -p ${REDIS_PORT} ${REDIS_PASSWORD:+-a ${REDIS_PASSWORD}} ping > /dev/null 2>&1; then
+    bashio::log.info "Redis already running and accessible on port ${REDIS_PORT}, using existing instance"
+    exec sleep infinity
+fi
+
+# Check if port is in use but Redis not responding
+# Use bash built-in /dev/tcp to check if port is listening
+if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${REDIS_PORT}" 2>/dev/null; then
+    bashio::log.error "Port ${REDIS_PORT} in use but Redis not responding. Check for port conflicts."
+    bashio::log.error "You can change the bundled Redis port in the add-on configuration (redis.bundled_port)"
+    exit 1
+fi
 
 # Prepare Redis arguments
-REDIS_ARGS="--appendonly yes --dir /data/redis"
+REDIS_ARGS="--port ${REDIS_PORT} --appendonly yes --dir /data/redis"
 
 if [ -n "${REDIS_PASSWORD}" ]; then
     REDIS_ARGS="${REDIS_ARGS} --requirepass ${REDIS_PASSWORD}"

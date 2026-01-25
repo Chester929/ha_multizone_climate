@@ -24,7 +24,9 @@ if [ "${REDIS_MODE}" = "external" ]; then
 else
     # Bundled mode uses localhost
     REDIS_HOST="127.0.0.1"
-    REDIS_PORT="6379"
+    REDIS_PORT=$(bashio::config 'redis.bundled_port')
+    # Use default bundled port if not specified
+    REDIS_PORT=${REDIS_PORT:-6380}
 fi
 
 bashio::log.info "Redis mode: ${REDIS_MODE}"

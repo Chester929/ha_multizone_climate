@@ -18,6 +18,7 @@ options:
     backend_port: 8080
   redis:
     mode: bundled
+    bundled_port: 6380
     password: ""
   logic:
     log_level: "info"
@@ -28,6 +29,7 @@ schema:
     backend_port: port?
   redis:
     mode: list(bundled|external)
+    bundled_port: port?
     host: str?
     port: port?
     password: password?
