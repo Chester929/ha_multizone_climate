@@ -9,16 +9,19 @@ This directory contains the s6-overlay service definitions for the Multizone Cli
 - **Purpose**: Initializes the add-on and installs the custom component
 - **Location**: `/homeassistant/custom_components/multizone_climate` (or `/config/custom_components` as fallback)
 - **Dependencies**: None (runs first)
+- **Script**: `up` (oneshot services use `up` file, not `run`)
 
 ### redis (longrun)
 - **Type**: longrun (supervised daemon)
 - **Purpose**: Redis server for state management
 - **Dependencies**: None
+- **Script**: `run` (longrun services use `run` file)
 
 ### logic (longrun)
 - **Type**: longrun (supervised daemon)
 - **Purpose**: GoLang logic server providing the backend API
 - **Dependencies**: init, redis
+- **Script**: `run` (longrun services use `run` file)
 
 ## Service Execution Order
 
