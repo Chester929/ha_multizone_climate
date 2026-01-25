@@ -26,10 +26,11 @@ if [ ! -f "${MANIFEST_PATH}" ]; then
 fi
 
 # Use jq for reliable JSON parsing
-ADDON_VERSION=$(jq -r '.version' "${MANIFEST_PATH}" 2>/dev/null)
+ADDON_VERSION=$(jq -r '.version' "${MANIFEST_PATH}" 2>&1)
 
 if [ -z "${ADDON_VERSION}" ] || [ "${ADDON_VERSION}" = "null" ]; then
-    bashio::log.error "Could not read version from manifest.json"
+    bashio::log.error "Could not read version from manifest.json at ${MANIFEST_PATH}"
+    bashio::log.error "JQ output: ${ADDON_VERSION}"
     exit 1
 fi
 
@@ -81,14 +82,20 @@ elif [ ! -f "${VERSION_FILE}" ]; then
     bashio::log.info "Version file not found, will reinstall..."
     INSTALL_NEEDED=true
 else
-    INSTALLED_VERSION=$(cat "${VERSION_FILE}")
-    if version_greater_than "${ADDON_VERSION}" "${INSTALLED_VERSION}"; then
-        bashio::log.info "Custom component version upgrade available (${INSTALLED_VERSION} -> ${ADDON_VERSION}), will update..."
+    INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>&1) || {
+        bashio::log.warning "Failed to read version file ${VERSION_FILE}, will reinstall"
         INSTALL_NEEDED=true
-    elif [ "${INSTALLED_VERSION}" != "${ADDON_VERSION}" ]; then
-        bashio::log.warning "Installed version ${INSTALLED_VERSION} is newer than addon version ${ADDON_VERSION}, skipping installation"
-    else
-        bashio::log.info "Custom component already installed (v${INSTALLED_VERSION})"
+    }
+    
+    if [ "${INSTALL_NEEDED}" = false ]; then
+        if version_greater_than "${ADDON_VERSION}" "${INSTALLED_VERSION}"; then
+            bashio::log.info "Custom component version upgrade available (${INSTALLED_VERSION} -> ${ADDON_VERSION}), will update..."
+            INSTALL_NEEDED=true
+        elif [ "${INSTALLED_VERSION}" != "${ADDON_VERSION}" ]; then
+            bashio::log.warning "Installed version ${INSTALLED_VERSION} is newer than addon version ${ADDON_VERSION}, skipping installation"
+        else
+            bashio::log.info "Custom component already installed (v${INSTALLED_VERSION})"
+        fi
     fi
 fi
 
