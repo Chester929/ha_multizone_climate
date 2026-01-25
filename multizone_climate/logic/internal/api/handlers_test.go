@@ -634,15 +634,15 @@ func TestCreateZoneWithAdvancedParameters(t *testing.T) {
 
 	zoneID := "test-zone-advanced"
 	payload := map[string]interface{}{
-		"id":                       zoneID,
-		"name":                     "Advanced Test Zone",
-		"opening_offset":           "0.5",
-		"closing_offset":           "0.4",
-		"target_change_threshold":  "0.2",
-		"is_fallback_valve":        "true",
-		"target_temperature":       "21.5",
+		"id":                           zoneID,
+		"name":                         "Advanced Test Zone",
+		"opening_offset":               "0.5",
+		"closing_offset":               "0.4",
+		"target_change_threshold":      "0.2",
+		"is_fallback_valve":            "true",
+		"target_temperature":           "21.5",
 		"temperature_sensor_entity_id": "sensor.test_temp",
-		"valve_switch_entity_id":   "switch.test_valve",
+		"valve_switch_entity_id":       "switch.test_valve",
 	}
 	body, _ := json.Marshal(payload)
 
