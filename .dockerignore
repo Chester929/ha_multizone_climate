@@ -58,9 +58,7 @@ htmlcov/
 /requirements_dev.txt
 
 # Repository config
-repository.json
 repository.yaml
-info.md
 
 # Devcontainer
 .devcontainer/
