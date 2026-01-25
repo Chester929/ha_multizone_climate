@@ -110,8 +110,8 @@ jobs:
       - name: Build Logic Container
         uses: docker/build-push-action@v5
         with:
-          context: ./logic
-          file: ./logic/Dockerfile
+          context: ./multizone_climate/logic
+          file: ./multizone_climate/logic/Dockerfile
           push: false
           tags: multizone-logic:test
           cache-from: type=gha
