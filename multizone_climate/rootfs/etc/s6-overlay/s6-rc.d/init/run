@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 
-bashio::log.info "Starting Multizone Climate Add-on..."
+bashio::log.info "Starting Multizone Climate Add-on initialization..."
 
 # Get configuration options
 REDIS_MODE=$(bashio::config 'redis.mode')
@@ -9,35 +9,20 @@ LOG_LEVEL=$(bashio::config 'logic.log_level')
 COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
 BACKEND_PORT=$(bashio::config 'integration.backend_port')
 
-# Redis connection settings
-if [ "${REDIS_MODE}" = "external" ]; then
-    REDIS_HOST=$(bashio::config 'redis.host')
-    REDIS_PORT=$(bashio::config 'redis.port')
-    
-    if [ -z "${REDIS_HOST}" ]; then
-        bashio::log.error "External Redis mode requires redis.host to be configured"
-        exit 1
-    fi
-    
-    # Use default port if not specified
-    REDIS_PORT=${REDIS_PORT:-6379}
-else
-    # Bundled mode uses localhost
-    REDIS_HOST="127.0.0.1"
-    REDIS_PORT=$(bashio::config 'redis.bundled_port')
-    # Use default bundled port if not specified
-    REDIS_PORT=${REDIS_PORT:-6380}
-fi
-
-bashio::log.info "Redis mode: ${REDIS_MODE}"
-bashio::log.info "Redis host: ${REDIS_HOST}"
-bashio::log.info "Redis port: ${REDIS_PORT}"
-bashio::log.info "Log level: ${LOG_LEVEL}"
-bashio::log.info "Backend port: ${BACKEND_PORT}"
-bashio::log.info "Coordinator interval: ${COORDINATOR_INTERVAL}s"
+bashio::log.info "Configuration loaded - Redis mode: ${REDIS_MODE}, Log level: ${LOG_LEVEL}"
 
 # Auto-install custom component
-CUSTOM_COMPONENTS_DIR="/config/custom_components"
+# Try /config/custom_components first, fallback to /homeassistant/custom_components
+if [ -d "/config" ]; then
+    CUSTOM_COMPONENTS_DIR="/config/custom_components"
+elif [ -d "/homeassistant" ]; then
+    CUSTOM_COMPONENTS_DIR="/homeassistant/custom_components"
+    bashio::log.info "Using /homeassistant path for custom components"
+else
+    bashio::log.error "Neither /config nor /homeassistant directory found!"
+    exit 1
+fi
+
 COMPONENT_NAME="multizone_climate"
 COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/${COMPONENT_NAME}"
 VERSION_FILE="${COMPONENT_DIR}/.installed_version"
@@ -58,12 +43,17 @@ if [ -z "${ADDON_VERSION}" ] || [ "${ADDON_VERSION}" = "null" ]; then
 fi
 
 bashio::log.info "Custom component version: ${ADDON_VERSION}"
+bashio::log.info "Target installation directory: ${CUSTOM_COMPONENTS_DIR}"
 bashio::log.info "Checking custom component installation..."
 
 # Create custom_components directory if it doesn't exist
 if [ ! -d "${CUSTOM_COMPONENTS_DIR}" ]; then
-    bashio::log.info "Creating custom_components directory..."
+    bashio::log.info "Creating custom_components directory at ${CUSTOM_COMPONENTS_DIR}..."
     mkdir -p "${CUSTOM_COMPONENTS_DIR}"
+    if [ $? -ne 0 ]; then
+        bashio::log.error "Failed to create directory ${CUSTOM_COMPONENTS_DIR}"
+        exit 1
+    fi
 fi
 
 # Function to compare semantic versions
@@ -127,13 +117,10 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     # Write version file
     echo "${ADDON_VERSION}" > "${VERSION_FILE}"
     
-    bashio::log.info "Custom component installed successfully!"
+    bashio::log.info "Custom component installed successfully to ${COMPONENT_DIR}!"
     bashio::log.warning "Please restart Home Assistant for the integration to be available"
 else
     bashio::log.info "Custom component installation up to date"
 fi
 
 bashio::log.info "Multizone Climate Add-on initialization complete"
-bashio::log.info "Services will be started by s6-overlay"
-bashio::log.info "Configure zones through Home Assistant integration UI"
-
