@@ -61,12 +61,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Get coordinator and zone_id before unloading
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    zone_id = entry.entry_id
+    zone_name = entry.data.get("zone_name", "Unknown")
+    
+    # Delete zone from backend
+    try:
+        async with coordinator.session.delete(
+            f"{coordinator.backend_url}/api/zones/{zone_id}",
+        ) as response:
+            if response.status == 200:
+                _LOGGER.info(f"Zone {zone_name} (ID: {zone_id}) deleted from backend")
+            elif response.status == 404:
+                _LOGGER.warning(f"Zone {zone_name} (ID: {zone_id}) not found in backend during deletion")
+            else:
+                error_text = await response.text()
+                _LOGGER.warning(
+                    f"Failed to delete zone {zone_name} from backend: status {response.status}, error: {error_text}"
+                )
+    except Exception as err:
+        _LOGGER.error(f"Error deleting zone {zone_name} from backend: {err}")
+    
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
         # Cleanup coordinator
-        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         await coordinator.async_shutdown()
 
         # Cleanup redis client

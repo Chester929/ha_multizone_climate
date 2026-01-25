@@ -42,15 +42,12 @@ async def async_setup_entry(
 
     # Register zone with backend
     zone_config = {
-        "zone_id": zone_id,
+        "id": zone_id,
         "name": zone_name,
-        "temperature_sensor": temperature_sensor,
-        "valve_switch": valve_switch,
-        "target_temperature": target_temp,
-        "opening_offset": opening_offset,
-        "closing_offset": closing_offset,
-        "priority": priority,
-        "is_fallback_valve": is_fallback,
+        "temperature_sensor_entity_id": temperature_sensor,
+        "valve_switch_entity_id": valve_switch,
+        "target_temperature": str(target_temp),
+        "priority": str(priority),
     }
 
     try:
@@ -59,8 +56,14 @@ async def async_setup_entry(
             json=zone_config,
         ) as response:
             if response.status not in (200, 201):
+                error_text = await response.text()
                 _LOGGER.warning(
-                    f"Failed to register zone {zone_name} with backend: status {response.status}"
+                    f"Failed to register zone {zone_name} with backend: status {response.status}, error: {error_text}"
+                )
+            else:
+                response_data = await response.json()
+                _LOGGER.info(
+                    f"Zone {zone_name} registered successfully with backend (ID: {zone_id})"
                 )
     except Exception as err:
         _LOGGER.error(f"Error registering zone {zone_name} with backend: {err}")
