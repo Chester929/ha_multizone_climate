@@ -37,8 +37,12 @@ bashio::log.info "Backend port: ${BACKEND_PORT}"
 # Wait for Redis to be ready
 if [ "${REDIS_MODE}" = "bundled" ]; then
     bashio::log.info "Waiting for bundled Redis to be ready..."
+    # Set password via environment variable for security (not visible in ps)
+    if [ -n "${REDIS_PASSWORD}" ]; then
+        export REDISCLI_AUTH="${REDIS_PASSWORD}"
+    fi
     for i in {1..30}; do
-        if redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} ${REDIS_PASSWORD:+-a ${REDIS_PASSWORD}} ping > /dev/null 2>&1; then
+        if redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} ping > /dev/null 2>&1; then
             bashio::log.info "Redis is ready!"
             break
         fi
@@ -48,6 +52,7 @@ if [ "${REDIS_MODE}" = "bundled" ]; then
         fi
         sleep 1
     done
+    unset REDISCLI_AUTH
 fi
 
 # Export environment variables for the logic service
