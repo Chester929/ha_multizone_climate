@@ -23,5 +23,5 @@ class MainClimateDeviceInfo:
             name="Multizone Climate",
             manufacturer="Chester929",
             model="Multizone Climate Controller",
-            sw_version="0.1.3",
+            sw_version="0.1.4",
         )
