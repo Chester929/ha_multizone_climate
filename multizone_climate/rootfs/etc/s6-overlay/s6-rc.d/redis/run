@@ -28,7 +28,7 @@ fi
 
 # Check if port is in use but Redis not responding
 # Use bash built-in /dev/tcp to check if port is listening
-if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/${REDIS_PORT}" 2>/dev/null; then
+if (timeout 1 bash -c "echo > /dev/tcp/127.0.0.1/${REDIS_PORT}" 2>/dev/null); then
     bashio::log.error "Port ${REDIS_PORT} in use but Redis not responding. Check for port conflicts."
     bashio::log.error "You can change the bundled Redis port in the add-on configuration (redis.bundled_port)"
     exit 1
