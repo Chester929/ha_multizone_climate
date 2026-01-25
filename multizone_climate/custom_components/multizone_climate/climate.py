@@ -72,26 +72,6 @@ async def async_setup_entry(
                 _LOGGER.info(
                     f"Zone {zone_name} registered successfully with backend (ID: {zone_id})"
                 )
-                
-                # Update zone with control parameters that CreateZoneHandler doesn't store
-                # but are needed by the worker processor for valve control logic
-                try:
-                    async with coordinator.session.put(
-                        f"{coordinator.backend_url}/api/zones/{zone_id}",
-                        json=control_params,
-                    ) as update_response:
-                        if update_response.status != 200:
-                            update_error = await update_response.text()
-                            _LOGGER.warning(
-                                f"Failed to update zone {zone_name} with control parameters: status {update_response.status}, error: {update_error}"
-                            )
-                        else:
-                            _LOGGER.debug(
-                                f"Zone {zone_name} control parameters updated (opening_offset: {opening_offset}, closing_offset: {closing_offset}, is_fallback: {is_fallback})"
-                            )
-                except Exception as update_err:
-                    _LOGGER.error(f"Error updating zone {zone_name} control parameters: {update_err}")
-                    
     except Exception as err:
         _LOGGER.error(f"Error registering zone {zone_name} with backend: {err}")
 

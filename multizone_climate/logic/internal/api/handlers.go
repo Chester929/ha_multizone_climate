@@ -279,6 +279,9 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			"temperature_sensor_entity_id": getStringOrDefault(zone, "temperature_sensor_entity_id", ""),
 			"valve_switch_entity_id":       getStringOrDefault(zone, "valve_switch_entity_id", ""),
 			"climate_entity_id":            getStringOrDefault(zone, "climate_entity_id", ""),
+			"opening_offset":               getStringOrDefault(zone, "opening_offset", "0.3"),
+			"closing_offset":               getStringOrDefault(zone, "closing_offset", "0.3"),
+			"is_fallback_valve":            getBoolOrDefault(zone, "is_fallback_valve", false),
 		}
 
 		// Save zone to Redis
@@ -487,6 +490,14 @@ func DeleteZoneHandler(client *redis.Client) http.HandlerFunc {
 // Helper function to get string value from map or return default
 func getStringOrDefault(m map[string]interface{}, key string, defaultValue string) string {
 	if val, ok := m[key].(string); ok {
+		return val
+	}
+	return defaultValue
+}
+
+// Helper function to get bool value from map or return default
+func getBoolOrDefault(m map[string]interface{}, key string, defaultValue bool) bool {
+	if val, ok := m[key].(bool); ok {
 		return val
 	}
 	return defaultValue
