@@ -49,11 +49,10 @@ bashio::log.info "Checking custom component installation..."
 # Create custom_components directory if it doesn't exist
 if [ ! -d "${CUSTOM_COMPONENTS_DIR}" ]; then
     bashio::log.info "Creating custom_components directory at ${CUSTOM_COMPONENTS_DIR}..."
-    mkdir -p "${CUSTOM_COMPONENTS_DIR}"
-    if [ $? -ne 0 ]; then
+    mkdir -p "${CUSTOM_COMPONENTS_DIR}" || {
         bashio::log.error "Failed to create directory ${CUSTOM_COMPONENTS_DIR}"
         exit 1
-    fi
+    }
 fi
 
 # Function to compare semantic versions
