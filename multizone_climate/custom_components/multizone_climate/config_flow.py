@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any
 
 import voluptuous as vol
@@ -15,6 +17,8 @@ from homeassistant.helpers import selector
 import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -157,6 +161,50 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Manage the options."""
         if user_input is not None:
+            # Merge user input with existing config data
+            new_data = {**self.config_entry.data, **user_input}
+            
+            # Update the config entry data
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            
+            # Update the backend zone via API if we have a zone_id
+            zone_id = self.config_entry.entry_id
+            backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+            backend_url = f"http://localhost:{backend_port}"
+            
+            # Prepare zone update payload
+            zone_update = {
+                "name": user_input.get("zone_name"),
+                "target_temperature": user_input.get("target_temperature"),
+                "priority": user_input.get("priority"),
+                "opening_offset": user_input.get("opening_offset"),
+                "closing_offset": user_input.get("closing_offset"),
+                "target_change_threshold": user_input.get("target_change_threshold"),
+                "is_fallback_valve": user_input.get("is_fallback_valve"),
+                "temperature_sensor_entity_id": user_input.get("temperature_sensor"),
+                "valve_switch_entity_id": user_input.get("valve_switch"),
+            }
+            
+            # Remove None values
+            zone_update = {k: v for k, v in zone_update.items() if v is not None}
+            
+            # Update zone via backend API
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.put(
+                        f"{backend_url}/api/zones/{zone_id}",
+                        json=zone_update,
+                    ) as response:
+                        if response.status not in (200, 201):
+                            _LOGGER.warning(
+                                f"Failed to update zone {zone_id} via backend API: status {response.status}"
+                            )
+            except Exception as err:
+                _LOGGER.error(f"Error updating zone {zone_id} via backend API: {err}")
+            
             return self.async_create_entry(title="", data=user_input)
 
         options_schema = vol.Schema(
