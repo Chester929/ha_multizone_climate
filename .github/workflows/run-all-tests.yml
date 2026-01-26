@@ -39,7 +39,7 @@ jobs:
       - name: Check trailing spaces
         run: |
           # Check for trailing whitespace in Python files
-          if git grep -I --line-number '[[:blank:]]$' -- '*.py'; then
+          if git grep -I --line-number '[[:blank:]]$' -- '**/*.py'; then
             echo "⚠️  Warning: Found trailing whitespace in Python files"
             exit 1
           fi
