@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, Literal
 import logging
 
 from homeassistant.components.climate import (
@@ -38,6 +38,9 @@ from .core import ZoneSatisfactionStateMachine
 
 _LOGGER = logging.getLogger(__name__)
 
+# Type alias for HVAC mode literals used by state machine
+HVACModeLiteral = Literal["heating", "cooling", "off"]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -63,7 +66,11 @@ async def async_setup_entry(
 
     # Get config from hass.data or config_entry (fallback if coordinator.get_config() is None)
     config_raw: Any = data.get("config") or config_entry.data or {}
-    config: dict[Any, Any] = dict(config_raw) if config_raw else {}
+    # Ensure config is a dict (defensive check)
+    if isinstance(config_raw, dict):
+        config: dict[Any, Any] = config_raw
+    else:
+        config = {}
     if not config:
         _LOGGER.warning(
             "No config found in coordinator or config entry, cannot create climate entities"
@@ -622,8 +629,7 @@ class ZoneClimateEntity(ClimateEntity):
                 hvac_mode_str = "heating"
 
         # Call state machine with proper HVACMode literal type
-        from .core.satisfaction import HVACMode as HVACModeLiteral
-
+        # Use explicit type assertion since we've validated the string
         hvac_mode: HVACModeLiteral = hvac_mode_str  # type: ignore[assignment]
 
         new_state, temp_direction = self._state_machine.update_state(

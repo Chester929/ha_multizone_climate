@@ -200,12 +200,14 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         """Get configuration from coordinator data."""
         if self.data:
             value = self.data.get("config")
-            return dict(value) if value is not None else None
+            # Return the value only if it's a dict, else None
+            return value if isinstance(value, dict) else None
         return None
 
     def get_main_climate_data(self) -> dict | None:
         """Get main climate data from coordinator data."""
         if self.data:
             value = self.data.get("main_climate")
-            return dict(value) if value is not None else None
+            # Return the value only if it's a dict, else None
+            return value if isinstance(value, dict) else None
         return None
