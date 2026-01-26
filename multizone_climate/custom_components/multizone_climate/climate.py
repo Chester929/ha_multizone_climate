@@ -31,8 +31,6 @@ from .const import (
     ATTR_MULTIZONE_ENABLED,
     STATE_UNKNOWN,
     HVAC_ACTION_HEATING,
-    HVAC_ACTION_COOLING,
-    HVAC_ACTION_OFF,
     JOB_TYPE_CALCULATE_MAIN_TEMP,
     JOB_TYPE_UPDATE_VALVES,
 )
@@ -418,7 +416,11 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Zone target temperature
         """
-        return float(self._target_temperature) if self._target_temperature is not None else None
+        return (
+            float(self._target_temperature)
+            if self._target_temperature is not None
+            else None
+        )
 
     @property
     def target_temperature_step(self) -> float:
@@ -621,8 +623,9 @@ class ZoneClimateEntity(ClimateEntity):
 
         # Call state machine with proper HVACMode literal type
         from .core.satisfaction import HVACMode as HVACModeLiteral
+
         hvac_mode: HVACModeLiteral = hvac_mode_str  # type: ignore[assignment]
-        
+
         new_state, temp_direction = self._state_machine.update_state(
             current_temperature=self._current_temperature,
             previous_temperature=self._previous_temperature,
