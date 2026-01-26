@@ -521,7 +521,10 @@ class ZoneClimateEntity(ClimateEntity):
             satisfaction_eps=self._state_machine.satisfaction_eps,
         )
 
-        # Write to Redis
+        # Recalculate satisfaction state immediately with new target bounds
+        await self._update_satisfaction_state()
+
+        # Write to Redis (now with correct satisfaction state)
         await self._update_zone_state_in_redis()
 
         # Trigger recalculation by enqueuing jobs

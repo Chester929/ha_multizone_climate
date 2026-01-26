@@ -86,6 +86,11 @@ class ValveController:
         valves_to_open = []
         valves_to_close = []
 
+        # Detect heating mode: any zone underheated
+        has_underheated_zones = any(
+            z.get("satisfaction") == "underheated" for z in sorted_zones
+        )
+
         for zone in sorted_zones:
             valve_id = zone.get("valve_id")
             if not valve_id:
@@ -103,8 +108,14 @@ class ValveController:
                 elif satisfaction == "overheated":
                     valves_to_close.append(valve_id)
                 elif satisfaction == "satisfied":
-                    # Satisfied zones should have valves open to maintain temperature
-                    valves_to_open.append(valve_id)
+                    # HEATING MODE: Close satisfied zones (prevent overheat from boosted water)
+                    # MAINTENANCE MODE: Open satisfied zones (maintain equilibrium)
+                    if has_underheated_zones:
+                        # Heating mode - close satisfied zones
+                        valves_to_close.append(valve_id)
+                    else:
+                        # Maintenance mode - open satisfied zones
+                        valves_to_open.append(valve_id)
             elif main_climate_state.upper() == "COOLING":
                 if satisfaction == "undercooled":
                     valves_to_open.append(valve_id)
@@ -186,7 +197,7 @@ class ValveController:
         Each zone manages its own valve:
         - Underheated/Undercooled: open valve
         - Overheated/Overcooled: close valve
-        - Satisfied: maintain current state
+        - Satisfied: open valve (maintain temperature)
 
         Args:
             zones: Zone list

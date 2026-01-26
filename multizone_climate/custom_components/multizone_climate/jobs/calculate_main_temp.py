@@ -75,12 +75,14 @@ class CalculateMainTempJob(BaseJob):
         # Get current main climate state
         main_climate = await self.redis_client.get_main_climate_state()
         current_main_target = main_climate.get("target_temperature", 20.0)
+        main_current_temp = main_climate.get("current_temperature", 20.0)
 
         # Call calculate_main_target_temperature()
         new_target = calculate_main_target_temperature(
             zones=zone_states,
             config=config,
             current_main_target=current_main_target,
+            main_current_temp=main_current_temp,
         )
 
         # If new target returned, update main climate entity
