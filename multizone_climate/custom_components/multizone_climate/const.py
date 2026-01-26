@@ -21,3 +21,7 @@ STATE_UNKNOWN = "unknown"
 HVAC_ACTION_HEATING = "heating"
 HVAC_ACTION_COOLING = "cooling"
 HVAC_ACTION_OFF = "off"
+
+# Alternative action strings (for compatibility)
+HVAC_ACTION_COOL = "cool"
+HVAC_ACTION_IDLE = "idle"

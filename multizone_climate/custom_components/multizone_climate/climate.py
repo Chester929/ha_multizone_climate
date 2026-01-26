@@ -31,6 +31,10 @@ from .const import (
     ATTR_MULTIZONE_ENABLED,
     STATE_UNKNOWN,
     HVAC_ACTION_HEATING,
+    HVAC_ACTION_COOLING,
+    HVAC_ACTION_OFF,
+    HVAC_ACTION_COOL,
+    HVAC_ACTION_IDLE,
     JOB_TYPE_CALCULATE_MAIN_TEMP,
     JOB_TYPE_UPDATE_VALVES,
 )
@@ -615,22 +619,22 @@ class ZoneClimateEntity(ClimateEntity):
         main_climate_data = self.coordinator.get_main_climate_data()
         # Default to heating if main climate data unavailable
         # This is safe as zones will not be actively managed when HVAC is off
-        hvac_mode_str = "heating"
+        hvac_mode_str = HVAC_ACTION_HEATING
 
         if main_climate_data:
             hvac_action_str = main_climate_data.get(
                 "hvac_action", HVAC_ACTION_HEATING
             ).lower()
-            if hvac_action_str in ("cooling", "cool"):
-                hvac_mode_str = "cooling"
-            elif hvac_action_str in ("off", "idle"):
-                hvac_mode_str = "off"
+            if hvac_action_str in (HVAC_ACTION_COOLING, HVAC_ACTION_COOL):
+                hvac_mode_str = HVAC_ACTION_COOLING
+            elif hvac_action_str in (HVAC_ACTION_OFF, HVAC_ACTION_IDLE):
+                hvac_mode_str = HVAC_ACTION_OFF
             else:
-                hvac_mode_str = "heating"
+                hvac_mode_str = HVAC_ACTION_HEATING
 
         # Call state machine with proper HVACMode literal type
         # Use explicit type assertion since we've validated the string
-        hvac_mode: HVACModeLiteral = hvac_mode_str  # type: ignore[assignment]
+        hvac_mode = cast(HVACModeLiteral, hvac_mode_str)
 
         new_state, temp_direction = self._state_machine.update_state(
             current_temperature=self._current_temperature,
