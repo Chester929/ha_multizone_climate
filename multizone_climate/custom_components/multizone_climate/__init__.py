@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
+
+import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -54,9 +57,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
 
     # Check if this is initial setup with zone data in entry.data
-    # If zone data exists, register the initial fallback zone
-    if "zone_name" in entry.data and "temperature_sensor" in entry.data:
-        import uuid
+    # If zone data exists (all required fields present), register the initial fallback zone
+    required_zone_fields = ["zone_name", "temperature_sensor", "valve_switch"]
+    has_initial_zone = all(field in entry.data for field in required_zone_fields)
+    
+    if has_initial_zone:
         zone_id = str(uuid.uuid4())
         
         # Prepare zone data for Redis
@@ -97,7 +102,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }
 
             try:
-                import aiohttp
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
                         f"{backend_url}/api/zones",

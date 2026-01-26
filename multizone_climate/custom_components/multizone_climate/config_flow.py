@@ -164,11 +164,11 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
-                # This first zone must be a fallback valve
-                vol.Optional(
+                # This first zone must be a fallback valve (fixed to True)
+                vol.Required(
                     "is_fallback_valve",
                     default=True
-                ): cv.boolean,
+                ): vol.All(cv.boolean, vol.In([True])),
             }
         )
 
@@ -177,7 +177,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=zone_schema,
             errors=errors,
             description_placeholders={
-                "description": "Configure the first fallback zone. This zone is required to ensure at least one valve can be opened when the minimum valve requirement is active."
+                "description": "Configure the first fallback zone. This zone is required and must be set as a fallback valve to ensure at least one valve can be opened when the minimum valve requirement is active."
             },
         )
 
