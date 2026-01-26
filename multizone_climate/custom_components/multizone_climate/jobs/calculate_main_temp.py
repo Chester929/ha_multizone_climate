@@ -75,7 +75,14 @@ class CalculateMainTempJob(BaseJob):
         # Get current main climate state
         main_climate = await self.redis_client.get_main_climate_state()
         current_main_target = main_climate.get("target_temperature", 20.0)
-        main_current_temp = main_climate.get("current_temperature", 20.0)
+        # Use None when current temperature is unavailable; algorithms.py treats None as zero capability
+        main_current_temp = main_climate.get("current_temperature")
+        
+        if main_current_temp is None:
+            _LOGGER.warning(
+                "Main climate current temperature not available in Redis, "
+                "assuming zero heating capability for boost calculation"
+            )
 
         # Call calculate_main_target_temperature()
         new_target = calculate_main_target_temperature(
