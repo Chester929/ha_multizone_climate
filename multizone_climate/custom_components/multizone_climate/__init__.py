@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from typing import cast
 
 import aiohttp
 
@@ -152,7 +153,9 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     # Unload platforms
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = cast(
+        bool, await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    )
 
     if unload_ok:
         # Cleanup coordinator

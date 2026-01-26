@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 import logging
 from datetime import timedelta, datetime
 
@@ -31,7 +31,7 @@ class SafetyTimerAutomation:
         self.hass = hass
         self.redis_client = redis_client
         self.safety_check_job = safety_check_job
-        self._cancel_timer = None
+        self._cancel_timer: Callable[[], None] | None = None
 
     async def setup(self, interval: int) -> None:
         """

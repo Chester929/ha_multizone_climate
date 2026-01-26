@@ -6,7 +6,7 @@ from typing import Any
 import logging
 import asyncio
 
-from homeassistant.core import Event, callback
+from homeassistant.core import Event, callback, EventStateChangedData
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
@@ -51,12 +51,14 @@ class TemperatureChangeAutomation:
             - Set up debouncing (5 seconds)
         """
         zone_ids = await self.redis_client.get_zone_ids()
-        sensor_entity_ids = []
+        sensor_entity_ids: list[str] = []
 
         for zone_id in zone_ids:
             zone_state = await self.redis_client.get_zone_state(zone_id)
             if zone_state and "temperature_sensor_entity_id" in zone_state:
-                sensor_entity_ids.append(zone_state["temperature_sensor_entity_id"])
+                entity_id = zone_state["temperature_sensor_entity_id"]
+                if isinstance(entity_id, str):
+                    sensor_entity_ids.append(entity_id)
 
         if sensor_entity_ids:
             cancel = async_track_state_change_event(
@@ -69,7 +71,7 @@ class TemperatureChangeAutomation:
             )
 
     @callback
-    def _handle_temperature_change(self, event: Event) -> None:
+    def _handle_temperature_change(self, event: Event[EventStateChangedData]) -> None:
         """
         Handle temperature sensor state change.
 

@@ -38,7 +38,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self.data: dict[str, Any] = {}
 
-    async def async_step_user(
+    async def async_step_user(  # type: ignore[override]
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Handle the initial step - Main Climate Configuration."""
@@ -62,7 +62,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.data = user_input
                     return await self.async_step_zone_initial()
 
-        return self.async_show_form(
+        return self.async_show_form(  # type: ignore[return-value]
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
@@ -91,7 +91,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.data.update(user_input)
 
                 # Create the config entry
-                return self.async_create_entry(
+                return self.async_create_entry(  # type: ignore[return-value]
                     title="Multizone Climate",
                     data=self.data,
                 )
@@ -164,7 +164,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-        return self.async_show_form(
+        return self.async_show_form(  # type: ignore[return-value]
             step_id="zone_initial",
             data_schema=zone_schema,
             errors=errors,
@@ -206,7 +206,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Required("action"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
+                        options=[  # type: ignore[typeddict-item]
                             {"value": "add_zone", "label": "Add New Zone"},
                             {"value": "edit_main", "label": "Edit Main Climate Entity"},
                         ],
@@ -216,7 +216,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             }
         )
 
-        return self.async_show_form(
+        return self.async_show_form(  # type: ignore[return-value]
             step_id="init",
             data_schema=menu_schema,
         )
@@ -228,7 +228,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             # Validate the main climate entity exists
             if not self.hass.states.get(user_input["main_climate_entity"]):
-                return self.async_show_form(
+                return self.async_show_form(  # type: ignore[return-value]
                     step_id="edit_main",
                     data_schema=self._get_edit_main_schema(),
                     errors={"main_climate_entity": "entity_not_found"},
@@ -242,9 +242,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
             # Reload the config entry so the integration uses the updated main climate entity
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            return self.async_create_entry(title="", data={})
+            return self.async_create_entry(title="", data={})  # type: ignore[return-value]
 
-        return self.async_show_form(
+        return self.async_show_form(  # type: ignore[return-value]
             step_id="edit_main",
             data_schema=self._get_edit_main_schema(),
         )
@@ -353,7 +353,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 except Exception as err:
                     _LOGGER.error(f"Failed to add zone to Redis: {err}")
                     errors["base"] = "redis_error"
-                    return self.async_show_form(
+                    return self.async_show_form(  # type: ignore[return-value]
                         step_id="add_zone",
                         data_schema=self._get_add_zone_schema(),
                         errors=errors,
@@ -362,9 +362,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 # Reload the integration to pick up the new zone
                 await self.hass.config_entries.async_reload(self.config_entry.entry_id)
 
-                return self.async_create_entry(title="", data={})
+                return self.async_create_entry(title="", data={})  # type: ignore[return-value]
 
-        return self.async_show_form(
+        return self.async_show_form(  # type: ignore[return-value]
             step_id="add_zone",
             data_schema=self._get_add_zone_schema(),
             errors=errors,

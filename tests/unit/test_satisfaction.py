@@ -68,7 +68,8 @@ class TestZoneSatisfactionStateMachine:
 
         Scenario:
             - Temperature oscillating around target
-            - Should stay satisfied within bounds
+            - Should stay satisfied within offset bounds (exit bounds)
+            - Two-tier hysteresis: narrow eps for entering, wide offsets for exiting
         """
         state_machine = ZoneSatisfactionStateMachine(
             target_temperature=21.0,
@@ -80,23 +81,25 @@ class TestZoneSatisfactionStateMachine:
         # Start satisfied at 21.0
         state = "satisfied"
 
-        # Temperature drops to 20.8 (still above lower bound 20.7)
+        # Temperature drops to 20.8 (above exit lower bound 20.7, below entry lower bound 20.9)
+        # Should stay satisfied because we use wider offset bounds for exiting
         state, direction = state_machine.update_state(
             current_temperature=20.8,
             previous_temperature=21.0,
             current_state=state,
             hvac_mode="heating",
         )
-        assert state == "satisfied"  # Should stay satisfied
+        assert state == "satisfied"  # Should stay satisfied (within offset exit bounds)
 
-        # Temperature rises to 21.2 (still below upper bound 21.3)
+        # Temperature rises to 21.2 (below exit upper bound 21.3, above entry upper bound 21.1)
+        # Should stay satisfied because we use wider offset bounds for exiting
         state, direction = state_machine.update_state(
             current_temperature=21.2,
             previous_temperature=20.8,
             current_state=state,
             hvac_mode="heating",
         )
-        assert state == "satisfied"  # Should stay satisfied
+        assert state == "satisfied"  # Should stay satisfied (within offset exit bounds)
 
     def test_cooling_mode_inverted(self):
         """

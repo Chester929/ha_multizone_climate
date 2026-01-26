@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 import logging
 
 from homeassistant.components.sensor import (
@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ..const import DOMAIN
@@ -40,7 +41,7 @@ async def async_setup_entry(
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
 
-    entities = []
+    entities: list[SensorEntity] = []
 
     # Temperature sensors
     entities.extend(
@@ -113,7 +114,7 @@ class MultizoneTemperatureSensor(SensorEntity):
         self._attr_name = type_names.get(sensor_type, f"Multizone {sensor_type}")
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
@@ -136,11 +137,11 @@ class MultizoneTemperatureSensor(SensorEntity):
         main_climate = self.coordinator.data.get("main_climate", {})
 
         if self.sensor_type == "main_current_temperature":
-            return main_climate.get("current_temperature")
+            return cast(float | None, main_climate.get("current_temperature"))
         if self.sensor_type == "main_target_temperature":
-            return main_climate.get("target_temperature")
+            return cast(float | None, main_climate.get("target_temperature"))
         if self.sensor_type == "outdoor_temperature":
-            return main_climate.get("outdoor_temperature")
+            return cast(float | None, main_climate.get("outdoor_temperature"))
 
         return None
 
@@ -181,7 +182,7 @@ class MultizoneTextSensor(SensorEntity):
         self._attr_name = type_names.get(sensor_type, f"Multizone {sensor_type}")
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
@@ -261,7 +262,7 @@ class ZoneTemperatureSensor(SensorEntity):
         self._attr_name = f"{zone_name} {type_names.get(sensor_type, sensor_type)}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
@@ -283,7 +284,7 @@ class ZoneTemperatureSensor(SensorEntity):
         if not zone_data:
             return None
 
-        return zone_data.get(self.sensor_type)
+        return cast(float | None, zone_data.get(self.sensor_type))
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -328,7 +329,7 @@ class ZoneTextSensor(SensorEntity):
         self._attr_name = f"{zone_name} {type_names.get(sensor_type, sensor_type)}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
@@ -351,9 +352,9 @@ class ZoneTextSensor(SensorEntity):
             return None
 
         if self.sensor_type == "satisfaction":
-            return zone_data.get("satisfaction_state")
+            return cast(str | None, zone_data.get("satisfaction_state"))
         if self.sensor_type == "valve_state":
-            return zone_data.get("valve_state")
+            return cast(str | None, zone_data.get("valve_state"))
         if self.sensor_type == "direction":
             # Determine direction from temperature_rising and temperature_falling
             if zone_data.get("temperature_rising"):
