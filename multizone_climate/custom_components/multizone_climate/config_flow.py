@@ -188,8 +188,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 zone_data = {
                     "id": zone_id,
                     "name": user_input.get("zone_name", "Zone"),
-                    "temperature_sensor": user_input.get("temperature_sensor"),
-                    "valve_switch": user_input.get("valve_switch"),
+                    "temperature_sensor_entity_id": user_input.get("temperature_sensor"),
+                    "valve_switch_entity_id": user_input.get("valve_switch"),
                     "target_temperature": user_input.get("target_temperature", 20.0),
                     "priority": user_input.get("priority", 50),
                     "opening_offset": user_input.get("opening_offset", 0.3),
@@ -215,8 +215,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     zone_config = {
                         "zone_id": zone_id,
                         "name": zone_data["name"],
-                        "temperature_sensor": zone_data["temperature_sensor"],
-                        "valve_switch": zone_data["valve_switch"],
+                        "temperature_sensor": zone_data["temperature_sensor_entity_id"],
+                        "valve_switch": zone_data["valve_switch_entity_id"],
                         "target_temperature": zone_data["target_temperature"],
                         "opening_offset": zone_data["opening_offset"],
                         "closing_offset": zone_data["closing_offset"],
