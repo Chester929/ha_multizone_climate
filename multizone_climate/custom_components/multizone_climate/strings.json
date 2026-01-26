@@ -3,25 +3,30 @@
     "step": {
       "user": {
         "title": "Configure Main Climate",
-        "description": "Select the main climate entity that controls your HVAC system. This will be used to calculate and set the target temperature based on all zones.",
+        "description": "Select the main climate entity that controls your HVAC system. At least one fallback zone is required for the system to function properly.",
         "data": {
           "main_climate_entity": "Main Climate Entity"
         }
       },
-      "zones": {
-        "title": "Configure Zone",
-        "description": "Configure a heating/cooling zone. Select the temperature sensor and valve switch for this zone. The integration will create a climate entity for this zone.",
+      "zone_initial": {
+        "title": "Configure Initial Fallback Zone",
+        "description": "Configure the first fallback zone. This zone is required to ensure at least one valve can be opened when the minimum valve requirement is active.",
         "data": {
           "zone_name": "Zone Name",
           "temperature_sensor": "Temperature Sensor",
-          "valve_switch": "Valve Switch (switch or valve domain)",
+          "valve_switch": "Valve Switch",
           "target_temperature": "Target Temperature",
-          "priority": "Priority (0-100, default: 50)"
+          "priority": "Priority (0-100)",
+          "opening_offset": "Opening Offset (°C)",
+          "closing_offset": "Closing Offset (°C)",
+          "target_change_threshold": "Target Change Threshold (°C)",
+          "is_fallback_valve": "Is Fallback Valve"
         }
       }
     },
     "error": {
-      "entity_not_found": "The selected entity was not found in Home Assistant"
+      "entity_not_found": "The selected entity was not found in Home Assistant",
+      "already_configured": "This integration is already configured with this main climate entity"
     },
     "abort": {
       "already_configured": "This integration is already configured"
@@ -30,15 +35,38 @@
   "options": {
     "step": {
       "init": {
-        "title": "Update Configuration",
-        "description": "Update the configuration for this zone.",
+        "title": "Multizone Climate Options",
+        "description": "Choose an action to perform.",
         "data": {
-          "main_climate_entity": "Main Climate Entity",
+          "action": "Action"
+        }
+      },
+      "edit_main": {
+        "title": "Edit Main Climate Entity",
+        "description": "Update the main climate entity that controls your HVAC system.",
+        "data": {
+          "main_climate_entity": "Main Climate Entity"
+        }
+      },
+      "add_zone": {
+        "title": "Add New Zone",
+        "description": "Configure a new heating/cooling zone with temperature sensor and valve control.",
+        "data": {
           "zone_name": "Zone Name",
           "temperature_sensor": "Temperature Sensor",
-          "valve_switch": "Valve Switch"
+          "valve_switch": "Valve Switch",
+          "target_temperature": "Target Temperature",
+          "priority": "Priority (0-100)",
+          "opening_offset": "Opening Offset (°C)",
+          "closing_offset": "Closing Offset (°C)",
+          "target_change_threshold": "Target Change Threshold (°C)",
+          "is_fallback_valve": "Is Fallback Valve"
         }
       }
+    },
+    "error": {
+      "entity_not_found": "The selected entity was not found in Home Assistant",
+      "redis_error": "Failed to add zone to Redis. Check logs for details."
     }
   }
 }
