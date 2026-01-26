@@ -31,6 +31,7 @@ class TestZoneClimateEntity:
         """Create mock Redis client."""
         redis_client = MagicMock()
         redis_client.set_zone_state = AsyncMock()
+        redis_client.enqueue_job = AsyncMock()
         redis_client.get_zone_state = AsyncMock(
             return_value={
                 "id": "zone1",
