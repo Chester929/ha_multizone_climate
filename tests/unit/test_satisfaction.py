@@ -67,8 +67,8 @@ class TestZoneSatisfactionStateMachine:
         Test that hysteresis prevents rapid state changes.
 
         Scenario:
-            - Temperature oscillating around target
-            - Should stay satisfied within bounds
+            - Temperature oscillating around target within satisfaction bounds
+            - Should stay satisfied within eps bounds (not offset bounds)
         """
         state_machine = ZoneSatisfactionStateMachine(
             target_temperature=21.0,
@@ -80,23 +80,23 @@ class TestZoneSatisfactionStateMachine:
         # Start satisfied at 21.0
         state = "satisfied"
 
-        # Temperature drops to 20.8 (still above lower bound 20.7)
+        # Temperature drops to 20.95 (still above lower satisfaction bound 20.9)
         state, direction = state_machine.update_state(
-            current_temperature=20.8,
+            current_temperature=20.95,
             previous_temperature=21.0,
             current_state=state,
             hvac_mode="heating",
         )
-        assert state == "satisfied"  # Should stay satisfied
+        assert state == "satisfied"  # Should stay satisfied (within eps bounds)
 
-        # Temperature rises to 21.2 (still below upper bound 21.3)
+        # Temperature rises to 21.05 (still below upper satisfaction bound 21.1)
         state, direction = state_machine.update_state(
-            current_temperature=21.2,
-            previous_temperature=20.8,
+            current_temperature=21.05,
+            previous_temperature=20.95,
             current_state=state,
             hvac_mode="heating",
         )
-        assert state == "satisfied"  # Should stay satisfied
+        assert state == "satisfied"  # Should stay satisfied (within eps bounds)
 
     def test_cooling_mode_inverted(self):
         """

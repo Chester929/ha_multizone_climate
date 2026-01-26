@@ -35,27 +35,40 @@ class ZoneSatisfactionStateMachine:
 
         Args:
             target_temperature: Target temperature for the zone
-            opening_offset: Temperature below target to trigger valve opening
-            closing_offset: Temperature above target to trigger valve closing
-            satisfaction_eps: Epsilon around target for satisfaction determination
+            opening_offset: Temperature offset for valve opening control (valve logic, not satisfaction)
+            closing_offset: Temperature offset for valve closing control (valve logic, not satisfaction)
+            satisfaction_eps: Epsilon for satisfaction state determination (satisfaction boundaries)
 
+        Note:
+            Valve control and satisfaction states are separate:
+            - Valve control uses opening_offset and closing_offset
+            - Satisfaction states use satisfaction_eps for boundaries
+            
         Example:
-            target = 21.0, opening_offset = 0.3, closing_offset = 0.3, satisfaction_eps = 0.1
-            Lower bound: 20.7 (target - opening_offset)
-            Upper bound: 21.3 (target + closing_offset)
-            Satisfied entry (from underheated): 21.1 (target + eps)
-            Satisfied exit (from overheated): 20.9 (target - eps)
+            target = 22.0, opening_offset = 0.3, closing_offset = 0.3, satisfaction_eps = 0.1
+            
+            Satisfaction state boundaries (using eps):
+            - Underheated: temp < 21.9 (target - eps)
+            - Satisfied: 21.9 <= temp <= 22.1 (target ± eps)
+            - Overheated: temp > 22.1 (target + eps)
+            
+            Valve control boundaries (using offsets, separate logic):
+            - Valve opens: temp < 21.7 (target - opening_offset)
+            - Valve closes: temp > 22.3 (target + closing_offset)
         """
         self.target_temperature = target_temperature
         self.opening_offset = opening_offset
         self.closing_offset = closing_offset
         self.satisfaction_eps = satisfaction_eps
 
-        # Calculate bounds for state determination
-        self.lower_bound = target_temperature - opening_offset
-        self.upper_bound = target_temperature + closing_offset
-        self.satisfied_entry_heating = target_temperature + satisfaction_eps
-        self.satisfied_exit_heating = target_temperature - satisfaction_eps
+        # Calculate bounds for satisfaction state determination (using eps)
+        # Satisfaction states are based on proximity to target
+        self.satisfied_lower = target_temperature - satisfaction_eps
+        self.satisfied_upper = target_temperature + satisfaction_eps
+        
+        # Valve control uses opening_offset and closing_offset (separate from satisfaction)
+        self.valve_lower_bound = target_temperature - opening_offset
+        self.valve_upper_bound = target_temperature + closing_offset
 
     def update_state(
         self,
@@ -77,16 +90,28 @@ class ZoneSatisfactionStateMachine:
             tuple: (new_satisfaction_state, temperature_direction)
 
         State Transitions (Heating):
-            Underheated -> Satisfied: temp >= target + satisfaction_eps (while rising)
-            Satisfied -> Overheated: temp > target + closing_offset
-            Overheated -> Satisfied: temp <= target - satisfaction_eps (while falling)
-            Satisfied -> Underheated: temp < target - opening_offset
+            Underheated: temp < (target - satisfaction_eps)
+            Satisfied: (target - satisfaction_eps) <= temp <= (target + satisfaction_eps)
+            Overheated: temp > (target + satisfaction_eps)
+            
+            Transitions with hysteresis:
+            - Underheated -> Satisfied: temp >= (target + satisfaction_eps) while rising
+            - Satisfied -> Underheated: temp < (target - satisfaction_eps) while falling
+            - Satisfied -> Overheated: temp > (target + satisfaction_eps) while rising
+            - Overheated -> Satisfied: temp <= (target - satisfaction_eps) while falling
 
         State Transitions (Cooling):
-            Undercooled -> Satisfied: temp <= target - satisfaction_eps (while falling)
-            Satisfied -> Overcooled: temp < target - closing_offset
-            Overcooled -> Satisfied: temp >= target + satisfaction_eps (while rising)
-            Satisfied -> Undercooled: temp > target + opening_offset
+            Undercooled: temp > (target + satisfaction_eps)
+            Satisfied: (target - satisfaction_eps) <= temp <= (target + satisfaction_eps)
+            Overcooled: temp < (target - satisfaction_eps)
+            
+            Transitions with hysteresis:
+            - Undercooled -> Satisfied: temp <= (target - satisfaction_eps) while falling
+            - Satisfied -> Undercooled: temp > (target + satisfaction_eps) while rising
+            - Satisfied -> Overcooled: temp < (target - satisfaction_eps) while falling
+            - Overcooled -> Satisfied: temp >= (target + satisfaction_eps) while rising
+            
+        Note: Valve control uses opening_offset and closing_offset (separate logic).
         """
         # Determine temperature direction
         temp_direction = self._determine_direction(
@@ -127,46 +152,46 @@ class ZoneSatisfactionStateMachine:
         Returns:
             SatisfactionState: New satisfaction state
 
-        Logic:
-            - Underheated: temp < lower_bound (target - opening_offset)
-            - Overheated: temp > upper_bound (target + closing_offset)
-            - Satisfied: between bounds with hysteresis
+        Logic (using satisfaction_eps for state boundaries):
+            - Underheated: temp < (target - satisfaction_eps)
+            - Satisfied: (target - satisfaction_eps) <= temp <= (target + satisfaction_eps)
+            - Overheated: temp > (target + satisfaction_eps)
         """
-        # Check if currently overheated (above upper bound)
-        if current_temperature > self.upper_bound:
+        # Check if currently overheated (above satisfaction upper bound)
+        if current_temperature > self.satisfied_upper:
             # If we're overheated, stay overheated until we reach target - eps while falling
             if current_state == "overheated":
                 # Transition to satisfied only when reaching target - eps while falling
                 if (
                     temp_direction == "falling"
-                    and current_temperature <= self.satisfied_exit_heating
+                    and current_temperature <= self.satisfied_lower
                 ):
                     return "satisfied"
                 return "overheated"
-            # Any other state -> overheated when exceeding upper bound
+            # Any other state -> overheated when exceeding upper satisfaction bound
             return "overheated"
 
-        # Check if currently underheated (below lower bound)
-        if current_temperature < self.lower_bound:
+        # Check if currently underheated (below satisfaction lower bound)
+        if current_temperature < self.satisfied_lower:
             # If we're underheated, stay underheated until we reach target + eps while rising
             if current_state == "underheated":
                 # Transition to satisfied only when reaching target + eps while rising
                 if (
                     temp_direction == "rising"
-                    and current_temperature >= self.satisfied_entry_heating
+                    and current_temperature >= self.satisfied_upper
                 ):
                     return "satisfied"
                 return "underheated"
-            # Any other state -> underheated when falling below lower bound
+            # Any other state -> underheated when falling below lower satisfaction bound
             return "underheated"
 
-        # Between bounds - handle hysteresis
+        # Between satisfaction bounds - handle hysteresis
         # If currently underheated, check for transition to satisfied
         if current_state == "underheated":
             # Must reach target + eps while rising to become satisfied
             if (
                 temp_direction == "rising"
-                and current_temperature >= self.satisfied_entry_heating
+                and current_temperature >= self.satisfied_upper
             ):
                 return "satisfied"
             return "underheated"
@@ -176,12 +201,12 @@ class ZoneSatisfactionStateMachine:
             # Must reach target - eps while falling to become satisfied
             if (
                 temp_direction == "falling"
-                and current_temperature <= self.satisfied_exit_heating
+                and current_temperature <= self.satisfied_lower
             ):
                 return "satisfied"
             return "overheated"
 
-        # If currently satisfied or unknown, stay/become satisfied (within bounds)
+        # If currently satisfied or unknown, stay/become satisfied (within satisfaction bounds)
         return "satisfied"
 
     def _update_cooling_state(
@@ -201,52 +226,46 @@ class ZoneSatisfactionStateMachine:
         Returns:
             SatisfactionState: New satisfaction state
 
-        Logic:
-            - Undercooled: temp > upper_bound (target + opening_offset)
-            - Overcooled: temp < lower_bound (target - closing_offset)
-            - Satisfied: between bounds with hysteresis
+        Logic (using satisfaction_eps for state boundaries):
+            - Undercooled: temp > (target + satisfaction_eps)
+            - Satisfied: (target - satisfaction_eps) <= temp <= (target + satisfaction_eps)
+            - Overcooled: temp < (target - satisfaction_eps)
         """
-        # In cooling mode, the satisfaction thresholds are symmetric to heating
-        # satisfied_entry_cooling = target - satisfaction_eps (for undercooled -> satisfied while falling)
-        # satisfied_exit_cooling = target + satisfaction_eps (for overcooled -> satisfied while rising)
-        satisfied_entry_cooling = self.target_temperature - self.satisfaction_eps
-        satisfied_exit_cooling = self.target_temperature + self.satisfaction_eps
-
-        # Check if currently undercooled (above upper bound - needs cooling)
-        if current_temperature > self.upper_bound:
+        # Check if currently undercooled (above satisfaction upper bound - needs cooling)
+        if current_temperature > self.satisfied_upper:
             # If we're undercooled, stay undercooled until we reach target - eps while falling
             if current_state == "undercooled":
                 # Transition to satisfied only when reaching target - eps while falling
                 if (
                     temp_direction == "falling"
-                    and current_temperature <= satisfied_entry_cooling
+                    and current_temperature <= self.satisfied_lower
                 ):
                     return "satisfied"
                 return "undercooled"
-            # Any other state -> undercooled when exceeding upper bound
+            # Any other state -> undercooled when exceeding upper satisfaction bound
             return "undercooled"
 
-        # Check if currently overcooled (below lower bound - too cool)
-        if current_temperature < self.lower_bound:
+        # Check if currently overcooled (below satisfaction lower bound - too cool)
+        if current_temperature < self.satisfied_lower:
             # If we're overcooled, stay overcooled until we reach target + eps while rising
             if current_state == "overcooled":
                 # Transition to satisfied only when reaching target + eps while rising
                 if (
                     temp_direction == "rising"
-                    and current_temperature >= satisfied_exit_cooling
+                    and current_temperature >= self.satisfied_upper
                 ):
                     return "satisfied"
                 return "overcooled"
-            # Any other state -> overcooled when falling below lower bound
+            # Any other state -> overcooled when falling below lower satisfaction bound
             return "overcooled"
 
-        # Between bounds - handle hysteresis
+        # Between satisfaction bounds - handle hysteresis
         # If currently undercooled, check for transition to satisfied
         if current_state == "undercooled":
             # Must reach target - eps while falling to become satisfied
             if (
                 temp_direction == "falling"
-                and current_temperature <= satisfied_entry_cooling
+                and current_temperature <= self.satisfied_lower
             ):
                 return "satisfied"
             return "undercooled"
@@ -256,12 +275,12 @@ class ZoneSatisfactionStateMachine:
             # Must reach target + eps while rising to become satisfied
             if (
                 temp_direction == "rising"
-                and current_temperature >= satisfied_exit_cooling
+                and current_temperature >= self.satisfied_upper
             ):
                 return "satisfied"
             return "overcooled"
 
-        # If currently satisfied or unknown, stay/become satisfied (within bounds)
+        # If currently satisfied or unknown, stay/become satisfied (within satisfaction bounds)
         return "satisfied"
 
     def _determine_direction(
