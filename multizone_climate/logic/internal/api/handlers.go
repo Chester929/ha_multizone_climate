@@ -302,15 +302,35 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			}
 		}
 
-		// Validate is_fallback_valve if provided
-		if isFallbackValve, ok := zone["is_fallback_valve"].(string); ok && isFallbackValve != "" {
-			if err := validateBoolean(isFallbackValve, "Is fallback valve"); err != nil {
+		// Validate is_fallback_valve if provided; accept both string and boolean values
+		if rawFallbackValve, exists := zone["is_fallback_valve"]; exists {
+			var isFallbackValve string
+
+			switch v := rawFallbackValve.(type) {
+			case string:
+				isFallbackValve = v
+			case bool:
+				// Normalize boolean to string so that validation and later processing work consistently
+				isFallbackValve = strconv.FormatBool(v)
+				zone["is_fallback_valve"] = isFallbackValve
+			default:
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": err.Error(),
+					"error": "Is fallback valve must be a boolean or a boolean-like string",
 				})
 				return
+			}
+
+			if isFallbackValve != "" {
+				if err := validateBoolean(isFallbackValve, "Is fallback valve"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
 			}
 		}
 
