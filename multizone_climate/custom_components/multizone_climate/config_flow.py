@@ -198,7 +198,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             action = user_input.get("action")
             if action == "add_zone":
                 return await self.async_step_add_zone()
-            elif action == "edit_main":
+            if action == "edit_main":
                 return await self.async_step_edit_main()
 
         # Show menu with options
