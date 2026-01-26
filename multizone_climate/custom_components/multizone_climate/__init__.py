@@ -60,15 +60,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Only create initial zone if Redis is empty (prevents duplicates on restart)
     required_zone_fields = ["zone_name", "temperature_sensor", "valve_switch"]
     has_initial_zone = all(field in entry.data for field in required_zone_fields)
-    
+
     if has_initial_zone:
         # Check if zones already exist in Redis to prevent duplicates
         existing_zones = await redis_client.get_zone_ids()
-        
+
         if not existing_zones:
             # No zones in Redis, create the initial fallback zone
             zone_id = str(uuid.uuid4())
-            
+
             # Prepare zone data for Redis
             zone_data = {
                 "id": zone_id,
@@ -79,7 +79,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "priority": entry.data.get("priority", 50),
                 "opening_offset": entry.data.get("opening_offset", 0.3),
                 "closing_offset": entry.data.get("closing_offset", 0.3),
-                "target_change_threshold": entry.data.get("target_change_threshold", 0.1),
+                "target_change_threshold": entry.data.get(
+                    "target_change_threshold", 0.1
+                ),
                 "is_fallback_valve": entry.data.get("is_fallback_valve", True),
                 "current_temperature": 0.0,
                 "satisfaction": "unknown",
@@ -91,13 +93,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Add zone to Redis
             try:
                 await redis_client.add_zone(zone_id, zone_data)
-                _LOGGER.info(f"Added initial fallback zone {zone_id} ({zone_data['name']}) to Redis")
+                _LOGGER.info(
+                    f"Added initial fallback zone {zone_id} ({zone_data['name']}) to Redis"
+                )
 
                 # Also register zone with backend via API
                 zone_config = {
                     "id": zone_id,  # Backend expects 'id', not 'zone_id'
                     "name": zone_data["name"],
-                    "temperature_sensor_entity_id": zone_data["temperature_sensor_entity_id"],
+                    "temperature_sensor_entity_id": zone_data[
+                        "temperature_sensor_entity_id"
+                    ],
                     "valve_switch_entity_id": zone_data["valve_switch_entity_id"],
                     "target_temperature": zone_data["target_temperature"],
                     "opening_offset": zone_data["opening_offset"],
@@ -117,12 +123,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                     f"Failed to register initial zone {zone_id} with backend: status {response.status}"
                                 )
                 except Exception as err:
-                    _LOGGER.error(f"Error registering initial zone {zone_id} with backend: {err}")
+                    _LOGGER.error(
+                        f"Error registering initial zone {zone_id} with backend: {err}"
+                    )
 
             except Exception as err:
                 _LOGGER.error(f"Failed to add initial zone to Redis: {err}")
         else:
-            _LOGGER.info(f"Initial zone already exists in Redis (found {len(existing_zones)} zones), skipping creation")
+            _LOGGER.info(
+                f"Initial zone already exists in Redis (found {len(existing_zones)} zones), skipping creation"
+            )
 
     # Forward to climate platform to create zone entities
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

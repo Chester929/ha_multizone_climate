@@ -37,7 +37,6 @@ from .const import (
 )
 from .core import ZoneSatisfactionStateMachine
 
-
 _LOGGER = logging.getLogger(__name__)
 
 
