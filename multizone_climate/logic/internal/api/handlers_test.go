@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -332,7 +333,7 @@ func TestIntegrationStateUpdateHandler(t *testing.T) {
 		ctx := context.Background()
 		jobsQueueKey := "multizone:jobs:calculate_temp"
 		jobJSON, err := client.RPop(ctx, jobsQueueKey)
-		if err == redisv8.Nil {
+		if errors.Is(err, redisv8.Nil) {
 			t.Error("Expected calculation job to be enqueued, but queue is empty")
 		} else if err != nil {
 			t.Fatalf("Failed to pop job from queue: %v", err)
