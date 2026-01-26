@@ -12,12 +12,12 @@ class TestCalculateMainTargetTemperature:
 
     def test_slider_mode_basic(self):
         """
-        Test slider-based calculation.
+        Test slider-based calculation in heating mode.
 
         Scenario:
-            - 2 zones with targets 20°C and 22°C
-            - One underheated, one satisfied
+            - 2 zones: one underheated, one satisfied
             - Heating mode: should boost for underheated zone
+            - Satisfied zone keeps valve open (will close at upper offset if overheats)
             - Expected: boost based on deficit
         """
         zones = [

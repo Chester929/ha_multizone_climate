@@ -21,7 +21,7 @@ def calculate_main_target_temperature(
     Implements dynamic heating boost algorithm for hydronic systems with three operating modes:
     - HEATING MODE: Any zone underheated - boost main target to provide hotter water
     - MAINTENANCE MODE: All zones satisfied - use slider/average logic
-    - COOLING MODE: All zones overheated - reduce main target
+    - IDLE MODE: All zones overheated - reduce main target, valves closed
 
     Args:
         zones: List of climate zones with the following keys:

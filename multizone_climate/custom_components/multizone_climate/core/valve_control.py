@@ -86,11 +86,6 @@ class ValveController:
         valves_to_open = []
         valves_to_close = []
 
-        # Detect heating mode: any zone underheated
-        has_underheated_zones = any(
-            z.get("satisfaction") == "underheated" for z in sorted_zones
-        )
-
         for zone in sorted_zones:
             valve_id = zone.get("valve_id")
             if not valve_id:
@@ -108,21 +103,16 @@ class ValveController:
                 elif satisfaction == "overheated":
                     valves_to_close.append(valve_id)
                 elif satisfaction == "satisfied":
-                    # HEATING MODE: Close satisfied zones (prevent overheat from boosted water)
-                    # MAINTENANCE MODE: Open satisfied zones (maintain equilibrium)
-                    if has_underheated_zones:
-                        # Heating mode - close satisfied zones
-                        valves_to_close.append(valve_id)
-                    else:
-                        # Maintenance mode - open satisfied zones
-                        valves_to_open.append(valve_id)
+                    # Satisfied zones keep valves open to maintain temperature
+                    # Valve will close automatically when zone hits upper closing offset
+                    valves_to_open.append(valve_id)
             elif main_climate_state.upper() == "COOLING":
                 if satisfaction == "undercooled":
                     valves_to_open.append(valve_id)
                 elif satisfaction == "overcooled":
                     valves_to_close.append(valve_id)
                 elif satisfaction == "satisfied":
-                    # Satisfied zones should have valves open to maintain temperature
+                    # Satisfied zones keep valves open to maintain temperature
                     valves_to_open.append(valve_id)
 
         # Apply minimum valves safety
@@ -194,10 +184,10 @@ class ValveController:
         """
         Determine valve actions when multizone is disabled.
 
-        Each zone manages its own valve:
+        In individual control mode (multizone disabled), each zone manages its own valve:
         - Underheated/Undercooled: open valve
         - Overheated/Overcooled: close valve
-        - Satisfied: open valve (maintain temperature)
+        - Satisfied: open valve to maintain temperature (no dynamic boost in this mode)
 
         Args:
             zones: Zone list
