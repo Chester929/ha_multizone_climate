@@ -88,7 +88,7 @@ def calculate_main_target_temperature(
             len(satisfied_zones),
             len(overheated_zones),
         )
-        
+
         # Calculate maximum zone deficit (how much heating is needed)
         max_zone_deficit = 0.0
         for zone in underheated_zones:
@@ -106,7 +106,7 @@ def calculate_main_target_temperature(
                         current_temp,
                         target_temp,
                     )
-        
+
         if max_zone_deficit == 0.0:
             zones_without_temps = [
                 zone.get("id", "unknown")
@@ -121,7 +121,7 @@ def calculate_main_target_temperature(
                     len(zones_without_temps),
                     ", ".join(map(str, zones_without_temps)),
                 )
-        
+
         # Calculate main climate capability (how much it can heat now)
         main_capability = 0.0
         if main_current_temp is not None:
@@ -135,13 +135,13 @@ def calculate_main_target_temperature(
             )
         else:
             _LOGGER.debug("Main current temp not available, assuming capability = 0")
-        
+
         # Calculate required boost (already safe: both inputs are >= 0)
         required_boost = max(0.0, max_zone_deficit - main_capability)
-        
+
         # Calculate new main target with boost
         main_target_raw = current_main_target + required_boost
-        
+
         _LOGGER.info(
             "HEATING MODE: max_deficit=%.1f, capability=%.1f, boost=%.1f, new_target_raw=%.1f",
             max_zone_deficit,
@@ -149,13 +149,13 @@ def calculate_main_target_temperature(
             required_boost,
             main_target_raw,
         )
-        
+
     elif satisfied_zones:
         # MAINTENANCE MODE: All zones satisfied
         _LOGGER.debug("MAINTENANCE MODE: All %d zones satisfied", len(satisfied_zones))
-        
+
         zone_targets = [z["target_temperature"] for z in satisfied_zones]
-        
+
         # Calculate main target based on mode
         if config.get("use_average_mode", False):
             # True average
@@ -164,26 +164,26 @@ def calculate_main_target_temperature(
             # Slider-based linear interpolation
             min_target = min(zone_targets)
             max_target = max(zone_targets)
-            
+
             slider = config.get("main_target_all_zones_satisfied", 0.5)
             if min_target == max_target:
                 main_target_raw = min_target
             else:
                 main_target_raw = min_target + slider * (max_target - min_target)
-        
+
         _LOGGER.info("MAINTENANCE MODE: target=%.1f", main_target_raw)
-        
+
     elif overheated_zones:
         # IDLE MODE: All zones overheated (valves closed, system idle)
         _LOGGER.debug("IDLE MODE: All %d zones overheated", len(overheated_zones))
-        
+
         zone_targets = [z["target_temperature"] for z in overheated_zones]
-        
+
         # Reduce main target to minimum of overheated zones to cool down naturally
         main_target_raw = min(zone_targets)
-        
+
         _LOGGER.info("IDLE MODE: target=%.1f (min of overheated zones, system idle)", main_target_raw)
-        
+
     else:
         # No active zones with valid satisfaction state
         return None

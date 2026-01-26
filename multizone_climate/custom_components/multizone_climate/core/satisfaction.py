@@ -43,18 +43,18 @@ class ZoneSatisfactionStateMachine:
             Valve control and satisfaction states are separate:
             - Valve control uses opening_offset and closing_offset
             - Satisfaction states use satisfaction_eps for boundaries
-            
+
         Example:
             target = 22.0, opening_offset = 0.3, closing_offset = 0.3, satisfaction_eps = 0.1
-            
+
             Entering satisfied (uses eps):
             - From underheated: at 22.1 (target + eps) while rising
             - From overheated: at 21.9 (target - eps) while falling
-            
+
             Exiting satisfied (uses offsets - wider range):
             - To underheated: at 21.7 (target - opening_offset) while falling
             - To overheated: at 22.3 (target + closing_offset) while rising
-            
+
             Valve control boundaries (using offsets, separate logic):
             - Valve opens: temp < 21.7 (target - opening_offset)
             - Valve closes: temp > 22.3 (target + closing_offset)
@@ -67,7 +67,7 @@ class ZoneSatisfactionStateMachine:
         # Calculate bounds for entering satisfied state (using eps - narrower range)
         self.satisfied_entry_lower = target_temperature - satisfaction_eps
         self.satisfied_entry_upper = target_temperature + satisfaction_eps
-        
+
         # Calculate bounds for exiting satisfied state (using offsets - wider range)
         self.satisfied_exit_lower = target_temperature - opening_offset
         self.satisfied_exit_upper = target_temperature + closing_offset
@@ -95,7 +95,7 @@ class ZoneSatisfactionStateMachine:
             Entering satisfied (uses satisfaction_eps):
             - Underheated → Satisfied: temp >= (target + satisfaction_eps) while rising
             - Overheated → Satisfied: temp <= (target - satisfaction_eps) while falling
-            
+
             Exiting satisfied (uses opening/closing offsets - wider range):
             - Satisfied → Underheated: temp < (target - opening_offset) while falling
             - Satisfied → Overheated: temp > (target + closing_offset) while rising
@@ -104,11 +104,11 @@ class ZoneSatisfactionStateMachine:
             Entering satisfied (uses satisfaction_eps):
             - Undercooled → Satisfied: temp <= (target - satisfaction_eps) while falling
             - Overcooled → Satisfied: temp >= (target + satisfaction_eps) while rising
-            
+
             Exiting satisfied (uses opening/closing offsets - wider range):
             - Satisfied → Undercooled: temp > (target + opening_offset) while rising
             - Satisfied → Overcooled: temp < (target - closing_offset) while falling
-            
+
         Note: Two-tier hysteresis - narrow eps range for entering satisfied,
               wider offset range for exiting satisfied (prevents flapping).
         """
@@ -246,7 +246,7 @@ class ZoneSatisfactionStateMachine:
         # and closing_offset is subtracted (not added)
         exit_upper_cooling = self.target_temperature + self.opening_offset
         exit_lower_cooling = self.target_temperature - self.closing_offset
-        
+
         # Check if currently undercooled (above exit upper bound - needs cooling)
         if current_temperature > exit_upper_cooling:
             # If we're undercooled, stay undercooled until we reach entry lower bound while falling

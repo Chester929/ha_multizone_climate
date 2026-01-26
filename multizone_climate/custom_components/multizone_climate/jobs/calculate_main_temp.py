@@ -77,7 +77,7 @@ class CalculateMainTempJob(BaseJob):
         current_main_target = main_climate.get("target_temperature", 20.0)
         # Use None when current temperature is unavailable; algorithms.py treats None as zero capability
         main_current_temp = main_climate.get("current_temperature")
-        
+
         if main_current_temp is None:
             _LOGGER.warning(
                 "Main climate current temperature not available in Redis, "
