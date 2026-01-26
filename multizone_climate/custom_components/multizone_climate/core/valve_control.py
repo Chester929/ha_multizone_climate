@@ -103,17 +103,16 @@ class ValveController:
                 elif satisfaction == "overheated":
                     valves_to_close.append(valve_id)
                 elif satisfaction == "satisfied":
-                    # Satisfied zones keep valves open to maintain temperature
-                    # Valve will close automatically when zone hits upper closing offset
-                    valves_to_open.append(valve_id)
+                    # Leave valve in current state - hysteresis will manage transitions
+                    pass
             elif main_climate_state.upper() == "COOLING":
                 if satisfaction == "undercooled":
                     valves_to_open.append(valve_id)
                 elif satisfaction == "overcooled":
                     valves_to_close.append(valve_id)
                 elif satisfaction == "satisfied":
-                    # Satisfied zones keep valves open to maintain temperature
-                    valves_to_open.append(valve_id)
+                    # Leave valve in current state - hysteresis will manage transitions
+                    pass
 
         # Apply minimum valves safety
         valves_to_open, valves_to_close = self._apply_minimum_valves_safety(
