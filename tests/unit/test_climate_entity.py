@@ -71,8 +71,8 @@ class TestZoneClimateEntity:
         return {
             "id": "zone1",
             "name": "Bedroom",
-            "temperature_sensor": "sensor.bedroom_temp",
-            "valve_switch": "switch.bedroom_valve",
+            "temperature_sensor_entity_id": "sensor.bedroom_temp",
+            "valve_switch_entity_id": "switch.bedroom_valve",
             "target_temperature": 21.0,
             "opening_offset": 0.3,
             "closing_offset": 0.3,
@@ -136,9 +136,12 @@ class TestZoneClimateEntity:
 
         attrs = entity.extra_state_attributes
 
-        assert "id" in attrs
-        assert attrs["id"] == "zone1"
+        # Check attributes that ZoneClimateEntity actually exposes
         assert "satisfaction" in attrs
+        assert attrs["satisfaction"] == "satisfied"
+        assert "valve_state" in attrs
+        assert "priority" in attrs
+        assert "is_fallback_valve" in attrs
 
 
 class TestMainClimateDevice:

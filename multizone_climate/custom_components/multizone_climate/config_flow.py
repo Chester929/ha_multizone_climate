@@ -322,7 +322,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     backend_url = f"http://localhost:{backend_port}"
 
                     zone_config = {
-                        "zone_id": zone_id,
+                        "id": zone_id,  # Backend expects 'id', not 'zone_id'
                         "name": zone_data["name"],
                         "temperature_sensor_entity_id": zone_data["temperature_sensor_entity_id"],
                         "valve_switch_entity_id": zone_data["valve_switch_entity_id"],
