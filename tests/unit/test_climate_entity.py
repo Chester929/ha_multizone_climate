@@ -120,7 +120,7 @@ class TestZoneClimateEntity:
         assert entity._target_temperature == 22.0
 
         # Verify Redis was updated
-        mock_redis_client.set_zone_state.assert_called()
+        mock_redis_client.set_zone_state.assert_awaited()
 
     def test_extra_state_attributes(self, mock_coordinator, mock_redis_client,
                                     mock_hass, mock_config_entry, zone_config):
@@ -186,5 +186,5 @@ class TestMainClimateDevice:
             config_entry=mock_config_entry,
         )
 
-        assert entity.name == "Multizone Climate"
+        assert entity.name == "Multizone Climate Main"
         assert entity._attr_should_poll is False

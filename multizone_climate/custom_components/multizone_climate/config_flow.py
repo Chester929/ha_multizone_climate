@@ -247,6 +247,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 self.config_entry, data=user_input
             )
 
+            # Reload the config entry so the integration uses the updated main climate entity
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
