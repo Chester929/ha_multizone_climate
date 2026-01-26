@@ -178,7 +178,8 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            return data.get("current_temperature")
+            value = data.get("current_temperature")
+            return float(value) if value is not None else None
         return None
 
     @property
@@ -191,7 +192,8 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            return data.get("target_temperature")
+            value = data.get("target_temperature")
+            return float(value) if value is not None else None
         return None
 
     @property
@@ -374,7 +376,7 @@ class ZoneClimateEntity(ClimateEntity):
     @property
     def name(self) -> str:
         """Return the name of the entity."""
-        return self._name
+        return str(self._name)
 
     @property
     def unique_id(self) -> str:
@@ -414,7 +416,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Zone target temperature
         """
-        return self._target_temperature
+        return float(self._target_temperature) if self._target_temperature is not None else None
 
     @property
     def target_temperature_step(self) -> float:
@@ -424,7 +426,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Step size for target temperature changes
         """
-        return self._target_change_threshold
+        return float(self._target_change_threshold)
 
     @property
     def min_temp(self) -> float:

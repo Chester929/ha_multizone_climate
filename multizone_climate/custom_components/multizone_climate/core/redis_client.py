@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 
@@ -82,7 +82,7 @@ class RedisClient:
             self._redis = aioredis.Redis(connection_pool=self._pool)
 
             # Test connection
-            await self._redis.ping()
+            await self._redis.ping()  # type: ignore[misc]
             _LOGGER.info("Connected to Redis at %s:%s", self.host, self.port)
 
         except Exception as err:
@@ -139,7 +139,7 @@ class RedisClient:
 
         try:
             config_key = self._get_key("config")
-            config_data = await self._redis.hgetall(config_key)
+            config_data = await self._redis.hgetall(config_key)  # type: ignore[misc]
 
             if not config_data:
                 return {}
@@ -176,7 +176,7 @@ class RedisClient:
             }
 
             if serialized_config:
-                await self._redis.hset(config_key, mapping=serialized_config)
+                await self._redis.hset(config_key, mapping=serialized_config)  # type: ignore[misc]
                 _LOGGER.debug("Updated config in Redis")
             else:
                 _LOGGER.warning("Attempted to set empty config")
@@ -198,7 +198,7 @@ class RedisClient:
 
         try:
             zones_key = self._get_key("zones")
-            zone_ids = await self._redis.lrange(zones_key, 0, -1)
+            zone_ids = await self._redis.lrange(zones_key, 0, -1)  # type: ignore[misc]
             return zone_ids if zone_ids else []
         except Exception as err:
             _LOGGER.error("Failed to get zone IDs: %s", err)
@@ -222,7 +222,7 @@ class RedisClient:
 
         try:
             zone_key = self._get_key(f"zone:{zone_id}")
-            zone_data = await self._redis.hgetall(zone_key)
+            zone_data = await self._redis.hgetall(zone_key)  # type: ignore[misc]
 
             if not zone_data:
                 return None
@@ -260,7 +260,7 @@ class RedisClient:
             }
 
             if serialized_state:
-                await self._redis.hset(zone_key, mapping=serialized_state)
+                await self._redis.hset(zone_key, mapping=serialized_state)  # type: ignore[misc]
                 _LOGGER.debug("Updated zone state for %s", zone_id)
             else:
                 _LOGGER.warning("Attempted to set empty zone state for %s", zone_id)
@@ -288,9 +288,9 @@ class RedisClient:
 
             # Use LPOS to check if zone exists (more efficient than LRANGE)
             # LPOS returns position or None if not found
-            position = await self._redis.lpos(zones_key, zone_id)
+            position = await self._redis.lpos(zones_key, zone_id)  # type: ignore[misc]
             if position is None:
-                await self._redis.rpush(zones_key, zone_id)
+                await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]
                 _LOGGER.debug("Added zone %s to zones list", zone_id)
 
             # Create zone state
@@ -319,7 +319,7 @@ class RedisClient:
             zone_key = self._get_key(f"zone:{zone_id}")
 
             # Remove from zones list
-            await self._redis.lrem(zones_key, 0, zone_id)
+            await self._redis.lrem(zones_key, 0, zone_id)  # type: ignore[misc]
 
             # Delete zone state hash
             await self._redis.delete(zone_key)
@@ -343,7 +343,7 @@ class RedisClient:
 
         try:
             main_climate_key = self._get_key("main_climate")
-            climate_data = await self._redis.hgetall(main_climate_key)
+            climate_data = await self._redis.hgetall(main_climate_key)  # type: ignore[misc]
 
             if not climate_data:
                 return {}
@@ -380,7 +380,7 @@ class RedisClient:
             }
 
             if serialized_state:
-                await self._redis.hset(main_climate_key, mapping=serialized_state)
+                await self._redis.hset(main_climate_key, mapping=serialized_state)  # type: ignore[misc]
                 _LOGGER.debug("Updated main climate state")
             else:
                 _LOGGER.warning("Attempted to set empty main climate state")
@@ -406,7 +406,7 @@ class RedisClient:
             job_json = json.dumps(job_data)
 
             # LPUSH for FIFO (left push, right pop)
-            await self._redis.lpush(queue_key, job_json)
+            await self._redis.lpush(queue_key, job_json)  # type: ignore[misc]
             _LOGGER.debug("Enqueued job type %s", job_type)
         except Exception as err:
             _LOGGER.error("Failed to enqueue job %s: %s", job_type, err)
@@ -431,10 +431,10 @@ class RedisClient:
             queue_key = self._get_key(f"queue:{job_type}")
 
             # RPOP for FIFO (left push, right pop)
-            job_json = await self._redis.rpop(queue_key)
+            job_json = await self._redis.rpop(queue_key)  # type: ignore[misc]
 
             if job_json:
-                job_data = json.loads(job_json)
+                job_data: dict[str, Any] = json.loads(job_json)
                 _LOGGER.debug("Dequeued job type %s", job_type)
                 return job_data
 
@@ -461,7 +461,7 @@ class RedisClient:
 
         try:
             queue_key = self._get_key(f"queue:{job_type}")
-            size = await self._redis.llen(queue_key)
+            size = await self._redis.llen(queue_key)  # type: ignore[misc]
             return size if size else 0
         except Exception as err:
             _LOGGER.error("Failed to get queue size for %s: %s", job_type, err)
@@ -613,7 +613,7 @@ class RedisClient:
 
             if serialized_status:
                 # Store job status hash
-                await self._redis.hset(status_key, mapping=serialized_status)
+                await self._redis.hset(status_key, mapping=serialized_status)  # type: ignore[misc]
 
                 # Set TTL using configured value
                 await self._redis.expire(status_key, self.job_status_ttl)
@@ -644,7 +644,7 @@ class RedisClient:
 
         try:
             status_key = self._get_key(f"jobstatus:{job_id}")
-            status_data = await self._redis.hgetall(status_key)
+            status_data = await self._redis.hgetall(status_key)  # type: ignore[misc]
 
             if not status_data:
                 return None

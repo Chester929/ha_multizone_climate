@@ -141,6 +141,14 @@ class UpdateValvesJob(BaseJob):
         action_type = action.get("action")
         delay = action.get("delay", 0)
 
+        # Validate required fields
+        if not valve_id or not isinstance(valve_id, str):
+            _LOGGER.error("Invalid valve_id in action: %s", action)
+            return
+        if not action_type or not isinstance(action_type, str):
+            _LOGGER.error("Invalid action_type in action: %s", action)
+            return
+
         if delay > 0:
             # Schedule action with delay
             _LOGGER.debug(

@@ -135,7 +135,7 @@ class BaseJob(ABC):
         Returns:
             bool: True if acquired, False if already locked
         """
-        return await self.redis_client.acquire_job_lock(self.job_type, timeout)
+        return bool(await self.redis_client.acquire_job_lock(self.job_type, timeout))
 
     async def _release_lock(self) -> None:
         """Release job lock."""

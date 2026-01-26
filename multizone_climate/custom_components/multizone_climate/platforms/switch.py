@@ -74,7 +74,7 @@ class MultizoneEnableSwitch(SwitchEntity):
         config = self.coordinator.get_config()
         if not config:
             return False
-        return config.get("multizone_enabled", False)
+        return bool(config.get("multizone_enabled", False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """
