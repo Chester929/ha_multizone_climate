@@ -95,7 +95,8 @@ def calculate_main_target_temperature(
             current_temp = zone.get("current_temperature")
             target_temp = zone.get("target_temperature")
             if current_temp is not None and target_temp is not None:
-                deficit = target_temp - current_temp
+                # Safety: ensure deficit is non-negative (should always be positive for underheated zones)
+                deficit = max(0.0, target_temp - current_temp)
                 if deficit > max_zone_deficit:
                     max_zone_deficit = deficit
                     _LOGGER.debug(
@@ -109,7 +110,8 @@ def calculate_main_target_temperature(
         # Calculate main climate capability (how much it can heat now)
         main_capability = 0.0
         if main_current_temp is not None:
-            main_capability = current_main_target - main_current_temp
+            # Safety: capability can be negative if main is cooling down, clamp to 0
+            main_capability = max(0.0, current_main_target - main_current_temp)
             _LOGGER.debug(
                 "Main climate capability: %.1f°C (target %.1f - current %.1f)",
                 main_capability,
@@ -119,7 +121,7 @@ def calculate_main_target_temperature(
         else:
             _LOGGER.debug("Main current temp not available, assuming capability = 0")
         
-        # Calculate required boost
+        # Calculate required boost (already safe: both inputs are >= 0)
         required_boost = max(0.0, max_zone_deficit - main_capability)
         
         # Calculate new main target with boost
