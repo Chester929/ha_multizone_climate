@@ -15,6 +15,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
@@ -63,7 +64,8 @@ async def async_setup_entry(
     redis_client = data["redis_client"]
 
     # Get config from hass.data or config_entry (fallback if coordinator.get_config() is None)
-    config = data.get("config") or config_entry.data or {}
+    config_raw: Any = data.get("config") or config_entry.data or {}
+    config: dict[Any, Any] = dict(config_raw) if config_raw else {}
     if not config:
         _LOGGER.warning(
             "No config found in coordinator or config entry, cannot create climate entities"
@@ -78,7 +80,7 @@ async def async_setup_entry(
         config_entry=config_entry,
     )
 
-    entities = [main_climate]
+    entities: list[ClimateEntity] = [main_climate]
 
     # Fetch zones from Redis
     zone_ids = await redis_client.get_zone_ids()
@@ -154,7 +156,7 @@ class MainClimateDevice(ClimateEntity):
         return f"{DOMAIN}_main_{self._config_entry.entry_id}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
@@ -256,7 +258,7 @@ class MainClimateDevice(ClimateEntity):
         return HVACAction.IDLE
 
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> ClimateEntityFeature:
         """
         Return the supported features.
 
@@ -264,7 +266,7 @@ class MainClimateDevice(ClimateEntity):
             int: Feature flags (read-only, no target temperature control)
         """
         # Main climate is read-only - control via main thermostat entity
-        return 0
+        return ClimateEntityFeature(0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -384,7 +386,7 @@ class ZoneClimateEntity(ClimateEntity):
         return f"{DOMAIN}_zone_{self.zone_id}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
@@ -460,7 +462,7 @@ class ZoneClimateEntity(ClimateEntity):
         return [HVACMode.HEAT]
 
     @property
-    def supported_features(self) -> int:
+    def supported_features(self) -> ClimateEntityFeature:
         """
         Return the list of supported features.
 
@@ -604,25 +606,28 @@ class ZoneClimateEntity(ClimateEntity):
         main_climate_data = self.coordinator.get_main_climate_data()
         # Default to heating if main climate data unavailable
         # This is safe as zones will not be actively managed when HVAC is off
-        hvac_action = HVAC_ACTION_HEATING
+        hvac_mode_str = "heating"
 
         if main_climate_data:
             hvac_action_str = main_climate_data.get(
                 "hvac_action", HVAC_ACTION_HEATING
             ).lower()
             if hvac_action_str in ("cooling", "cool"):
-                hvac_action = HVAC_ACTION_COOLING
+                hvac_mode_str = "cooling"
             elif hvac_action_str in ("off", "idle"):
-                hvac_action = HVAC_ACTION_OFF
+                hvac_mode_str = "off"
             else:
-                hvac_action = HVAC_ACTION_HEATING
+                hvac_mode_str = "heating"
 
-        # Call state machine
+        # Call state machine with proper HVACMode literal type
+        from .core.satisfaction import HVACMode as HVACModeLiteral
+        hvac_mode: HVACModeLiteral = hvac_mode_str  # type: ignore[assignment]
+        
         new_state, temp_direction = self._state_machine.update_state(
             current_temperature=self._current_temperature,
             previous_temperature=self._previous_temperature,
             current_state=self._satisfaction_state,
-            hvac_mode=hvac_action,
+            hvac_mode=hvac_mode,
         )
 
         # Update internal state

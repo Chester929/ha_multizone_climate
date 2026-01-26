@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ..const import DOMAIN
@@ -40,7 +41,7 @@ async def async_setup_entry(
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
 
-    entities = []
+    entities: list[SensorEntity] = []
 
     # Temperature sensors
     entities.extend(
@@ -113,7 +114,7 @@ class MultizoneTemperatureSensor(SensorEntity):
         self._attr_name = type_names.get(sensor_type, f"Multizone {sensor_type}")
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
@@ -184,7 +185,7 @@ class MultizoneTextSensor(SensorEntity):
         self._attr_name = type_names.get(sensor_type, f"Multizone {sensor_type}")
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
@@ -264,7 +265,7 @@ class ZoneTemperatureSensor(SensorEntity):
         self._attr_name = f"{zone_name} {type_names.get(sensor_type, sensor_type)}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
@@ -332,7 +333,7 @@ class ZoneTextSensor(SensorEntity):
         self._attr_name = f"{zone_name} {type_names.get(sensor_type, sensor_type)}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},

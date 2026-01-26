@@ -60,7 +60,7 @@ class TemperatureChangeAutomation:
 
         if sensor_entity_ids:
             cancel = async_track_state_change_event(
-                self.hass, sensor_entity_ids, self._handle_temperature_change
+                self.hass, sensor_entity_ids, self._handle_temperature_change  # type: ignore[arg-type]
             )
             self._cancel_listeners.append(cancel)
             _LOGGER.info(

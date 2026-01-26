@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from homeassistant.helpers.entity import Entity
+from typing import Any
+
+from homeassistant.helpers.entity import Entity, DeviceInfo
 
 from .const import DOMAIN
 
@@ -10,7 +12,7 @@ from .const import DOMAIN
 class MultizoneClimateEntity(Entity):
     """Base entity for Multizone Climate integration."""
 
-    def __init__(self, coordinator: any, unique_id_suffix: str) -> None:
+    def __init__(self, coordinator: Any, unique_id_suffix: str) -> None:
         """
         Initialize base entity.
 
@@ -22,7 +24,7 @@ class MultizoneClimateEntity(Entity):
         self._attr_unique_id = f"{DOMAIN}_{unique_id_suffix}"
 
     @property
-    def device_info(self) -> dict:
+    def device_info(self) -> DeviceInfo:
         """
         Return device information.
 
