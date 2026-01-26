@@ -528,14 +528,34 @@ func UpdateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 		}
 
 		// Validate opening_offset if provided
-		if openingOffset, ok := updates["opening_offset"].(string); ok && openingOffset != "" {
-			if err := validateTemperatureOffset(openingOffset, "Opening offset"); err != nil {
+		if rawOpeningOffset, exists := updates["opening_offset"]; exists {
+			var openingOffsetStr string
+
+			switch v := rawOpeningOffset.(type) {
+			case string:
+				openingOffsetStr = v
+			case float64:
+				openingOffsetStr = strconv.FormatFloat(v, 'f', -1, 64)
+			default:
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": err.Error(),
+					"error": fmt.Sprintf("Opening offset has invalid type %T", rawOpeningOffset),
 				})
 				return
+			}
+
+			if openingOffsetStr != "" {
+				if err := validateTemperatureOffset(openingOffsetStr, "Opening offset"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+				// Store normalized, validated value back into updates
+				updates["opening_offset"] = openingOffsetStr
 			}
 		}
 
