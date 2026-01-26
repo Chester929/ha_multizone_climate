@@ -107,6 +107,21 @@ def calculate_main_target_temperature(
                         target_temp,
                     )
         
+        if max_zone_deficit == 0.0:
+            zones_without_temps = [
+                zone.get("id", "unknown")
+                for zone in underheated_zones
+                if zone.get("current_temperature") is None
+                or zone.get("target_temperature") is None
+            ]
+            if zones_without_temps:
+                _LOGGER.warning(
+                    "HEATING MODE: max_zone_deficit is 0.0 but %d underheated zone(s) "
+                    "lack temperature data; no boost will be applied. Affected zones: %s",
+                    len(zones_without_temps),
+                    ", ".join(map(str, zones_without_temps)),
+                )
+        
         # Calculate main climate capability (how much it can heat now)
         main_capability = 0.0
         if main_current_temp is not None:

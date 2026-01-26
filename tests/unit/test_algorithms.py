@@ -17,7 +17,7 @@ class TestCalculateMainTargetTemperature:
         Scenario:
             - 2 zones: one underheated, one satisfied
             - Heating mode: should boost for underheated zone
-            - Satisfied zone keeps valve open (will close at upper offset if overheats)
+            - Satisfied zone does not contribute to boost calculation (no deficit)
             - Expected: boost based on deficit
         """
         zones = [
@@ -372,7 +372,7 @@ class TestCalculateMainTargetTemperatureEdgeCases:
             },
         ]
         config = {
-            "use_average_mode": True,  # Average of deficits
+            "use_average_mode": True,  # In heating mode this flag is ignored; algorithm uses max deficit
             "main_min_temp": 18.0,
             "main_max_temp": 30.0,
             "main_change_threshold": 0.5,
