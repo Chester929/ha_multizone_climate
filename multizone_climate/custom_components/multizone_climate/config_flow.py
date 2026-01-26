@@ -223,6 +223,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "closing_offset",
+                    # Note: Existing config entries created with the legacy Python implementation
+                    # may have a stored default of 0.5 for `closing_offset`. We intentionally
+                    # reuse the stored value here (when present) for backward compatibility,
+                    # while falling back to 0.3 to match the Go backend's default for new zones.
                     default=self.config_entry.data.get("closing_offset", 0.3)
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
