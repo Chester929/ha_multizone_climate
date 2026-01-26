@@ -209,6 +209,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
+                # Note: 0.3 is the canonical default for `opening_offset`, aligned with the
+                # Go backend. For existing entries that already have an `opening_offset`
+                # stored (e.g. legacy setups that used 0.5 in the old Python code),
+                # we intentionally preserve the stored value via `config_entry.data`.
                 vol.Optional(
                     "opening_offset",
                     default=self.config_entry.data.get("opening_offset", 0.3)
