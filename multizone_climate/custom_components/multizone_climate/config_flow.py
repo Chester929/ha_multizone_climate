@@ -58,19 +58,126 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not self.hass.states.get(user_input["main_climate_entity"]):
                     errors["main_climate_entity"] = "entity_not_found"
                 else:
-                    # Create the main config entry
-                    # Zones will be added through options flow
-                    return self.async_create_entry(
-                        title="Multizone Climate",
-                        data=user_input,
-                    )
+                    # Store main climate entity and proceed to zone setup
+                    self.data = user_input
+                    return await self.async_step_zone_initial()
 
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
             description_placeholders={
-                "description": "Configure the main climate entity that controls your HVAC system. You can add zones after setup."
+                "description": "Configure the main climate entity that controls your HVAC system. At least one fallback zone is required."
+            },
+        )
+
+    async def async_step_zone_initial(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Handle initial zone configuration step (required fallback zone)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Validate temperature_sensor entity exists
+            if not self.hass.states.get(user_input["temperature_sensor"]):
+                errors["temperature_sensor"] = "entity_not_found"
+
+            # Validate valve_switch entity exists
+            if not self.hass.states.get(user_input["valve_switch"]):
+                errors["valve_switch"] = "entity_not_found"
+
+            if not errors:
+                # Merge zone data with main climate data
+                self.data.update(user_input)
+
+                # Create the config entry
+                return self.async_create_entry(
+                    title="Multizone Climate",
+                    data=self.data,
+                )
+
+        # Schema for initial fallback zone configuration
+        zone_schema = vol.Schema(
+            {
+                vol.Required("zone_name", default="Fallback Zone"): cv.string,
+                vol.Required("temperature_sensor"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=SENSOR_DOMAIN,
+                        device_class="temperature",
+                    ),
+                ),
+                vol.Required("valve_switch"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
+                ),
+                vol.Optional(
+                    "target_temperature", default=20.0
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5.0,
+                        max=35.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional("priority", default=50): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "opening_offset",
+                    default=0.3
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "closing_offset",
+                    default=0.3
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "target_change_threshold",
+                    default=0.1
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                # This first zone must be a fallback valve
+                vol.Optional(
+                    "is_fallback_valve",
+                    default=True
+                ): cv.boolean,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="zone_initial",
+            data_schema=zone_schema,
+            errors=errors,
+            description_placeholders={
+                "description": "Configure the first fallback zone. This zone is required to ensure at least one valve can be opened when the minimum valve requirement is active."
             },
         )
 

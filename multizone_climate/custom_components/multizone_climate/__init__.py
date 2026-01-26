@@ -53,6 +53,66 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
 
+    # Check if this is initial setup with zone data in entry.data
+    # If zone data exists, register the initial fallback zone
+    if "zone_name" in entry.data and "temperature_sensor" in entry.data:
+        import uuid
+        zone_id = str(uuid.uuid4())
+        
+        # Prepare zone data for Redis
+        zone_data = {
+            "id": zone_id,
+            "name": entry.data.get("zone_name", "Fallback Zone"),
+            "temperature_sensor_entity_id": entry.data.get("temperature_sensor"),
+            "valve_switch_entity_id": entry.data.get("valve_switch"),
+            "target_temperature": entry.data.get("target_temperature", 20.0),
+            "priority": entry.data.get("priority", 50),
+            "opening_offset": entry.data.get("opening_offset", 0.3),
+            "closing_offset": entry.data.get("closing_offset", 0.3),
+            "target_change_threshold": entry.data.get("target_change_threshold", 0.1),
+            "is_fallback_valve": entry.data.get("is_fallback_valve", True),
+            "current_temperature": 0.0,
+            "satisfaction": "unknown",
+            "valve_state": "unknown",
+            "temperature_rising": False,
+            "temperature_falling": False,
+        }
+
+        # Add zone to Redis
+        try:
+            await redis_client.add_zone(zone_id, zone_data)
+            _LOGGER.info(f"Added initial fallback zone {zone_id} ({zone_data['name']}) to Redis")
+
+            # Also register zone with backend via API
+            zone_config = {
+                "zone_id": zone_id,
+                "name": zone_data["name"],
+                "temperature_sensor_entity_id": zone_data["temperature_sensor_entity_id"],
+                "valve_switch_entity_id": zone_data["valve_switch_entity_id"],
+                "target_temperature": zone_data["target_temperature"],
+                "opening_offset": zone_data["opening_offset"],
+                "closing_offset": zone_data["closing_offset"],
+                "priority": zone_data["priority"],
+                "is_fallback_valve": zone_data["is_fallback_valve"],
+            }
+
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{backend_url}/api/zones",
+                        json=zone_config,
+                    ) as response:
+                        if response.status not in (200, 201):
+                            _LOGGER.warning(
+                                f"Failed to register initial zone {zone_id} with backend: status {response.status}"
+                            )
+            except Exception as err:
+                _LOGGER.error(f"Error registering initial zone {zone_id} with backend: {err}")
+
+        except Exception as err:
+            _LOGGER.error(f"Failed to add initial zone to Redis: {err}")
+
     # Forward to climate platform to create zone entities
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

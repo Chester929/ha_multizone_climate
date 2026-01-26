@@ -3,9 +3,24 @@
     "step": {
       "user": {
         "title": "Configure Main Climate",
-        "description": "Select the main climate entity that controls your HVAC system. This will be used to calculate and set the target temperature based on all zones. You can add zones after setup.",
+        "description": "Select the main climate entity that controls your HVAC system. At least one fallback zone is required for the system to function properly.",
         "data": {
           "main_climate_entity": "Main Climate Entity"
+        }
+      },
+      "zone_initial": {
+        "title": "Configure Initial Fallback Zone",
+        "description": "Configure the first fallback zone. This zone is required to ensure at least one valve can be opened when the minimum valve requirement is active.",
+        "data": {
+          "zone_name": "Zone Name",
+          "temperature_sensor": "Temperature Sensor",
+          "valve_switch": "Valve Switch",
+          "target_temperature": "Target Temperature",
+          "priority": "Priority (0-100)",
+          "opening_offset": "Opening Offset (°C)",
+          "closing_offset": "Closing Offset (°C)",
+          "target_change_threshold": "Target Change Threshold (°C)",
+          "is_fallback_valve": "Is Fallback Valve"
         }
       }
     },
