@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -289,6 +290,62 @@ func TestIntegrationStateUpdateHandler(t *testing.T) {
 		updatedTargetTemp := mr.HGet(zoneKey, "target_temperature")
 		if updatedTargetTemp != "22.5" {
 			t.Errorf("Expected target_temperature '22.5', got '%s'", updatedTargetTemp)
+		}
+	})
+
+	t.Run("UpdateTargetTemperatureEnqueuesCalculationJob", func(t *testing.T) {
+		client, mr, cleanup := newTestRedisClient(t)
+		defer cleanup()
+
+		// Create a test zone in miniredis
+		zoneID := "test-zone-recalc"
+		zoneKey := "multizone:zone:" + zoneID
+		mr.HSet(zoneKey, "name", "Office")
+		mr.HSet(zoneKey, "target_temperature", "20.0")
+
+		handler := IntegrationStateUpdateHandler(client)
+
+		newTargetTemp := 23.0
+		payload := map[string]interface{}{
+			"zone_id":             zoneID,
+			"current_temperature": 21.0,
+			"target_temperature":  newTargetTemp,
+		}
+		body, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest("POST", "/api/integration/state_update", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		handler(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+		}
+
+		// Verify target temperature was updated in Redis
+		updatedTargetTemp := mr.HGet(zoneKey, "target_temperature")
+		if updatedTargetTemp != "23" {
+			t.Errorf("Expected target_temperature '23', got '%s'", updatedTargetTemp)
+		}
+
+		// Verify calculation job was enqueued using Redis client
+		ctx := context.Background()
+		jobsQueueKey := "multizone:jobs:calculate_temp"
+		jobJSON, err := client.RPop(ctx, jobsQueueKey)
+		if err == redisv8.Nil {
+			t.Error("Expected calculation job to be enqueued, but queue is empty")
+		} else if err != nil {
+			t.Fatalf("Failed to pop job from queue: %v", err)
+		} else {
+			// Verify job contains zone_id
+			var job map[string]interface{}
+			if err := json.Unmarshal([]byte(jobJSON), &job); err != nil {
+				t.Fatalf("Failed to unmarshal job JSON: %v", err)
+			}
+
+			if job["zone_id"] != zoneID {
+				t.Errorf("Expected job zone_id '%s', got '%v'", zoneID, job["zone_id"])
+			}
 		}
 	})
 }
