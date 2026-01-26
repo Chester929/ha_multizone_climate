@@ -242,9 +242,10 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     errors={"main_climate_entity": "entity_not_found"},
                 )
 
-            # Update the config entry data
+            # Update the config entry data - merge with existing to preserve zone fields
+            updated_data = {**self.config_entry.data, **user_input}
             self.hass.config_entries.async_update_entry(
-                self.config_entry, data=user_input
+                self.config_entry, data=updated_data
             )
 
             # Reload the config entry so the integration uses the updated main climate entity

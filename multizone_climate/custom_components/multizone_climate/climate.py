@@ -63,11 +63,11 @@ async def async_setup_entry(
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
 
-    # Get config from coordinator
-    config = coordinator.get_config()
+    # Get config from hass.data or config_entry (fallback if coordinator.get_config() is None)
+    config = data.get("config") or config_entry.data or {}
     if not config:
         _LOGGER.warning(
-            "No config found in coordinator, cannot create climate entities"
+            "No config found in coordinator or config entry, cannot create climate entities"
         )
         return
 
