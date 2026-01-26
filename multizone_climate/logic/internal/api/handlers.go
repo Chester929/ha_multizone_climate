@@ -267,38 +267,83 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 		}
 
 		// Validate opening_offset if provided
-		if openingOffset, ok := zone["opening_offset"].(string); ok && openingOffset != "" {
-			if err := validateTemperatureOffset(openingOffset, "Opening offset"); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": err.Error(),
-				})
-				return
+		if rawOpeningOffset, exists := zone["opening_offset"]; exists {
+			var openingOffset string
+			switch v := rawOpeningOffset.(type) {
+			case string:
+				openingOffset = v
+			case float64:
+				openingOffset = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				openingOffset = strconv.Itoa(v)
+			case int64:
+				openingOffset = strconv.FormatInt(v, 10)
+			case json.Number:
+				openingOffset = v.String()
+			}
+			if openingOffset != "" {
+				if err := validateTemperatureOffset(openingOffset, "Opening offset"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
 			}
 		}
 
 		// Validate closing_offset if provided
-		if closingOffset, ok := zone["closing_offset"].(string); ok && closingOffset != "" {
-			if err := validateTemperatureOffset(closingOffset, "Closing offset"); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": err.Error(),
-				})
-				return
+		if rawClosingOffset, exists := zone["closing_offset"]; exists {
+			var closingOffset string
+			switch v := rawClosingOffset.(type) {
+			case string:
+				closingOffset = v
+			case float64:
+				closingOffset = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				closingOffset = strconv.Itoa(v)
+			case int64:
+				closingOffset = strconv.FormatInt(v, 10)
+			case json.Number:
+				closingOffset = v.String()
+			}
+			if closingOffset != "" {
+				if err := validateTemperatureOffset(closingOffset, "Closing offset"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
 			}
 		}
 
 		// Validate target_change_threshold if provided
-		if targetChangeThreshold, ok := zone["target_change_threshold"].(string); ok && targetChangeThreshold != "" {
-			if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": err.Error(),
-				})
-				return
+		if rawTargetChangeThreshold, exists := zone["target_change_threshold"]; exists {
+			var targetChangeThreshold string
+			switch v := rawTargetChangeThreshold.(type) {
+			case string:
+				targetChangeThreshold = v
+			case float64:
+				targetChangeThreshold = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				targetChangeThreshold = strconv.Itoa(v)
+			case int64:
+				targetChangeThreshold = strconv.FormatInt(v, 10)
+			case json.Number:
+				targetChangeThreshold = v.String()
+			}
+			if targetChangeThreshold != "" {
+				if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
 			}
 		}
 
