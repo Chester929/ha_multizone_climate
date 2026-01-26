@@ -254,7 +254,11 @@ Each zone now has a climate entity that you can:
 - **Target Temperature**: Desired temperature in °C (adjustable anytime)
 - **Priority**: Zone importance (0=lowest, 100=highest, default=50)
 
-**Note:** Advanced valve control parameters (temperature offsets for opening/closing valves, fallback valve selection) can be configured per zone through the integration's options flow. Default values are provided based on typical HVAC systems.
+**Note:** Advanced valve control parameters can be configured per zone through the integration's options flow. Default values are provided based on typical HVAC systems:
+- `opening_offset`: How far below the target temperature the zone must fall before the valve is opened.
+- `closing_offset`: How far above the target temperature the zone must rise before the valve is closed.
+- `target_change_threshold`: Minimum change in target temperature required to trigger a recalculation of valve states.
+- `is_fallback_valve`: Marks a zone valve to remain open when minimum valve/open-zone requirements are not otherwise met.
 
 ## Technology Stack
 
