@@ -552,15 +552,37 @@ func UpdateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 		}
 
 		// Validate target_change_threshold if provided
-		if targetChangeThreshold, ok := updates["target_change_threshold"].(string); ok && targetChangeThreshold != "" {
-			if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+		if rawValue, exists := updates["target_change_threshold"]; exists {
+			var targetChangeThreshold string
+
+			switch v := rawValue.(type) {
+			case string:
+				targetChangeThreshold = v
+			case float64:
+				// JSON numbers are decoded as float64; normalize to string for validation/storage
+				targetChangeThreshold = strconv.FormatFloat(v, 'f', -1, 64)
+			default:
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": err.Error(),
+					"error": "Target change threshold must be a string or number",
 				})
 				return
 			}
+
+			if targetChangeThreshold != "" {
+				if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+			}
+
+			// Ensure the normalized string value is stored back into the updates map
+			updates["target_change_threshold"] = targetChangeThreshold
 		}
 
 		// Validate is_fallback_valve if provided
