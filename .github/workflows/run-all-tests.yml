@@ -83,15 +83,15 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Download dependencies
-        working-directory: ./logic
+        working-directory: ./multizone_climate/logic
         run: go mod download
 
       - name: Run tests
-        working-directory: ./logic
+        working-directory: ./multizone_climate/logic
         run: go test -v ./...
 
       - name: Run linter
-        working-directory: ./logic
+        working-directory: ./multizone_climate/logic
         run: |
           go vet ./...
           test -z "$(gofmt -l .)"

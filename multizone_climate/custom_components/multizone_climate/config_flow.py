@@ -128,10 +128,16 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
-                vol.Optional(
-                    "opening_offset",
-                    default=0.3
-                ): selector.NumberSelector(
+                vol.Optional("opening_offset", default=0.3): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional("closing_offset", default=0.3): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
                         max=5.0,
@@ -141,20 +147,7 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ),
                 vol.Optional(
-                    "closing_offset",
-                    default=0.3
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0.0,
-                        max=5.0,
-                        step=0.1,
-                        unit_of_measurement="°C",
-                        mode=selector.NumberSelectorMode.BOX,
-                    ),
-                ),
-                vol.Optional(
-                    "target_change_threshold",
-                    default=0.1
+                    "target_change_threshold", default=0.1
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
@@ -165,10 +158,9 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ),
                 # This first zone must be a fallback valve (fixed to True)
-                vol.Required(
-                    "is_fallback_valve",
-                    default=True
-                ): vol.All(cv.boolean, vol.In([True])),
+                vol.Required("is_fallback_valve", default=True): vol.All(
+                    cv.boolean, vol.In([True])
+                ),
             }
         )
 
@@ -288,6 +280,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 # Generate a unique zone_id
                 import uuid
+
                 zone_id = str(uuid.uuid4())
 
                 # Get Redis client from hass.data
@@ -298,13 +291,17 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 zone_data = {
                     "id": zone_id,
                     "name": user_input.get("zone_name", "Zone"),
-                    "temperature_sensor_entity_id": user_input.get("temperature_sensor"),
+                    "temperature_sensor_entity_id": user_input.get(
+                        "temperature_sensor"
+                    ),
                     "valve_switch_entity_id": user_input.get("valve_switch"),
                     "target_temperature": user_input.get("target_temperature", 20.0),
                     "priority": user_input.get("priority", 50),
                     "opening_offset": user_input.get("opening_offset", 0.3),
                     "closing_offset": user_input.get("closing_offset", 0.3),
-                    "target_change_threshold": user_input.get("target_change_threshold", 0.1),
+                    "target_change_threshold": user_input.get(
+                        "target_change_threshold", 0.1
+                    ),
                     "is_fallback_valve": user_input.get("is_fallback_valve", False),
                     "current_temperature": 0.0,
                     "satisfaction": "unknown",
@@ -325,7 +322,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     zone_config = {
                         "id": zone_id,  # Backend expects 'id', not 'zone_id'
                         "name": zone_data["name"],
-                        "temperature_sensor_entity_id": zone_data["temperature_sensor_entity_id"],
+                        "temperature_sensor_entity_id": zone_data[
+                            "temperature_sensor_entity_id"
+                        ],
                         "valve_switch_entity_id": zone_data["valve_switch_entity_id"],
                         "target_temperature": zone_data["target_temperature"],
                         "opening_offset": zone_data["opening_offset"],
@@ -336,6 +335,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
                     try:
                         import aiohttp
+
                         async with aiohttp.ClientSession() as session:
                             async with session.post(
                                 f"{backend_url}/api/zones",
@@ -346,7 +346,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                                         f"Failed to register zone {zone_id} with backend: status {response.status}"
                                     )
                     except Exception as err:
-                        _LOGGER.error(f"Error registering zone {zone_id} with backend: {err}")
+                        _LOGGER.error(
+                            f"Error registering zone {zone_id} with backend: {err}"
+                        )
 
                 except Exception as err:
                     _LOGGER.error(f"Failed to add zone to Redis: {err}")
@@ -404,10 +406,16 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
-                vol.Optional(
-                    "opening_offset",
-                    default=0.3
-                ): selector.NumberSelector(
+                vol.Optional("opening_offset", default=0.3): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional("closing_offset", default=0.3): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
                         max=5.0,
@@ -417,8 +425,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     ),
                 ),
                 vol.Optional(
-                    "closing_offset",
-                    default=0.3
+                    "target_change_threshold", default=0.1
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
@@ -428,21 +435,6 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
-                vol.Optional(
-                    "target_change_threshold",
-                    default=0.1
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0.0,
-                        max=5.0,
-                        step=0.1,
-                        unit_of_measurement="°C",
-                        mode=selector.NumberSelectorMode.BOX,
-                    ),
-                ),
-                vol.Optional(
-                    "is_fallback_valve",
-                    default=False
-                ): cv.boolean,
+                vol.Optional("is_fallback_valve", default=False): cv.boolean,
             }
         )

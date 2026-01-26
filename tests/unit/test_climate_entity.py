@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.components.climate import HVACMode
 from homeassistant.const import ATTR_TEMPERATURE
 
-from custom_components.multizone_climate.climate import ZoneClimateEntity, MainClimateDevice
+from custom_components.multizone_climate.climate import (
+    ZoneClimateEntity,
+    MainClimateDevice,
+)
 
 
 class TestZoneClimateEntity:
@@ -18,9 +21,9 @@ class TestZoneClimateEntity:
         coordinator.backend_url = "http://localhost:8080"
         coordinator.session = MagicMock()
         coordinator.push_state_update = AsyncMock()
-        coordinator.get_config = MagicMock(return_value={
-            "main_climate_entity": "climate.main_thermostat"
-        })
+        coordinator.get_config = MagicMock(
+            return_value={"main_climate_entity": "climate.main_thermostat"}
+        )
         return coordinator
 
     @pytest.fixture
@@ -28,20 +31,22 @@ class TestZoneClimateEntity:
         """Create mock Redis client."""
         redis_client = MagicMock()
         redis_client.set_zone_state = AsyncMock()
-        redis_client.get_zone_state = AsyncMock(return_value={
-            "id": "zone1",
-            "name": "Bedroom",
-            "temperature_sensor": "sensor.bedroom_temp",
-            "valve_switch": "switch.bedroom_valve",
-            "target_temperature": 21.0,
-            "opening_offset": 0.3,
-            "closing_offset": 0.3,
-            "priority": 50,
-            "is_fallback_valve": False,
-            "current_temperature": 20.5,
-            "satisfaction": "satisfied",
-            "valve_state": "closed",
-        })
+        redis_client.get_zone_state = AsyncMock(
+            return_value={
+                "id": "zone1",
+                "name": "Bedroom",
+                "temperature_sensor": "sensor.bedroom_temp",
+                "valve_switch": "switch.bedroom_valve",
+                "target_temperature": 21.0,
+                "opening_offset": 0.3,
+                "closing_offset": 0.3,
+                "priority": 50,
+                "is_fallback_valve": False,
+                "current_temperature": 20.5,
+                "satisfaction": "satisfied",
+                "valve_state": "closed",
+            }
+        )
         return redis_client
 
     @pytest.fixture
@@ -83,8 +88,14 @@ class TestZoneClimateEntity:
             "valve_state": "closed",
         }
 
-    def test_entity_initialization(self, mock_coordinator, mock_redis_client, 
-                                   mock_hass, mock_config_entry, zone_config):
+    def test_entity_initialization(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
         """Test entity initializes with correct properties."""
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
@@ -99,8 +110,14 @@ class TestZoneClimateEntity:
         assert entity.zone_id == "zone1"
         assert entity._target_temperature == 21.0
 
-    async def test_set_temperature(self, mock_coordinator, mock_redis_client,
-                                   mock_hass, mock_config_entry, zone_config):
+    async def test_set_temperature(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
         """Test setting target temperature updates Redis and triggers jobs."""
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
@@ -122,8 +139,14 @@ class TestZoneClimateEntity:
         # Verify Redis was updated
         mock_redis_client.set_zone_state.assert_awaited()
 
-    def test_extra_state_attributes(self, mock_coordinator, mock_redis_client,
-                                    mock_hass, mock_config_entry, zone_config):
+    def test_extra_state_attributes(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
         """Test extra state attributes include zone configuration."""
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
@@ -152,10 +175,12 @@ class TestMainClimateDevice:
         """Create mock coordinator."""
         coordinator = MagicMock()
         coordinator.backend_url = "http://localhost:8080"
-        coordinator.get_config = MagicMock(return_value={
-            "main_climate_entity": "climate.main_thermostat",
-            "outdoor_temperature_sensor": "sensor.outdoor_temp",
-        })
+        coordinator.get_config = MagicMock(
+            return_value={
+                "main_climate_entity": "climate.main_thermostat",
+                "outdoor_temperature_sensor": "sensor.outdoor_temp",
+            }
+        )
         coordinator.data = {
             "current_temperature": 21.0,
             "target_temperature": 22.0,
@@ -178,10 +203,12 @@ class TestMainClimateDevice:
         config_entry.entry_id = "test_entry_id"
         return config_entry
 
-    def test_main_device_initialization(self, mock_coordinator, mock_redis_client, mock_config_entry):
+    def test_main_device_initialization(
+        self, mock_coordinator, mock_redis_client, mock_config_entry
+    ):
         """Test main device initializes with correct properties."""
         config = {"main_climate_entity": "climate.main_thermostat"}
-        
+
         entity = MainClimateDevice(
             coordinator=mock_coordinator,
             redis_client=mock_redis_client,
