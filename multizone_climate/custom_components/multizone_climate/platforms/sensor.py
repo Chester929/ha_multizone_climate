@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 import logging
 
 from homeassistant.components.sensor import (
@@ -137,14 +137,11 @@ class MultizoneTemperatureSensor(SensorEntity):
         main_climate = self.coordinator.data.get("main_climate", {})
 
         if self.sensor_type == "main_current_temperature":
-            value = main_climate.get("current_temperature")
-            return float(value) if value is not None else None
+            return cast(float | None, main_climate.get("current_temperature"))
         if self.sensor_type == "main_target_temperature":
-            value = main_climate.get("target_temperature")
-            return float(value) if value is not None else None
+            return cast(float | None, main_climate.get("target_temperature"))
         if self.sensor_type == "outdoor_temperature":
-            value = main_climate.get("outdoor_temperature")
-            return float(value) if value is not None else None
+            return cast(float | None, main_climate.get("outdoor_temperature"))
 
         return None
 
@@ -287,8 +284,7 @@ class ZoneTemperatureSensor(SensorEntity):
         if not zone_data:
             return None
 
-        value = zone_data.get(self.sensor_type)
-        return float(value) if value is not None else None
+        return cast(float | None, zone_data.get(self.sensor_type))
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -356,11 +352,9 @@ class ZoneTextSensor(SensorEntity):
             return None
 
         if self.sensor_type == "satisfaction":
-            value = zone_data.get("satisfaction_state")
-            return str(value) if value is not None else None
+            return cast(str | None, zone_data.get("satisfaction_state"))
         if self.sensor_type == "valve_state":
-            value = zone_data.get("valve_state")
-            return str(value) if value is not None else None
+            return cast(str | None, zone_data.get("valve_state"))
         if self.sensor_type == "direction":
             # Determine direction from temperature_rising and temperature_falling
             if zone_data.get("temperature_rising"):

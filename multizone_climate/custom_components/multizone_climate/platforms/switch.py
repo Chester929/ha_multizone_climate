@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 import logging
 
 from homeassistant.components.switch import SwitchEntity
@@ -75,7 +75,7 @@ class MultizoneEnableSwitch(SwitchEntity):
         config = self.coordinator.get_config()
         if not config:
             return False
-        return bool(config.get("multizone_enabled", False))
+        return cast(bool, config.get("multizone_enabled", False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """

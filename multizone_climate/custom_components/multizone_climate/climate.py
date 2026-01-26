@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Literal
+from typing import Any, Literal, cast
 import logging
 
 from homeassistant.components.climate import (
@@ -185,8 +185,7 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            value = data.get("current_temperature")
-            return float(value) if value is not None else None
+            return cast(float | None, data.get("current_temperature"))
         return None
 
     @property
@@ -199,8 +198,7 @@ class MainClimateDevice(ClimateEntity):
         """
         data = self.coordinator.get_main_climate_data()
         if data:
-            value = data.get("target_temperature")
-            return float(value) if value is not None else None
+            return cast(float | None, data.get("target_temperature"))
         return None
 
     @property
@@ -354,16 +352,22 @@ class ZoneClimateEntity(ClimateEntity):
         self._temp_sensor_entity_id = zone_config.get("temperature_sensor_entity_id")
         self._valve_switch_entity_id = zone_config.get("valve_switch_entity_id")
 
-        # Zone parameters
-        self._target_temperature = zone_config.get("target_temperature", 20.0)
-        self._target_change_threshold = zone_config.get("target_change_threshold", 0.1)
+        # Zone parameters - these come from Redis as floats/ints via JSON deserialization
+        self._target_temperature: float = cast(
+            float, zone_config.get("target_temperature", 20.0)
+        )
+        self._target_change_threshold: float = cast(
+            float, zone_config.get("target_change_threshold", 0.1)
+        )
         self._opening_offset = zone_config.get("opening_offset", 0.3)
         self._closing_offset = zone_config.get("closing_offset", 0.3)
         self._priority = zone_config.get("priority", 0)
         self._is_fallback = zone_config.get("is_fallback_valve", False)
 
         # State tracking
-        self._current_temperature: float | None = zone_config.get("current_temperature")
+        self._current_temperature: float | None = cast(
+            float | None, zone_config.get("current_temperature")
+        )
         self._previous_temperature: float | None = self._current_temperature
         self._satisfaction_state = zone_config.get("satisfaction", STATE_UNKNOWN)
         self._temperature_direction = "stable"
@@ -383,7 +387,7 @@ class ZoneClimateEntity(ClimateEntity):
     @property
     def name(self) -> str:
         """Return the name of the entity."""
-        return str(self._name)
+        return cast(str, self._name)
 
     @property
     def unique_id(self) -> str:
@@ -423,11 +427,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Zone target temperature
         """
-        return (
-            float(self._target_temperature)
-            if self._target_temperature is not None
-            else None
-        )
+        return self._target_temperature
 
     @property
     def target_temperature_step(self) -> float:
@@ -437,7 +437,7 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             float: Step size for target temperature changes
         """
-        return float(self._target_change_threshold)
+        return self._target_change_threshold
 
     @property
     def min_temp(self) -> float:
