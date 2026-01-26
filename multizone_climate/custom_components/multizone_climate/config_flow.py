@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any
 
 import voluptuous as vol
@@ -15,6 +17,8 @@ from homeassistant.helpers import selector
 import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -157,6 +161,50 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Manage the options."""
         if user_input is not None:
+            # Merge user input with existing config data
+            new_data = {**self.config_entry.data, **user_input}
+            
+            # Update the config entry data
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            
+            # Update the backend zone via API if we have a zone_id
+            zone_id = self.config_entry.entry_id
+            backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+            backend_url = f"http://localhost:{backend_port}"
+            
+            # Prepare zone update payload
+            zone_update = {
+                "name": user_input.get("zone_name"),
+                "target_temperature": user_input.get("target_temperature"),
+                "priority": user_input.get("priority"),
+                "opening_offset": user_input.get("opening_offset"),
+                "closing_offset": user_input.get("closing_offset"),
+                "target_change_threshold": user_input.get("target_change_threshold"),
+                "is_fallback_valve": user_input.get("is_fallback_valve"),
+                "temperature_sensor_entity_id": user_input.get("temperature_sensor"),
+                "valve_switch_entity_id": user_input.get("valve_switch"),
+            }
+            
+            # Remove None values
+            zone_update = {k: v for k, v in zone_update.items() if v is not None}
+            
+            # Update zone via backend API
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.put(
+                        f"{backend_url}/api/zones/{zone_id}",
+                        json=zone_update,
+                    ) as response:
+                        if response.status not in (200, 201):
+                            _LOGGER.warning(
+                                f"Failed to update zone {zone_id} via backend API: status {response.status}"
+                            )
+            except Exception as err:
+                _LOGGER.error(f"Error updating zone {zone_id} via backend API: {err}")
+            
             return self.async_create_entry(title="", data=user_input)
 
         options_schema = vol.Schema(
@@ -186,6 +234,77 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=[SWITCH_DOMAIN, "valve"]),
                 ),
+                vol.Optional(
+                    "target_temperature", 
+                    default=self.config_entry.data.get("target_temperature", 20.0)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5.0,
+                        max=35.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "priority", 
+                    default=self.config_entry.data.get("priority", 50)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                # Note: 0.3 is the canonical default for `opening_offset`, aligned with the
+                # Go backend. For existing entries that already have an `opening_offset`
+                # stored (e.g. legacy setups that used 0.5 in the old Python code),
+                # we intentionally preserve the stored value via `config_entry.data`.
+                vol.Optional(
+                    "opening_offset",
+                    default=self.config_entry.data.get("opening_offset", 0.3)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "closing_offset",
+                    # Note: Existing config entries created with the legacy Python implementation
+                    # may have a stored default of 0.5 for `closing_offset`. We intentionally
+                    # reuse the stored value here (when present) for backward compatibility,
+                    # while falling back to 0.3 to match the Go backend's default for new zones.
+                    default=self.config_entry.data.get("closing_offset", 0.3)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "target_change_threshold",
+                    default=self.config_entry.data.get("target_change_threshold", 0.1)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=5.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Optional(
+                    "is_fallback_valve",
+                    default=self.config_entry.data.get("is_fallback_valve", False)
+                ): cv.boolean,
             }
         )
 

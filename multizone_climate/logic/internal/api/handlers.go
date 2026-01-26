@@ -266,6 +266,119 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			}
 		}
 
+		// Validate opening_offset if provided
+		if rawOpeningOffset, exists := zone["opening_offset"]; exists {
+			var openingOffset string
+			switch v := rawOpeningOffset.(type) {
+			case string:
+				openingOffset = v
+			case float64:
+				openingOffset = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				openingOffset = strconv.Itoa(v)
+			case int64:
+				openingOffset = strconv.FormatInt(v, 10)
+			case json.Number:
+				openingOffset = v.String()
+			}
+			if openingOffset != "" {
+				if err := validateTemperatureOffset(openingOffset, "Opening offset"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+			}
+		}
+
+		// Validate closing_offset if provided
+		if rawClosingOffset, exists := zone["closing_offset"]; exists {
+			var closingOffset string
+			switch v := rawClosingOffset.(type) {
+			case string:
+				closingOffset = v
+			case float64:
+				closingOffset = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				closingOffset = strconv.Itoa(v)
+			case int64:
+				closingOffset = strconv.FormatInt(v, 10)
+			case json.Number:
+				closingOffset = v.String()
+			}
+			if closingOffset != "" {
+				if err := validateTemperatureOffset(closingOffset, "Closing offset"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+			}
+		}
+
+		// Validate target_change_threshold if provided
+		if rawTargetChangeThreshold, exists := zone["target_change_threshold"]; exists {
+			var targetChangeThreshold string
+			switch v := rawTargetChangeThreshold.(type) {
+			case string:
+				targetChangeThreshold = v
+			case float64:
+				targetChangeThreshold = strconv.FormatFloat(v, 'f', -1, 64)
+			case int:
+				targetChangeThreshold = strconv.Itoa(v)
+			case int64:
+				targetChangeThreshold = strconv.FormatInt(v, 10)
+			case json.Number:
+				targetChangeThreshold = v.String()
+			}
+			if targetChangeThreshold != "" {
+				if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+			}
+		}
+
+		// Validate is_fallback_valve if provided; accept both string and boolean values
+		if rawFallbackValve, exists := zone["is_fallback_valve"]; exists {
+			var isFallbackValve string
+
+			switch v := rawFallbackValve.(type) {
+			case string:
+				isFallbackValve = v
+			case bool:
+				// Normalize boolean to string so that validation and later processing work consistently
+				isFallbackValve = strconv.FormatBool(v)
+				zone["is_fallback_valve"] = isFallbackValve
+			default:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Is fallback valve must be a boolean or a boolean-like string",
+				})
+				return
+			}
+
+			if isFallbackValve != "" {
+				if err := validateBoolean(isFallbackValve, "Is fallback valve"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+			}
+		}
+
 		// Set defaults for missing fields
 		zoneData := map[string]interface{}{
 			"id":                           zoneID,
@@ -279,6 +392,10 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			"temperature_sensor_entity_id": getStringOrDefault(zone, "temperature_sensor_entity_id", ""),
 			"valve_switch_entity_id":       getStringOrDefault(zone, "valve_switch_entity_id", ""),
 			"climate_entity_id":            getStringOrDefault(zone, "climate_entity_id", ""),
+			"opening_offset":               getStringOrDefault(zone, "opening_offset", "0.3"),
+			"closing_offset":               getStringOrDefault(zone, "closing_offset", "0.3"),
+			"target_change_threshold":      getStringOrDefault(zone, "target_change_threshold", "0.1"),
+			"is_fallback_valve":            getStringOrDefault(zone, "is_fallback_valve", "false"),
 		}
 
 		// Save zone to Redis
@@ -410,6 +527,96 @@ func UpdateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			}
 		}
 
+		// Validate opening_offset if provided
+		if rawOpeningOffset, exists := updates["opening_offset"]; exists {
+			var openingOffsetStr string
+
+			switch v := rawOpeningOffset.(type) {
+			case string:
+				openingOffsetStr = v
+			case float64:
+				openingOffsetStr = strconv.FormatFloat(v, 'f', -1, 64)
+			default:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": fmt.Sprintf("Opening offset has invalid type %T", rawOpeningOffset),
+				})
+				return
+			}
+
+			if openingOffsetStr != "" {
+				if err := validateTemperatureOffset(openingOffsetStr, "Opening offset"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+				// Store normalized, validated value back into updates
+				updates["opening_offset"] = openingOffsetStr
+			}
+		}
+
+		// Validate closing_offset if provided
+		if closingOffset, ok := updates["closing_offset"].(string); ok && closingOffset != "" {
+			if err := validateTemperatureOffset(closingOffset, "Closing offset"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
+		// Validate target_change_threshold if provided
+		if rawValue, exists := updates["target_change_threshold"]; exists {
+			var targetChangeThreshold string
+
+			switch v := rawValue.(type) {
+			case string:
+				targetChangeThreshold = v
+			case float64:
+				// JSON numbers are decoded as float64; normalize to string for validation/storage
+				targetChangeThreshold = strconv.FormatFloat(v, 'f', -1, 64)
+			default:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Target change threshold must be a string or number",
+				})
+				return
+			}
+
+			if targetChangeThreshold != "" {
+				if err := validateTemperatureOffset(targetChangeThreshold, "Target change threshold"); err != nil {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadRequest)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"error": err.Error(),
+					})
+					return
+				}
+			}
+
+			// Ensure the normalized string value is stored back into the updates map
+			updates["target_change_threshold"] = targetChangeThreshold
+		}
+
+		// Validate is_fallback_valve if provided
+		if isFallbackValve, ok := updates["is_fallback_valve"].(string); ok && isFallbackValve != "" {
+			if err := validateBoolean(isFallbackValve, "Is fallback valve"); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+
 		// Update zone in Redis
 		if err := client.HSet(ctx, key, updates); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -506,6 +713,23 @@ func validatePriority(priorityStr string) error {
 	priority, err := strconv.Atoi(priorityStr)
 	if err != nil || priority < 0 || priority > 100 {
 		return fmt.Errorf("priority must be between 0 and 100")
+	}
+	return nil
+}
+
+// Helper function to validate temperature offset range (opening/closing offsets)
+func validateTemperatureOffset(offsetStr string, fieldName string) error {
+	offset, err := strconv.ParseFloat(offsetStr, 64)
+	if err != nil || offset < 0.0 || offset > 5.0 {
+		return fmt.Errorf("%s must be between 0.0 and 5.0", fieldName)
+	}
+	return nil
+}
+
+// Helper function to validate boolean string
+func validateBoolean(boolStr string, fieldName string) error {
+	if boolStr != "true" && boolStr != "false" {
+		return fmt.Errorf("%s must be either 'true' or 'false'", fieldName)
 	}
 	return nil
 }
