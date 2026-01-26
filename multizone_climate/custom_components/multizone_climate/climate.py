@@ -521,7 +521,18 @@ class ZoneClimateEntity(ClimateEntity):
             satisfaction_eps=self._state_machine.satisfaction_eps,
         )
 
-        # Write to Redis
+        # Ensure previous temperature is initialized when only target changes
+        # This avoids _update_satisfaction_state() early-returning when
+        # _previous_temperature is None (e.g. after restart) but we already
+        # have a valid _current_temperature.
+        if getattr(self, "_previous_temperature", None) is None and getattr(
+            self, "_current_temperature", None
+        ) is not None:
+            self._previous_temperature = self._current_temperature
+        # Recalculate satisfaction state immediately with new target bounds
+        await self._update_satisfaction_state()
+
+        # Write to Redis (now with correct satisfaction state)
         await self._update_zone_state_in_redis()
 
         # Trigger recalculation by enqueuing jobs
