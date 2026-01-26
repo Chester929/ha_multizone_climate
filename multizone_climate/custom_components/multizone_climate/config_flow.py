@@ -215,8 +215,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     zone_config = {
                         "zone_id": zone_id,
                         "name": zone_data["name"],
-                        "temperature_sensor": zone_data["temperature_sensor_entity_id"],
-                        "valve_switch": zone_data["valve_switch_entity_id"],
+                        "temperature_sensor_entity_id": zone_data["temperature_sensor_entity_id"],
+                        "valve_switch_entity_id": zone_data["valve_switch_entity_id"],
                         "target_temperature": zone_data["target_temperature"],
                         "opening_offset": zone_data["opening_offset"],
                         "closing_offset": zone_data["closing_offset"],
