@@ -278,14 +278,43 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 errors["valve_switch"] = "entity_not_found"
 
             if not errors:
+                # Get Redis client from hass.data
+                data = self.hass.data[DOMAIN][self._config_entry.entry_id]
+                redis_client = data["redis_client"]
+
+                # Validate no duplicate sensors/valves across existing zones
+                existing_zones = await redis_client.get_zone_ids()
+                for existing_id in existing_zones:
+                    existing_zone = await redis_client.get_zone_state(existing_id)
+                    if existing_zone:
+                        # Check for duplicate temperature sensor
+                        if (
+                            existing_zone.get("temperature_sensor_entity_id")
+                            == user_input.get("temperature_sensor")
+                        ):
+                            errors["temperature_sensor"] = "sensor_already_used"
+                            break
+                        # Check for duplicate valve switch
+                        if (
+                            existing_zone.get("valve_switch_entity_id")
+                            == user_input.get("valve_switch")
+                        ):
+                            errors["valve_switch"] = "valve_already_used"
+                            break
+
+            if not errors:
                 # Generate a unique zone_id
                 import uuid
 
                 zone_id = str(uuid.uuid4())
 
-                # Get Redis client from hass.data
-                data = self.hass.data[DOMAIN][self._config_entry.entry_id]
-                redis_client = data["redis_client"]
+                # Paranoid check: verify zone_id doesn't already exist (UUID collision)
+                # Reuse redis_client and existing_zones from above
+                if zone_id in existing_zones:
+                    _LOGGER.error(f"UUID collision detected: {zone_id}")
+                    errors["base"] = "zone_id_collision"
+
+            if not errors:
 
                 # Prepare zone data for Redis
                 zone_data = {
@@ -350,6 +379,15 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                             f"Error registering zone {zone_id} with backend: {err}"
                         )
 
+                except ValueError as err:
+                    # Zone already exists (from redis_client.add_zone validation)
+                    _LOGGER.error(f"Failed to add zone to Redis: {err}")
+                    errors["base"] = "zone_id_collision"
+                    return self.async_show_form(  # type: ignore[return-value]
+                        step_id="add_zone",
+                        data_schema=self._get_add_zone_schema(),
+                        errors=errors,
+                    )
                 except Exception as err:
                     _LOGGER.error(f"Failed to add zone to Redis: {err}")
                     errors["base"] = "redis_error"

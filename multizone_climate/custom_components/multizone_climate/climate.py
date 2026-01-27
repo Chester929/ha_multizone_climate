@@ -60,26 +60,15 @@ async def async_setup_entry(
         async_add_entities: Callback to add entities
 
     Tasks:
-        - Create main climate device entity
         - Create zone climate entities for each configured zone
+        - Each zone is a separate device linked to the main integration device
     """
     # Get coordinator and redis_client from hass.data
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
 
-    # Get config from hass.data (already set in __init__.py)
-    config = data.get("config", {})
-
-    # Create main climate device entity
-    main_climate = MainClimateDevice(
-        coordinator=coordinator,
-        redis_client=redis_client,
-        config=config,
-        config_entry=config_entry,
-    )
-
-    entities: list[ClimateEntity] = [main_climate]
+    entities: list[ClimateEntity] = []
 
     # Fetch zones from Redis
     zone_ids = await redis_client.get_zone_ids()
@@ -102,196 +91,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
     _LOGGER.info(
-        "Added %d climate entities (%d zones + 1 main device)",
+        "Added %d zone climate entities",
         len(entities),
-        len(zone_ids),
     )
-
-
-class MainClimateDevice(ClimateEntity):
-    """
-    Main climate device entity.
-
-    Represents the integration itself and the main HVAC thermostat.
-    Displays:
-    - Current and target temperatures
-    - Outdoor temperature
-    - HVAC mode and action
-    - Multizone enable status
-
-    NOTE: This entity is read-only - actual control is via the main thermostat entity.
-    """
-
-    def __init__(
-        self,
-        coordinator: Any,
-        redis_client: Any,
-        config: dict,
-        config_entry: ConfigEntry,
-    ) -> None:
-        """
-        Initialize main climate device.
-
-        Args:
-            coordinator: Data update coordinator
-            redis_client: Redis client
-            config: Integration configuration
-            config_entry: Config entry for device info
-        """
-        self.coordinator = coordinator
-        self.redis_client = redis_client
-        self.config = config
-        self._config_entry = config_entry
-        self._attr_should_poll = False
-
-    @property
-    def name(self) -> str:
-        """Return the name of the entity."""
-        return "Multizone Climate Main"
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return f"{DOMAIN}_main_{self._config_entry.entry_id}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for grouping entities."""
-        return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": "Multizone Climate",
-            "manufacturer": "Multizone Climate",
-            "model": "Main Controller",
-        }
-
-    @property
-    def temperature_unit(self) -> str:
-        """Return the unit of measurement."""
-        return UnitOfTemperature.CELSIUS
-
-    @property
-    def current_temperature(self) -> float | None:
-        """
-        Return the current temperature.
-
-        Returns:
-            float: Current temperature from main climate entity
-        """
-        data = self.coordinator.get_main_climate_data()
-        if data:
-            return cast(float | None, data.get("current_temperature"))
-        return None
-
-    @property
-    def target_temperature(self) -> float | None:
-        """
-        Return the target temperature.
-
-        Returns:
-            float: Target temperature of main climate entity (calculated)
-        """
-        data = self.coordinator.get_main_climate_data()
-        if data:
-            return cast(float | None, data.get("target_temperature"))
-        return None
-
-    @property
-    def hvac_mode(self) -> HVACMode | None:
-        """
-        Return the current HVAC mode.
-
-        Returns:
-            HVACMode: Current HVAC mode (heat/cool/off)
-        """
-        data = self.coordinator.get_main_climate_data()
-        if not data:
-            return None
-
-        hvac_mode_str = data.get("hvac_mode", "").lower()
-
-        # Map from main climate entity mode
-        if hvac_mode_str in ("heat", "manual", "heating"):
-            return HVACMode.HEAT
-        if hvac_mode_str in ("cool", "cooling"):
-            return HVACMode.COOL
-        if hvac_mode_str in ("off", "anti-freeze"):
-            return HVACMode.OFF
-
-        return HVACMode.OFF
-
-    @property
-    def hvac_modes(self) -> list[HVACMode]:
-        """
-        Return the list of available HVAC modes.
-
-        Returns:
-            list: Available modes (read-only, reflects main climate)
-        """
-        return [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
-
-    @property
-    def hvac_action(self) -> HVACAction | None:
-        """
-        Return the current HVAC action.
-
-        Returns:
-            HVACAction: Current action (heating/cooling/idle/off)
-        """
-        data = self.coordinator.get_main_climate_data()
-        if not data:
-            return None
-
-        hvac_action_str = data.get("hvac_action", "").lower()
-
-        if hvac_action_str == "heating":
-            return HVACAction.HEATING
-        if hvac_action_str == "cooling":
-            return HVACAction.COOLING
-        if hvac_action_str == "idle":
-            return HVACAction.IDLE
-        if hvac_action_str == "off":
-            return HVACAction.OFF
-
-        return HVACAction.IDLE
-
-    @property
-    def supported_features(self) -> ClimateEntityFeature:
-        """
-        Return the supported features.
-
-        Returns:
-            int: Feature flags (read-only, no target temperature control)
-        """
-        # Main climate is read-only - control via main thermostat entity
-        return ClimateEntityFeature(0)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """
-        Return extra state attributes.
-
-        Returns:
-            dict: Additional attributes including outdoor temp and multizone status
-        """
-        data = self.coordinator.get_main_climate_data()
-        if not data:
-            return {}
-
-        return {
-            ATTR_OUTDOOR_TEMPERATURE: data.get("outdoor_temperature"),
-            ATTR_MULTIZONE_ENABLED: data.get("multizone_enabled", False),
-        }
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity is added to hass."""
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
 
 
 class ZoneClimateEntity(ClimateEntity):
@@ -392,10 +194,11 @@ class ZoneClimateEntity(ClimateEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
-            "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": "Multizone Climate",
+            "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
+            "name": f"Multizone Climate - {self._name}",
             "manufacturer": "Multizone Climate",
-            "model": "Main Controller",
+            "model": "Zone Controller",
+            "via_device": (DOMAIN, "main"),
         }
 
     @property
@@ -609,11 +412,31 @@ class ZoneClimateEntity(ClimateEntity):
         Update satisfaction state using state machine.
 
         Tasks:
-            - Get HVAC mode from main climate
+            - Check if multizone is enabled
+            - If disabled, set satisfaction to "unavailable"
+            - If enabled, get HVAC mode from main climate
             - Call state machine to calculate new state
             - Update internal state
         """
         if self._current_temperature is None or self._previous_temperature is None:
+            return
+
+        # Check if multizone is enabled
+        config = self.coordinator.get_config()
+        multizone_enabled = config.get("multizone_enabled", False) if config else False
+
+        # If multizone is disabled, set satisfaction to unavailable
+        # Zones control valves individually based on offsets only
+        if not multizone_enabled:
+            old_satisfaction = self._satisfaction_state
+            self._satisfaction_state = "unavailable"
+            self._temperature_direction = "stable"
+
+            if old_satisfaction != "unavailable":
+                _LOGGER.debug(
+                    "Zone %s satisfaction set to unavailable (multizone disabled)",
+                    self.zone_id,
+                )
             return
 
         # Get HVAC mode from main climate

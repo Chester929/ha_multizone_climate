@@ -107,6 +107,16 @@ class RedisClient:
         self._redis = None
         self._pool = None
 
+    @property
+    def is_connected(self) -> bool:
+        """
+        Check if Redis client is connected.
+
+        Returns:
+            bool: True if connected, False otherwise
+        """
+        return self._redis is not None
+
     def _get_key(self, key: str) -> str:
         """Generate a Redis key with the configured prefix."""
         return f"{self.key_prefix}:{key}"
@@ -277,7 +287,11 @@ class RedisClient:
             zone_id: Zone identifier
             zone_data: Zone configuration and state
 
+        Raises:
+            ValueError: If zone_id already exists
+
         Tasks:
+            - Verify zone doesn't already exist
             - Add zone_id to zones list
             - Create zone state hash
         """
@@ -286,9 +300,15 @@ class RedisClient:
             return
 
         try:
+            # Check if zone already exists (prevent silent overwrites)
+            existing_state = await self.get_zone_state(zone_id)
+            if existing_state:
+                _LOGGER.error(f"Zone {zone_id} already exists, refusing to overwrite")
+                raise ValueError(f"Zone {zone_id} already exists")
+
             zones_key = self._get_key("zones")
 
-            # Use LPOS to check if zone exists (more efficient than LRANGE)
+            # Use LPOS to check if zone exists in list (more efficient than LRANGE)
             # LPOS returns position or None if not found
             position = await self._redis.lpos(zones_key, zone_id)  # type: ignore[misc]
             if position is None:
@@ -298,8 +318,12 @@ class RedisClient:
             # Create zone state
             await self.set_zone_state(zone_id, zone_data)
             _LOGGER.info("Added zone %s", zone_id)
+        except ValueError:
+            # Re-raise ValueError for explicit zone existence errors
+            raise
         except Exception as err:
             _LOGGER.error("Failed to add zone %s: %s", zone_id, err)
+            raise
 
     async def remove_zone(self, zone_id: str) -> None:
         """

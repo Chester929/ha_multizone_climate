@@ -19,7 +19,7 @@ from .core import RedisClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE]
+PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -134,6 +134,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info(
                 f"Initial zone already exists in Redis (found {len(existing_zones)} zones), skipping creation"
             )
+
+    # Register main device in device registry
+    from homeassistant.helpers import device_registry as dr
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "main")},
+        name="Multizone Climate",
+        manufacturer="Multizone Climate",
+        model="Main Controller",
+        sw_version="0.1.6-dev",
+    )
 
     # Forward to climate platform to create zone entities
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

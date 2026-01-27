@@ -66,7 +66,10 @@
     },
     "error": {
       "entity_not_found": "The selected entity was not found in Home Assistant",
-      "redis_error": "Failed to add zone to Redis. Check logs for details."
+      "redis_error": "Failed to add zone to Redis. Check logs for details.",
+      "sensor_already_used": "This temperature sensor is already used by another zone",
+      "valve_already_used": "This valve switch is already used by another zone",
+      "zone_id_collision": "Zone ID collision detected. Please try again."
     }
   }
 }

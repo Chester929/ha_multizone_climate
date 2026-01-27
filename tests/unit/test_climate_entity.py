@@ -7,7 +7,6 @@ from homeassistant.const import ATTR_TEMPERATURE
 
 from custom_components.multizone_climate.climate import (
     ZoneClimateEntity,
-    MainClimateDevice,
 )
 
 
@@ -160,62 +159,9 @@ class TestZoneClimateEntity:
 
         attrs = entity.extra_state_attributes
 
-        # Check attributes that ZoneClimateEntity actually exposes
         assert "satisfaction" in attrs
         assert attrs["satisfaction"] == "satisfied"
         assert "valve_state" in attrs
         assert "priority" in attrs
         assert "is_fallback_valve" in attrs
 
-
-class TestMainClimateDevice:
-    """Test the MainClimateDevice class."""
-
-    @pytest.fixture
-    def mock_coordinator(self):
-        """Create mock coordinator."""
-        coordinator = MagicMock()
-        coordinator.backend_url = "http://localhost:8080"
-        coordinator.get_config = MagicMock(
-            return_value={
-                "main_climate_entity": "climate.main_thermostat",
-                "outdoor_temperature_sensor": "sensor.outdoor_temp",
-            }
-        )
-        coordinator.data = {
-            "current_temperature": 21.0,
-            "target_temperature": 22.0,
-            "hvac_mode": "heat",
-            "hvac_action": "heating",
-            "outdoor_temperature": 5.0,
-            "multizone_enabled": True,
-        }
-        return coordinator
-
-    @pytest.fixture
-    def mock_redis_client(self):
-        """Create mock Redis client."""
-        return MagicMock()
-
-    @pytest.fixture
-    def mock_config_entry(self):
-        """Create mock config entry."""
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry_id"
-        return config_entry
-
-    def test_main_device_initialization(
-        self, mock_coordinator, mock_redis_client, mock_config_entry
-    ):
-        """Test main device initializes with correct properties."""
-        config = {"main_climate_entity": "climate.main_thermostat"}
-
-        entity = MainClimateDevice(
-            coordinator=mock_coordinator,
-            redis_client=mock_redis_client,
-            config=config,
-            config_entry=mock_config_entry,
-        )
-
-        assert entity.name == "Multizone Climate Main"
-        assert entity._attr_should_poll is False

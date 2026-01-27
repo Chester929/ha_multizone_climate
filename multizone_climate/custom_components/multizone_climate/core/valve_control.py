@@ -183,13 +183,14 @@ class ValveController:
         """
         Determine valve actions when multizone is disabled.
 
-        In individual control mode (multizone disabled), each zone manages its own valve:
-        - Underheated/Undercooled: open valve
-        - Overheated/Overcooled: close valve
-        - Satisfied: open valve to maintain temperature (no dynamic boost in this mode)
+        In individual control mode (multizone disabled), each zone manages its own valve
+        based on temperature difference and configured offsets:
+        - If current < target - opening_offset: open valve
+        - If current > target + closing_offset: close valve
+        - Otherwise: maintain current state
 
         Args:
-            zones: Zone list
+            zones: Zone list with current_temperature, target_temperature, opening_offset, closing_offset
             hvac_state: HVAC state
 
         Returns:
@@ -205,30 +206,37 @@ class ValveController:
             if not valve_id:
                 continue
 
-            satisfaction = zone.get("satisfaction", "unknown")
+            current_temp = zone.get("current_temperature")
+            target_temp = zone.get("target_temperature")
+            opening_offset = zone.get("opening_offset", 0.3)
+            closing_offset = zone.get("closing_offset", 0.3)
 
-            # Per README: Each zone manages its own valve based on satisfaction
-            # Satisfied zones should have valves OPEN to maintain temperature
+            # Skip if temperatures not available
+            if current_temp is None or target_temp is None:
+                continue
+
+            # Determine valve action based on temperature and offsets
             if hvac_state.upper() == "HEATING":
-                if satisfaction == "underheated":
+                # Open valve if temperature is below target minus opening offset
+                if current_temp < target_temp - opening_offset:
                     actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
-                elif satisfaction == "overheated":
+                # Close valve if temperature is above target plus closing offset
+                elif current_temp > target_temp + closing_offset:
                     actions.append(
                         {"valve_id": valve_id, "action": "close", "delay": 0}
                     )
-                elif satisfaction == "satisfied":
-                    # Satisfied zones keep valves open to maintain temperature
-                    actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
+                # Otherwise maintain current state (no action)
+
             elif hvac_state.upper() == "COOLING":
-                if satisfaction == "undercooled":
+                # Open valve if temperature is above target plus opening offset
+                if current_temp > target_temp + opening_offset:
                     actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
-                elif satisfaction == "overcooled":
+                # Close valve if temperature is below target minus closing offset
+                elif current_temp < target_temp - closing_offset:
                     actions.append(
                         {"valve_id": valve_id, "action": "close", "delay": 0}
                     )
-                elif satisfaction == "satisfied":
-                    # Satisfied zones keep valves open to maintain temperature
-                    actions.append({"valve_id": valve_id, "action": "open", "delay": 0})
+                # Otherwise maintain current state (no action)
 
         return actions
 

@@ -117,10 +117,10 @@ class MultizoneTemperatureSensor(SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "identifiers": {(DOMAIN, "main")},
             "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
+            "manufacturer": "Multizone Climate",
+            "model": "Main Controller",
         }
 
     @property
@@ -185,10 +185,10 @@ class MultizoneTextSensor(SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "identifiers": {(DOMAIN, "main")},
             "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
+            "manufacturer": "Multizone Climate",
+            "model": "Main Controller",
         }
 
     @property
@@ -267,9 +267,9 @@ class ZoneTemperatureSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
             "name": self.zone_name,
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Zone",
-            "via_device": (DOMAIN, "multizone_climate_main"),
+            "manufacturer": "Multizone Climate",
+            "model": "Zone Controller",
+            "via_device": (DOMAIN, "main"),
         }
 
     @property
@@ -334,9 +334,9 @@ class ZoneTextSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
             "name": self.zone_name,
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Zone",
-            "via_device": (DOMAIN, "multizone_climate_main"),
+            "manufacturer": "Multizone Climate",
+            "model": "Zone Controller",
+            "via_device": (DOMAIN, "main"),
         }
 
     @property
