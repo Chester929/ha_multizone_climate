@@ -1,0 +1,34 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Running cleanup for Multizone Climate Add-on..."
+
+# Determine custom components directory
+if [ -d "/homeassistant" ]; then
+    CUSTOM_COMPONENTS_DIR="/homeassistant/custom_components"
+elif [ -d "/config" ]; then
+    CUSTOM_COMPONENTS_DIR="/config/custom_components"
+    bashio::log.info "Using /config path for custom components (legacy mount)"
+else
+    bashio::log.warning "Neither /homeassistant nor /config directory found, skipping cleanup"
+    exit 0
+fi
+
+COMPONENT_NAME="multizone_climate"
+COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/${COMPONENT_NAME}"
+
+# Check if custom component exists and remove it
+if [ -d "${COMPONENT_DIR}" ]; then
+    bashio::log.info "Removing custom component from ${COMPONENT_DIR}..."
+    
+    rm -rf "${COMPONENT_DIR}" || {
+        bashio::log.error "Failed to remove custom component directory ${COMPONENT_DIR}"
+        exit 1
+    }
+    
+    bashio::log.info "Custom component removed successfully!"
+    bashio::log.warning "Please restart Home Assistant and remove the Multizone Climate integration from Settings -> Devices & Services to complete cleanup"
+else
+    bashio::log.info "Custom component not found at ${COMPONENT_DIR}, nothing to clean up"
+fi
+
+bashio::log.info "Multizone Climate Add-on cleanup complete"

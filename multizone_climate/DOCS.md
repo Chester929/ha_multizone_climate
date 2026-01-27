@@ -6,6 +6,7 @@ Advanced multi-zone HVAC management for Home Assistant.
 
 - [Overview](#overview)
 - [Installation](#installation)
+- [Uninstallation](#uninstallation)
 - [Configuration](#configuration)
   - [Integration Settings](#integration-settings)
   - [Redis Settings](#redis-settings)
@@ -95,6 +96,43 @@ The add-on automatically installs the custom integration to `/config/custom_comp
 2. Click **+ ADD INTEGRATION**
 3. Search for "Multizone Climate"
 4. Follow the configuration wizard to add zones (see [Zone Configuration](#zone-configuration))
+
+---
+
+## Uninstallation
+
+To completely remove the Multizone Climate add-on and integration from your system:
+
+### Step 1: Remove the Integration
+
+1. Navigate to **Settings** → **Devices & Services**
+2. Find the "Multizone Climate" integration
+3. Click the three dots (⋮) menu
+4. Select **Delete**
+5. Confirm the deletion
+
+This will remove all zone climate entities and devices created by the integration.
+
+### Step 2: Stop and Uninstall the Add-on
+
+1. Navigate to **Settings** → **Add-ons** → **Multizone Climate**
+2. Click **STOP** and wait for the add-on to stop completely
+3. Click **UNINSTALL**
+4. Confirm the uninstallation
+
+**Automatic Cleanup**: When the add-on is stopped or uninstalled, it automatically:
+- Removes the custom component from `/homeassistant/custom_components/multizone_climate/` (or `/config/custom_components/multizone_climate/`)
+- Cleans up the custom component files
+
+### Step 3: Restart Home Assistant
+
+1. Navigate to **Settings** → **System**
+2. Click **RESTART**
+3. Wait for Home Assistant to restart
+
+This completes the removal of all Multizone Climate components from your system.
+
+**Note**: If you had configured zones with the integration, those zone climate entities will be automatically removed when you delete the integration in Step 1. Device entries in the device registry are also automatically cleaned up by Home Assistant.
 
 ---
 
