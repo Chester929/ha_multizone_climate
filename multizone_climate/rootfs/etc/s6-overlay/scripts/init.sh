@@ -48,6 +48,8 @@ fi
 
 # Function to compare semantic versions
 # Returns 0 if version1 > version2, 1 otherwise
+# Note: When comparing different pre-release suffixes (e.g., alpha vs beta) of the same version,
+# neither is considered greater as there's no standard ordering for pre-release identifiers
 version_greater_than() {
     local v1=$1
     local v2=$2
@@ -57,9 +59,11 @@ version_greater_than() {
     v1_numeric=$(echo "$v1" | cut -d'-' -f1)
     v2_numeric=$(echo "$v2" | cut -d'-' -f1)
     
-    # Extract suffixes
-    v1_suffix=$(echo "$v1" | grep -o '\-.*' || echo "")
-    v2_suffix=$(echo "$v2" | grep -o '\-.*' || echo "")
+    # Extract suffixes using bash parameter expansion
+    v1_suffix=""
+    v2_suffix=""
+    [[ "$v1" == *-* ]] && v1_suffix="${v1#*-}"
+    [[ "$v2" == *-* ]] && v2_suffix="${v2#*-}"
     
     # Split versions into arrays
     IFS='.' read -ra V1 <<< "$v1_numeric"
