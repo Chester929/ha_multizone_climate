@@ -119,8 +119,8 @@ class MultizoneTemperatureSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
             "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
+            "manufacturer": "Multizone Climate",
+            "model": "Main Controller",
         }
 
     @property
@@ -187,8 +187,8 @@ class MultizoneTextSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, "multizone_climate_main")},
             "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
+            "manufacturer": "Multizone Climate",
+            "model": "Main Controller",
         }
 
     @property
@@ -267,8 +267,8 @@ class ZoneTemperatureSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
             "name": self.zone_name,
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Zone",
+            "manufacturer": "Multizone Climate",
+            "model": "Zone Controller",
             "via_device": (DOMAIN, "multizone_climate_main"),
         }
 
@@ -334,8 +334,8 @@ class ZoneTextSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, f"zone_{self.zone_id}")},
             "name": self.zone_name,
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Zone",
+            "manufacturer": "Multizone Climate",
+            "model": "Zone Controller",
             "via_device": (DOMAIN, "multizone_climate_main"),
         }
 

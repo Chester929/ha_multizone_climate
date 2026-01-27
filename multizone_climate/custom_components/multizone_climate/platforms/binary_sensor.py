@@ -7,8 +7,11 @@ import logging
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,33 +25,46 @@ async def async_setup_entry(
     Set up binary sensor entities.
 
     Creates binary sensors for:
-    - System status (OK/Error)
-    - Redis connection status
-    - Minimum valves requirement status
+    - Multizone enabled status
+    - System status monitoring
     """
-    # For now, binary sensors are optional
-    # Can be implemented later if needed for status monitoring
-    _LOGGER.debug("Binary sensor platform setup (no entities yet)")
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator = data["coordinator"]
+
+    entities = [
+        MultizoneEnabledSensor(coordinator, config_entry),
+    ]
+
+    async_add_entities(entities)
+    _LOGGER.info("Added %d binary sensor entities", len(entities))
 
 
-class MultizoneBinarySensor(BinarySensorEntity):
-    """Base binary sensor for multizone climate."""
+class MultizoneEnabledSensor(BinarySensorEntity):
+    """Binary sensor showing multizone enabled status."""
 
-    def __init__(self, coordinator: Any, sensor_type: str) -> None:
+    def __init__(self, coordinator: Any, config_entry: ConfigEntry) -> None:
         """
-        Initialize binary sensor.
+        Initialize multizone enabled sensor.
 
         Args:
             coordinator: Data update coordinator
-            sensor_type: Type of binary sensor
+            config_entry: Config entry for device info
         """
         self.coordinator = coordinator
-        self.sensor_type = sensor_type
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{DOMAIN}_multizone_enabled"
+        self._attr_name = "Multizone Enabled"
+        self._attr_should_poll = False
 
     @property
-    def name(self) -> str:
-        """Return sensor name."""
-        return f"Multizone {self.sensor_type}"
+    def device_info(self) -> DeviceInfo:
+        """Return device information for grouping entities."""
+        return {
+            "identifiers": {(DOMAIN, "main")},
+            "name": "Multizone Climate",
+            "manufacturer": "Multizone Climate",
+            "model": "Main Controller",
+        }
 
     @property
     def is_on(self) -> bool:
@@ -56,12 +72,20 @@ class MultizoneBinarySensor(BinarySensorEntity):
         Return binary sensor state.
 
         Returns:
-            bool: True if condition is met
+            bool: True if multizone is enabled
         """
-        # TODO: Get state from coordinator
+        data = self.coordinator.get_main_climate_data()
+        if data:
+            return bool(data.get("multizone_enabled", False))
         return False
 
-    async def async_update(self) -> None:
-        """Update sensor state from coordinator."""
-        # TODO: Request coordinator update
-        pass
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to hass."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
+        )
