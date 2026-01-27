@@ -20,6 +20,7 @@ class TestMultizoneDisabledBehavior:
         redis_client.get_zone_ids = AsyncMock()
         redis_client.get_zone_state = AsyncMock()
         redis_client.get_main_climate_state = AsyncMock()
+        redis_client.set_main_climate_state = AsyncMock()
         redis_client.set_valve_lock = AsyncMock()
         redis_client.is_valve_locked = AsyncMock(return_value=False)
         return redis_client
@@ -29,6 +30,7 @@ class TestMultizoneDisabledBehavior:
         """Create mock hass instance."""
         hass = MagicMock()
         hass.services = MagicMock()
+        hass.services.async_call = AsyncMock()
         hass.loop = MagicMock()
         hass.loop.time = MagicMock(return_value=1234567890.0)
         return hass
