@@ -308,12 +308,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
                 zone_id = str(uuid.uuid4())
 
-                # Get Redis client from hass.data (already fetched above)
-                data = self.hass.data[DOMAIN][self._config_entry.entry_id]
-                redis_client = data["redis_client"]
-
                 # Paranoid check: verify zone_id doesn't already exist (UUID collision)
-                existing_zones = await redis_client.get_zone_ids()
+                # Reuse redis_client and existing_zones from above
                 if zone_id in existing_zones:
                     _LOGGER.error(f"UUID collision detected: {zone_id}")
                     errors["base"] = "zone_id_collision"

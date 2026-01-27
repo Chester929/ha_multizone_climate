@@ -52,8 +52,8 @@ class MultizoneEnabledSensor(BinarySensorEntity):
         """
         self.coordinator = coordinator
         self._config_entry = config_entry
-        self._attr_unique_id = f"{DOMAIN}_multizone_enabled"
-        self._attr_name = "Multizone Enabled"
+        self._attr_unique_id = f"{DOMAIN}_multizone_enabled_status"
+        self._attr_name = "Multizone Enabled Status"
         self._attr_should_poll = False
 
     @property

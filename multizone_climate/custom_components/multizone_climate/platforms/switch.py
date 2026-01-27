@@ -58,10 +58,10 @@ class MultizoneEnableSwitch(SwitchEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "identifiers": {(DOMAIN, "main")},
             "name": "Multizone Climate",
-            "manufacturer": "Chester929",
-            "model": "Multizone Climate Controller",
+            "manufacturer": "Multizone Climate",
+            "model": "Main Controller",
         }
 
     @property

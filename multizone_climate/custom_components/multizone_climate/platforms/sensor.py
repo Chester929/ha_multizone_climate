@@ -117,7 +117,7 @@ class MultizoneTemperatureSensor(SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "identifiers": {(DOMAIN, "main")},
             "name": "Multizone Climate",
             "manufacturer": "Multizone Climate",
             "model": "Main Controller",
@@ -185,7 +185,7 @@ class MultizoneTextSensor(SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for grouping entities."""
         return {
-            "identifiers": {(DOMAIN, "multizone_climate_main")},
+            "identifiers": {(DOMAIN, "main")},
             "name": "Multizone Climate",
             "manufacturer": "Multizone Climate",
             "model": "Main Controller",
@@ -269,7 +269,7 @@ class ZoneTemperatureSensor(SensorEntity):
             "name": self.zone_name,
             "manufacturer": "Multizone Climate",
             "model": "Zone Controller",
-            "via_device": (DOMAIN, "multizone_climate_main"),
+            "via_device": (DOMAIN, "main"),
         }
 
     @property
@@ -336,7 +336,7 @@ class ZoneTextSensor(SensorEntity):
             "name": self.zone_name,
             "manufacturer": "Multizone Climate",
             "model": "Zone Controller",
-            "via_device": (DOMAIN, "multizone_climate_main"),
+            "via_device": (DOMAIN, "main"),
         }
 
     @property
