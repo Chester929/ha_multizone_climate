@@ -107,6 +107,16 @@ class RedisClient:
         self._redis = None
         self._pool = None
 
+    @property
+    def is_connected(self) -> bool:
+        """
+        Check if Redis client is connected.
+
+        Returns:
+            bool: True if connected, False otherwise
+        """
+        return self._redis is not None
+
     def _get_key(self, key: str) -> str:
         """Generate a Redis key with the configured prefix."""
         return f"{self.key_prefix}:{key}"

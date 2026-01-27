@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 import logging
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
@@ -110,7 +110,7 @@ class RedisConnectionSensor(BinarySensorEntity):
         self._config_entry = config_entry
         self._attr_unique_id = f"{DOMAIN}_redis_connection"
         self._attr_name = "Redis Connection"
-        self._attr_device_class = "connectivity"
+        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
         self._attr_should_poll = True  # Poll to check connection status
 
     @property
@@ -131,10 +131,8 @@ class RedisConnectionSensor(BinarySensorEntity):
         Returns:
             bool: True if Redis is connected
         """
-        # Check if Redis client is connected
-        if self.redis_client and hasattr(self.redis_client, '_redis'):
-            return self.redis_client._redis is not None
-        return False
+        # Check if Redis client is connected using public property
+        return self.redis_client.is_connected if self.redis_client else False
 
     @property
     def available(self) -> bool:
@@ -157,7 +155,7 @@ class MinimumValvesSensor(BinarySensorEntity):
         self._config_entry = config_entry
         self._attr_unique_id = f"{DOMAIN}_minimum_valves_ok"
         self._attr_name = "Minimum Valves Requirement"
-        self._attr_device_class = "safety"
+        self._attr_device_class = BinarySensorDeviceClass.SAFETY
         self._attr_should_poll = False
 
     @property
