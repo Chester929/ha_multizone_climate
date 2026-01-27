@@ -14,6 +14,9 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+# Invalid sensor states that should be ignored
+INVALID_SENSOR_STATES = ("unknown", "unavailable", None, "")
+
 
 class MultizoneClimateCoordinator(DataUpdateCoordinator):
     """Coordinator to poll backend for commands and manage state updates."""
@@ -55,16 +58,15 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             outdoor_sensor_entity_id = self.config.get("outdoor_temperature_sensor")
             if outdoor_sensor_entity_id:
                 outdoor_temp_state = self.hass.states.get(outdoor_sensor_entity_id)
-                # Check for valid state - exclude unknown, unavailable, None, and empty string
-                if outdoor_temp_state and outdoor_temp_state.state not in (
-                    "unknown", "unavailable", None, ""
-                ):
+                # Check for valid state - exclude invalid states
+                if outdoor_temp_state and outdoor_temp_state.state not in INVALID_SENSOR_STATES:
                     try:
                         outdoor_temp = float(outdoor_temp_state.state)
                         # Send outdoor temperature to backend
                         await self._send_outdoor_temperature(outdoor_temp)
                         # Also store in state_data for sensors to read
-                        state_data.setdefault("main_climate", {})["outdoor_temperature"] = outdoor_temp
+                        main_climate = state_data.setdefault("main_climate", {})
+                        main_climate["outdoor_temperature"] = outdoor_temp
                     except (ValueError, TypeError):
                         _LOGGER.warning(
                             f"Invalid outdoor temperature value: {outdoor_temp_state.state}"
