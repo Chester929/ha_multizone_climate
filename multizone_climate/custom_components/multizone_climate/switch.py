@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from ..const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP
+from .const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP
 
 _LOGGER = logging.getLogger(__name__)
 
