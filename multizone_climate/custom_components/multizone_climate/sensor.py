@@ -129,7 +129,7 @@ class MultizoneTemperatureSensor(SensorEntity):
         Return sensor state.
 
         Returns:
-            State value from coordinator data
+            State value from coordinator data, or None if not available
         """
         if not self.coordinator.data:
             return None
@@ -137,12 +137,20 @@ class MultizoneTemperatureSensor(SensorEntity):
         main_climate = self.coordinator.data.get("main_climate", {})
 
         if self.sensor_type == "main_current_temperature":
-            return cast(float | None, main_climate.get("current_temperature"))
-        if self.sensor_type == "main_target_temperature":
-            return cast(float | None, main_climate.get("target_temperature"))
-        if self.sensor_type == "outdoor_temperature":
-            return cast(float | None, main_climate.get("outdoor_temperature"))
+            value = main_climate.get("current_temperature")
+        elif self.sensor_type == "main_target_temperature":
+            value = main_climate.get("target_temperature")
+        elif self.sensor_type == "outdoor_temperature":
+            value = main_climate.get("outdoor_temperature")
+        else:
+            return None
 
+        # Return None if value is not present or not a number
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        
         return None
 
     @callback
@@ -278,13 +286,21 @@ class ZoneTemperatureSensor(SensorEntity):
         Return sensor state.
 
         Returns:
-            State value from coordinator data
+            State value from coordinator data, or None if not available
         """
         zone_data = self.coordinator.get_zone_data(self.zone_id)
         if not zone_data:
             return None
 
-        return cast(float | None, zone_data.get(self.sensor_type))
+        value = zone_data.get(self.sensor_type)
+        
+        # Return None if value is not present or not a number
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        
+        return None
 
     @callback
     def _handle_coordinator_update(self) -> None:

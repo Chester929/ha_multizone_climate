@@ -86,7 +86,10 @@ class MultizoneEnableSwitch(SwitchEntity):
         """
         # Check if at least one zone is ON
         zones = self.coordinator.data.get("zones", {}) if self.coordinator.data else {}
-        has_on_zone = any(zone.get("is_on", False) for zone in zones.values())
+        has_on_zone = any(
+            zone.get("enabled", "false") in ["true", "True", "1"]
+            for zone in zones.values()
+        )
 
         if not has_on_zone:
             _LOGGER.warning("Cannot enable multizone: no zones are turned ON")
