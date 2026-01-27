@@ -47,14 +47,28 @@ if [ ! -d "${CUSTOM_COMPONENTS_DIR}" ]; then
 fi
 
 # Function to compare semantic versions
-# Returns 0 if version1 > version2, 1 otherwise
+# Returns 0 if version1 > version2, 1 otherwise (1 means equal or less than)
+# Note: When comparing different pre-release suffixes (e.g., alpha vs beta) of the same version,
+# neither is considered greater as there's no standard ordering for pre-release identifiers
 version_greater_than() {
     local v1=$1
     local v2=$2
     
+    # Strip any suffix (e.g., -dev, -alpha, -beta, -rc)
+    # Extract only the numeric version part before any hyphen using bash parameter expansion
+    local v1_numeric="${v1%%-*}"
+    local v2_numeric="${v2%%-*}"
+    
+    # Extract suffixes using bash parameter expansion
+    # Initialize as empty (for versions without suffixes), then conditionally assign
+    local v1_suffix=""
+    local v2_suffix=""
+    [[ "$v1" == *-* ]] && v1_suffix="${v1#*-}"
+    [[ "$v2" == *-* ]] && v2_suffix="${v2#*-}"
+    
     # Split versions into arrays
-    IFS='.' read -ra V1 <<< "$v1"
-    IFS='.' read -ra V2 <<< "$v2"
+    IFS='.' read -ra V1 <<< "$v1_numeric"
+    IFS='.' read -ra V2 <<< "$v2_numeric"
     
     # Compare major, minor, patch
     for i in 0 1 2; do
@@ -68,7 +82,17 @@ version_greater_than() {
         fi
     done
     
-    # Versions are equal
+    # Numeric versions are equal, check suffixes
+    # A version without a suffix (release) is greater than a version with a suffix (pre-release)
+    if [ -z "$v1_suffix" ] && [ -n "$v2_suffix" ]; then
+        # v1 is release, v2 is pre-release -> v1 > v2
+        return 0
+    elif [ -n "$v1_suffix" ] && [ -z "$v2_suffix" ]; then
+        # v1 is pre-release, v2 is release -> v1 < v2
+        return 1
+    fi
+    
+    # Both have suffixes or both don't have suffixes - they're equal
     return 1
 }
 
