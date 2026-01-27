@@ -165,3 +165,213 @@ class TestZoneClimateEntity:
         assert "priority" in attrs
         assert "is_fallback_valve" in attrs
 
+    @pytest.mark.asyncio
+    async def test_turn_off_zone(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test turning off a zone (setting HVAC mode to OFF)."""
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        # Mock get_zone_ids to return just this zone
+        mock_redis_client.get_zone_ids = AsyncMock(return_value=["zone1"])
+
+        # Initially enabled
+        assert entity._enabled is True
+        assert entity.hvac_mode == HVACMode.HEAT
+
+        # Mock async_write_ha_state to avoid threading issues
+        with patch.object(entity, "async_write_ha_state"):
+            await entity.async_set_hvac_mode(HVACMode.OFF)
+
+        # Verify zone is disabled
+        assert entity._enabled is False
+        assert entity.hvac_mode == HVACMode.OFF
+
+        # Verify Redis was updated
+        mock_redis_client.set_zone_state.assert_awaited()
+
+        # Verify job was enqueued
+        mock_redis_client.enqueue_job.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_turn_on_zone(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test turning on a zone (setting HVAC mode to HEAT)."""
+        # Start with disabled zone
+        zone_config["enabled"] = "false"
+        
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        # Initially disabled
+        assert entity._enabled is False
+        assert entity.hvac_mode == HVACMode.OFF
+
+        # Mock async_write_ha_state to avoid threading issues
+        with patch.object(entity, "async_write_ha_state"):
+            await entity.async_set_hvac_mode(HVACMode.HEAT)
+
+        # Verify zone is enabled
+        assert entity._enabled is True
+        assert entity.hvac_mode == HVACMode.HEAT
+
+        # Verify Redis was updated
+        mock_redis_client.set_zone_state.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cannot_disable_last_fallback_zone(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test that last fallback zone cannot be disabled."""
+        # Make this a fallback zone
+        zone_config["is_fallback_valve"] = True
+        
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        # Mock get_zone_ids to return only this zone
+        mock_redis_client.get_zone_ids = AsyncMock(return_value=["zone1"])
+        
+        # Mock coordinator to require at least 1 fallback zone
+        mock_coordinator.get_config = MagicMock(
+            return_value={"min_valves_open": 1}
+        )
+
+        # Try to disable - should raise ValueError
+        with pytest.raises(ValueError, match="Cannot disable this fallback zone"):
+            with patch.object(entity, "async_write_ha_state"):
+                await entity.async_set_hvac_mode(HVACMode.OFF)
+
+        # Verify zone is still enabled
+        assert entity._enabled is True
+
+    @pytest.mark.asyncio
+    async def test_can_disable_fallback_zone_when_others_exist(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test that fallback zone can be disabled when other fallback zones exist."""
+        # Make this a fallback zone
+        zone_config["is_fallback_valve"] = True
+        
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        # Mock get_zone_ids to return two zones
+        mock_redis_client.get_zone_ids = AsyncMock(return_value=["zone1", "zone2"])
+        
+        # Mock get_zone_state for zone2 (another enabled fallback zone)
+        async def mock_get_zone_state(zone_id):
+            if zone_id == "zone2":
+                return {
+                    "id": "zone2",
+                    "is_fallback_valve": True,
+                    "enabled": "true",
+                }
+            return None
+        
+        mock_redis_client.get_zone_state = AsyncMock(side_effect=mock_get_zone_state)
+        
+        # Mock coordinator to require at least 1 fallback zone
+        mock_coordinator.get_config = MagicMock(
+            return_value={"min_valves_open": 1}
+        )
+
+        # Should be able to disable
+        with patch.object(entity, "async_write_ha_state"):
+            await entity.async_set_hvac_mode(HVACMode.OFF)
+
+        # Verify zone is disabled
+        assert entity._enabled is False
+
+    def test_hvac_modes_includes_off(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test that HVAC modes includes both HEAT and OFF."""
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        assert HVACMode.HEAT in entity.hvac_modes
+        assert HVACMode.OFF in entity.hvac_modes
+
+    def test_supported_features_includes_turn_on_off(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test that supported features includes TURN_ON and TURN_OFF."""
+        from homeassistant.components.climate import ClimateEntityFeature
+        
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        features = entity.supported_features
+        assert features & ClimateEntityFeature.TURN_ON
+        assert features & ClimateEntityFeature.TURN_OFF
+        assert features & ClimateEntityFeature.TARGET_TEMPERATURE
+
