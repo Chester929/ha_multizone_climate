@@ -20,15 +20,15 @@ COMPONENT_DIR="${CUSTOM_COMPONENTS_DIR}/${COMPONENT_NAME}"
 if [ -d "${COMPONENT_DIR}" ]; then
     bashio::log.info "Removing custom component from ${COMPONENT_DIR}..."
     
-    rm -rf "${COMPONENT_DIR}" || {
-        bashio::log.error "Failed to remove custom component directory ${COMPONENT_DIR}"
-        exit 1
-    }
-    
-    bashio::log.info "Custom component removed successfully!"
-    bashio::log.warning "Please restart Home Assistant and remove the Multizone Climate integration from Settings -> Devices & Services to complete cleanup"
+    if rm -rf "${COMPONENT_DIR}"; then
+        bashio::log.info "Custom component removed successfully!"
+        bashio::log.info "After restarting Home Assistant, you can remove the Multizone Climate integration from Settings -> Devices & Services if needed"
+    else
+        bashio::log.warning "Failed to remove custom component directory ${COMPONENT_DIR}, continuing with shutdown"
+    fi
 else
     bashio::log.info "Custom component not found at ${COMPONENT_DIR}, nothing to clean up"
 fi
 
 bashio::log.info "Multizone Climate Add-on cleanup complete"
+exit 0
