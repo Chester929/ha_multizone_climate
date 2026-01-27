@@ -98,7 +98,7 @@ class TestMultizoneDisabledBehavior:
     async def test_valves_controlled_individually_when_multizone_disabled(
         self, mock_redis_client
     ):
-        """Test that zones control valves individually when multizone is disabled."""
+        """Test that zones control valves by offsets when multizone is disabled."""
         config = {
             "multizone_enabled": False,
             "min_valves_open": 1,
@@ -112,27 +112,33 @@ class TestMultizoneDisabledBehavior:
                 "id": "zone1",
                 "state": "ON",
                 "valve_id": "switch.zone1_valve",
-                "current_temperature": 19.0,
+                "current_temperature": 19.0,  # Below target - opening_offset (21.0 - 0.3 = 20.7)
                 "target_temperature": 21.0,
-                "satisfaction": "underheated",
+                "opening_offset": 0.3,
+                "closing_offset": 0.3,
+                "satisfaction": "unavailable",  # Not used when multizone disabled
                 "valve_state": "closed",
             },
             {
                 "id": "zone2",
                 "state": "ON",
                 "valve_id": "switch.zone2_valve",
-                "current_temperature": 22.5,
+                "current_temperature": 22.5,  # Above target + closing_offset (21.0 + 0.3 = 21.3)
                 "target_temperature": 21.0,
-                "satisfaction": "overheated",
+                "opening_offset": 0.3,
+                "closing_offset": 0.3,
+                "satisfaction": "unavailable",  # Not used when multizone disabled
                 "valve_state": "open",
             },
             {
                 "id": "zone3",
                 "state": "ON",
                 "valve_id": "switch.zone3_valve",
-                "current_temperature": 21.0,
+                "current_temperature": 21.0,  # Within deadband
                 "target_temperature": 21.0,
-                "satisfaction": "satisfied",
+                "opening_offset": 0.3,
+                "closing_offset": 0.3,
+                "satisfaction": "unavailable",  # Not used when multizone disabled
                 "valve_state": "closed",
             },
         ]
@@ -143,16 +149,68 @@ class TestMultizoneDisabledBehavior:
             multizone_enabled=False,
         )
 
-        # Should return individual zone valve actions
-        # Underheated -> open
-        # Overheated -> close
-        # Satisfied -> open (to maintain)
-        assert len(actions) == 3
+        # Should control valves by offsets only:
+        # Zone1: 19.0 < 21.0 - 0.3 (20.7) -> open
+        # Zone2: 22.5 > 21.0 + 0.3 (21.3) -> close
+        # Zone3: 21.0 within deadband (20.7 to 21.3) -> no action
+        assert len(actions) == 2
 
         action_map = {action["valve_id"]: action["action"] for action in actions}
-        assert action_map["switch.zone1_valve"] == "open"  # underheated
-        assert action_map["switch.zone2_valve"] == "close"  # overheated
-        assert action_map["switch.zone3_valve"] == "open"  # satisfied (maintain)
+        assert action_map["switch.zone1_valve"] == "open"  # too cold
+        assert action_map["switch.zone2_valve"] == "close"  # too hot
+        # zone3 should not be in actions (within deadband)
+
+    @pytest.mark.asyncio
+    async def test_satisfaction_unavailable_when_multizone_disabled(
+        self, mock_redis_client, mock_hass
+    ):
+        """Test that satisfaction state is unavailable when multizone is disabled."""
+        from unittest.mock import MagicMock, AsyncMock
+        from custom_components.multizone_climate.climate import ZoneClimateEntity
+
+        # Mock coordinator
+        mock_coordinator = MagicMock()
+        mock_coordinator.get_config = MagicMock(
+            return_value={"multizone_enabled": False, "satisfaction_eps": 0.0}
+        )
+        mock_coordinator.get_main_climate_data = MagicMock(return_value={})
+
+        # Mock config entry
+        mock_config_entry = MagicMock()
+        mock_config_entry.entry_id = "test_entry"
+
+        # Mock redis client
+        mock_redis_client.set_zone_state = AsyncMock()
+
+        # Create zone entity
+        zone_config = {
+            "id": "test_zone",
+            "name": "Test Zone",
+            "temperature_sensor_entity_id": "sensor.test_temp",
+            "valve_switch_entity_id": "switch.test_valve",
+            "target_temperature": 21.0,
+            "opening_offset": 0.3,
+            "closing_offset": 0.3,
+            "priority": 50,
+            "is_fallback_valve": False,
+            "current_temperature": 20.0,
+        }
+
+        zone_entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="test_zone",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+
+        # Update satisfaction state
+        await zone_entity._update_satisfaction_state()
+
+        # Should be unavailable when multizone disabled
+        assert zone_entity._satisfaction_state == "unavailable"
+        assert zone_entity._temperature_direction == "stable"
 
     @pytest.mark.asyncio
     async def test_valves_use_multizone_logic_when_enabled(

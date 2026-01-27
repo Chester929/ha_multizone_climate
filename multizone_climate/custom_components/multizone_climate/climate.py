@@ -412,11 +412,31 @@ class ZoneClimateEntity(ClimateEntity):
         Update satisfaction state using state machine.
 
         Tasks:
-            - Get HVAC mode from main climate
+            - Check if multizone is enabled
+            - If disabled, set satisfaction to "unavailable"
+            - If enabled, get HVAC mode from main climate
             - Call state machine to calculate new state
             - Update internal state
         """
         if self._current_temperature is None or self._previous_temperature is None:
+            return
+
+        # Check if multizone is enabled
+        config = self.coordinator.get_config()
+        multizone_enabled = config.get("multizone_enabled", False) if config else False
+
+        # If multizone is disabled, set satisfaction to unavailable
+        # Zones control valves individually based on offsets only
+        if not multizone_enabled:
+            old_satisfaction = self._satisfaction_state
+            self._satisfaction_state = "unavailable"
+            self._temperature_direction = "stable"
+
+            if old_satisfaction != "unavailable":
+                _LOGGER.debug(
+                    "Zone %s satisfaction set to unavailable (multizone disabled)",
+                    self.zone_id,
+                )
             return
 
         # Get HVAC mode from main climate
