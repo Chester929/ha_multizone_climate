@@ -211,3 +211,11 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             # Return the value only if it's a dict, else None
             return value if isinstance(value, dict) else None
         return None
+
+    def get_zone_data(self, zone_id: str) -> dict | None:
+        """Get zone data from coordinator data."""
+        if self.data:
+            zones = self.data.get("zones", {})
+            if isinstance(zones, dict):
+                return zones.get(zone_id)
+        return None
