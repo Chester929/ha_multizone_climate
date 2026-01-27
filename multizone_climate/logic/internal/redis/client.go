@@ -72,6 +72,11 @@ func (c *Client) LPop(ctx context.Context, key string) (string, error) {
 	return c.rdb.LPop(ctx, key).Result()
 }
 
+// LLen returns the length of a list
+func (c *Client) LLen(ctx context.Context, key string) (int64, error) {
+	return c.rdb.LLen(ctx, key).Result()
+}
+
 // Exists checks if a key exists
 func (c *Client) Exists(ctx context.Context, keys ...string) (int64, error) {
 	return c.rdb.Exists(ctx, keys...).Result()
