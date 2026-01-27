@@ -34,7 +34,7 @@ class RedisClient:
         port: int,
         password: str | None = None,
         db: int = 0,
-        key_prefix: str = "ha_multizone",
+        key_prefix: str = "multizone",
         max_connections: int = 10,
         job_status_ttl: int = 900,
     ) -> None:
