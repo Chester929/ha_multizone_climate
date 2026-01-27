@@ -95,7 +95,7 @@ class MultizoneTemperatureSensor(SensorEntity):
 
         Args:
             coordinator: Data update coordinator
-            sensor_type: Type of sensor (main_current_temperature, main_target_temperature, outdoor_temperature)
+            sensor_type: Type of sensor (main_current_temperature, main_target_temperature)
         """
         self.coordinator = coordinator
         self.sensor_type = sensor_type
@@ -109,7 +109,6 @@ class MultizoneTemperatureSensor(SensorEntity):
         type_names = {
             "main_current_temperature": "Main Current Temperature",
             "main_target_temperature": "Main Target Temperature",
-            "outdoor_temperature": "Outdoor Temperature",
         }
         self._attr_name = type_names.get(sensor_type, f"Multizone {sensor_type}")
 
@@ -140,8 +139,6 @@ class MultizoneTemperatureSensor(SensorEntity):
             value = main_climate.get("current_temperature")
         elif self.sensor_type == "main_target_temperature":
             value = main_climate.get("target_temperature")
-        elif self.sensor_type == "outdoor_temperature":
-            value = main_climate.get("outdoor_temperature")
         else:
             return None
 
@@ -209,12 +206,14 @@ class OutdoorTemperatureSensor(SensorEntity):
         
         # Read directly from the configured HA sensor (like zone sensors do)
         sensor_state = self.hass.states.get(self._outdoor_sensor_entity_id)
-        if sensor_state and sensor_state.state not in ("unknown", "unavailable", None, ""):
+        if sensor_state and sensor_state.state not in ("unknown", "unavailable"):
             try:
                 return float(sensor_state.state)
             except (ValueError, TypeError):
                 _LOGGER.warning(
-                    f"Invalid outdoor temperature value from {self._outdoor_sensor_entity_id}: {sensor_state.state}"
+                    "Invalid outdoor temperature value from %s: %s",
+                    self._outdoor_sensor_entity_id,
+                    sensor_state.state,
                 )
                 return None
         
