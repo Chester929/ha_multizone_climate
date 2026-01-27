@@ -162,8 +162,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         await coordinator.async_shutdown()
 
-        # Cleanup redis client
+        # Cleanup redis client - clear all data before disconnecting
         redis_client = hass.data[DOMAIN][entry.entry_id]["redis_client"]
+        _LOGGER.debug("Clearing Redis data for integration removal")
+        await redis_client.clear_all_data()
         await redis_client.disconnect()
 
         # Remove data
