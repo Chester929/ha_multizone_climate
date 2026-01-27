@@ -1,5 +1,5 @@
 name: "Multizone Climate"
-version: "0.1.5-dev"
+version: "0.1.6-dev"
 slug: multizone_climate
 description: "Advanced multi-zone HVAC management - Home Assistant add-on for intelligent zone control"
 arch:
