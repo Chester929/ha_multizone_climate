@@ -75,6 +75,7 @@ func main() {
 	router.HandleFunc("/api/integration/state_update", api.IntegrationStateUpdateHandler(redisClient)).Methods("POST")
 	router.HandleFunc("/api/integration/commands", api.IntegrationGetCommandsHandler(redisClient)).Methods("GET")
 	router.HandleFunc("/api/integration/commands", api.IntegrationDeleteCommandsHandler(redisClient)).Methods("DELETE")
+	router.HandleFunc("/api/integration/state", api.IntegrationGetStateHandler(redisClient)).Methods("GET")
 	logger.Info("Integration API endpoints registered")
 
 	// Integration settings endpoints (for future use if needed)

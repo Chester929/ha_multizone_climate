@@ -47,6 +47,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict:
         """Fetch commands from backend and execute them."""
         try:
+            # Fetch system state first
+            state_data = await self._fetch_system_state()
+            
             # Get pending commands from backend
             async with self.session.get(
                 f"{self.backend_url}/api/integration/commands",
@@ -58,41 +61,64 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 response_data = await response.json()
                 commands = response_data.get("commands", [])
 
-                if not commands:
-                    return {}
+                if commands:
+                    _LOGGER.info(f"Received {len(commands)} commands from backend")
 
-                _LOGGER.info(f"Received {len(commands)} commands from backend")
+                    # Execute commands
+                    executed_entities = []
+                    for command in commands:
+                        entity_id = command.get("entity_id")
+                        action = command.get("action")
+                        value = command.get("value")
 
-                # Execute commands
-                executed_entities = []
-                for command in commands:
-                    entity_id = command.get("entity_id")
-                    action = command.get("action")
-                    value = command.get("value")
+                        if not entity_id or not action:
+                            _LOGGER.warning(f"Invalid command: {command}")
+                            continue
 
-                    if not entity_id or not action:
-                        _LOGGER.warning(f"Invalid command: {command}")
-                        continue
+                        try:
+                            await self._execute_command(entity_id, action, value)
+                            executed_entities.append(entity_id)
+                            _LOGGER.info(f"Executed {action} on {entity_id}")
+                        except Exception as err:
+                            _LOGGER.error(
+                                f"Failed to execute command on {entity_id}: {err}"
+                            )
 
-                    try:
-                        await self._execute_command(entity_id, action, value)
-                        executed_entities.append(entity_id)
-                        _LOGGER.info(f"Executed {action} on {entity_id}")
-                    except Exception as err:
-                        _LOGGER.error(
-                            f"Failed to execute command on {entity_id}: {err}"
-                        )
+                    # Acknowledge executed commands
+                    if executed_entities:
+                        await self._acknowledge_commands(executed_entities)
 
-                # Acknowledge executed commands
-                if executed_entities:
-                    await self._acknowledge_commands(executed_entities)
+                    state_data["commands_executed"] = len(executed_entities)
 
-                return {"commands_executed": len(executed_entities)}
+                return state_data
 
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Error communicating with backend: {err}")
         except Exception as err:
             raise UpdateFailed(f"Unexpected error: {err}")
+
+    async def _fetch_system_state(self) -> dict:
+        """Fetch current system state from backend."""
+        try:
+            async with self.session.get(
+                f"{self.backend_url}/api/integration/state",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.warning(
+                        f"Failed to fetch system state: status {response.status}"
+                    )
+                    return {}
+
+                state_data = await response.json()
+                return state_data
+
+        except aiohttp.ClientError as err:
+            _LOGGER.error(f"Error fetching system state: {err}")
+            return {}
+        except Exception as err:
+            _LOGGER.error(f"Unexpected error fetching system state: {err}")
+            return {}
 
     async def _execute_command(self, entity_id: str, action: str, value: Any) -> None:
         """Execute a command on a Home Assistant entity."""
