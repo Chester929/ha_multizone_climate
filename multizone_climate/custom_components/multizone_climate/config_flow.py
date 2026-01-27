@@ -187,7 +187,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
         self.zone_data: dict[str, Any] = {}
 
     async def async_step_init(
@@ -235,13 +235,13 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 )
 
             # Update the config entry data - merge with existing to preserve zone fields
-            updated_data = {**self.config_entry.data, **user_input}
+            updated_data = {**self._config_entry.data, **user_input}
             self.hass.config_entries.async_update_entry(
-                self.config_entry, data=updated_data
+                self._config_entry, data=updated_data
             )
 
             # Reload the config entry so the integration uses the updated main climate entity
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
             return self.async_create_entry(title="", data={})  # type: ignore[return-value]
 
         return self.async_show_form(  # type: ignore[return-value]
@@ -255,7 +255,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Required(
                     "main_climate_entity",
-                    default=self.config_entry.data.get("main_climate_entity"),
+                    default=self._config_entry.data.get("main_climate_entity"),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=CLIMATE_DOMAIN),
                 ),
@@ -284,7 +284,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 zone_id = str(uuid.uuid4())
 
                 # Get Redis client from hass.data
-                data = self.hass.data[DOMAIN][self.config_entry.entry_id]
+                data = self.hass.data[DOMAIN][self._config_entry.entry_id]
                 redis_client = data["redis_client"]
 
                 # Prepare zone data for Redis
@@ -360,7 +360,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     )
 
                 # Reload the integration to pick up the new zone
-                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                await self.hass.config_entries.async_reload(self._config_entry.entry_id)
 
                 return self.async_create_entry(title="", data={})  # type: ignore[return-value]
 

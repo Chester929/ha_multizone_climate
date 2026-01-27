@@ -68,18 +68,8 @@ async def async_setup_entry(
     coordinator = data["coordinator"]
     redis_client = data["redis_client"]
 
-    # Get config from hass.data or config_entry (fallback if coordinator.get_config() is None)
-    config_raw: Any = data.get("config") or config_entry.data or {}
-    # Ensure config is a dict (defensive check)
-    if isinstance(config_raw, dict):
-        config: dict[Any, Any] = config_raw
-    else:
-        config = {}
-    if not config:
-        _LOGGER.warning(
-            "No config found in coordinator or config entry, cannot create climate entities"
-        )
-        return
+    # Get config from hass.data (already set in __init__.py)
+    config = data.get("config", {})
 
     # Create main climate device entity
     main_climate = MainClimateDevice(

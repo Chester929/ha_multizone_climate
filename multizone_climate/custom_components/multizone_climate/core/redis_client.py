@@ -9,6 +9,8 @@ from typing import Any
 
 import redis.asyncio as aioredis
 
+from ..const import JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -658,3 +660,113 @@ class RedisClient:
         except Exception as err:
             _LOGGER.error("Failed to get job status for %s: %s", job_id, err)
             return None
+
+    async def _delete_keys_by_pattern(self, pattern: str) -> int:
+        """
+        Delete all keys matching a pattern.
+
+        Args:
+            pattern: Redis key pattern (e.g., "valvelock:*")
+
+        Returns:
+            int: Number of keys deleted
+
+        Note:
+            Uses cursor-based iteration to handle large numbers of keys efficiently.
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return 0
+
+        try:
+            deleted_count = 0
+            batch_size = 100  # Process keys in batches to avoid memory issues
+
+            # Use scan_iter for memory-efficient iteration
+            keys_to_delete = []
+            async for key in self._redis.scan_iter(match=pattern, count=batch_size):  # type: ignore[misc]
+                keys_to_delete.append(key)
+                
+                # Delete in batches to avoid building up too many keys in memory
+                if len(keys_to_delete) >= batch_size:
+                    await self._redis.delete(*keys_to_delete)
+                    deleted_count += len(keys_to_delete)
+                    keys_to_delete = []
+            
+            # Delete any remaining keys
+            if keys_to_delete:
+                await self._redis.delete(*keys_to_delete)
+                deleted_count += len(keys_to_delete)
+
+            return deleted_count
+
+        except Exception as err:
+            _LOGGER.error("Failed to delete keys matching pattern %s: %s", pattern, err)
+            return 0
+
+    async def clear_all_data(self) -> None:
+        """
+        Clear all integration data from Redis.
+
+        This method is called when the integration is being unloaded/removed.
+        It removes all zones, config, queues, locks, and state to ensure
+        clean removal and prevent stale data on reinstall.
+
+        Tasks:
+            - Remove all zones and their state
+            - Delete global config
+            - Delete main climate state
+            - Clear all job queues
+            - Clear all locks (job locks and valve locks)
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return
+
+        try:
+            _LOGGER.debug("Starting Redis cleanup for integration removal")
+
+            # Get all zone IDs and remove them
+            zone_ids = await self.get_zone_ids()
+            for zone_id in zone_ids:
+                await self.remove_zone(zone_id)
+                _LOGGER.debug("Removed zone %s from Redis", zone_id)
+
+            # Delete global config
+            config_key = self._get_key("config")
+            await self._redis.delete(config_key)
+            _LOGGER.debug("Deleted config from Redis")
+
+            # Delete main climate state
+            main_climate_key = self._get_key("main_climate")
+            await self._redis.delete(main_climate_key)
+            _LOGGER.debug("Deleted main climate state from Redis")
+
+            # Clear job queues
+            for job_type in [JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES]:
+                queue_key = self._get_key(f"queue:{job_type}")
+                await self._redis.delete(queue_key)
+                _LOGGER.debug("Cleared job queue for %s", job_type)
+
+            # Clear job locks
+            for job_type in [JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES]:
+                lock_key = self._get_key(f"joblock:{job_type}")
+                await self._redis.delete(lock_key)
+                _LOGGER.debug("Cleared job lock for %s", job_type)
+
+            # Clear valve locks using pattern deletion
+            valve_lock_pattern = self._get_key("valvelock:*")
+            valve_lock_count = await self._delete_keys_by_pattern(valve_lock_pattern)
+            if valve_lock_count > 0:
+                _LOGGER.debug("Cleared %d valve locks", valve_lock_count)
+
+            # Clear job status using pattern deletion
+            job_status_pattern = self._get_key("jobstatus:*")
+            job_status_count = await self._delete_keys_by_pattern(job_status_pattern)
+            if job_status_count > 0:
+                _LOGGER.debug("Cleared %d job status entries", job_status_count)
+
+            _LOGGER.info("Completed Redis cleanup for integration removal")
+
+        except Exception as err:
+            _LOGGER.error("Failed to clear all data from Redis: %s", err)
