@@ -57,6 +57,10 @@ version_greater_than() {
     v1_numeric=$(echo "$v1" | cut -d'-' -f1)
     v2_numeric=$(echo "$v2" | cut -d'-' -f1)
     
+    # Extract suffixes
+    v1_suffix=$(echo "$v1" | grep -o '\-.*' || echo "")
+    v2_suffix=$(echo "$v2" | grep -o '\-.*' || echo "")
+    
     # Split versions into arrays
     IFS='.' read -ra V1 <<< "$v1_numeric"
     IFS='.' read -ra V2 <<< "$v2_numeric"
@@ -73,7 +77,17 @@ version_greater_than() {
         fi
     done
     
-    # Numeric versions are equal
+    # Numeric versions are equal, check suffixes
+    # A version without a suffix (release) is greater than a version with a suffix (pre-release)
+    if [ -z "$v1_suffix" ] && [ -n "$v2_suffix" ]; then
+        # v1 is release, v2 is pre-release -> v1 > v2
+        return 0
+    elif [ -n "$v1_suffix" ] && [ -z "$v2_suffix" ]; then
+        # v1 is pre-release, v2 is release -> v1 < v2
+        return 1
+    fi
+    
+    # Both have suffixes or both don't have suffixes - they're equal
     return 1
 }
 
