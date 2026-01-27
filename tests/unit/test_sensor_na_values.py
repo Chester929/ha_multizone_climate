@@ -1,4 +1,4 @@
-"""Test sensor handling of N/A values."""
+"""Test sensor handling of missing temperature values."""
 
 import pytest
 from unittest.mock import MagicMock
@@ -21,18 +21,22 @@ def mock_coordinator():
     coordinator = MagicMock()
     coordinator.data = {
         "main_climate": {
-            "current_temperature": "N/A",
+            # current_temperature is missing (not set at all)
             "target_temperature": 20.0,
-            "outdoor_temperature": None,
+            "outdoor_temperature": None,  # explicitly None
         },
         "zones": {
             "zone1": {
-                "current_temperature": "N/A",
+                # current_temperature is missing (not set at all)
                 "target_temperature": "22",
             },
             "zone2": {
                 "current_temperature": 21.5,
                 "target_temperature": 22.0,
+            },
+            "zone3": {
+                "current_temperature": None,  # explicitly None
+                "target_temperature": 20.0,
             },
         },
     }
@@ -44,23 +48,20 @@ def mock_coordinator():
     return coordinator
 
 
-def test_zone_temperature_sensor_na_value(mock_coordinator):
-    """Test that ZoneTemperatureSensor returns None for N/A values."""
+def test_zone_temperature_sensor_missing_value(mock_coordinator):
+    """Test that ZoneTemperatureSensor returns None for missing values."""
     sensor = ZoneTemperatureSensor(
         mock_coordinator, "zone1", "Zone 1", "current_temperature"
     )
     
-    # Should return None for "N/A" string
+    # Should return None when key is not in data
     assert sensor.native_value is None
 
 
 def test_zone_temperature_sensor_none_value(mock_coordinator):
     """Test that ZoneTemperatureSensor returns None for None values."""
-    # Update mock data to have None
-    mock_coordinator.data["zones"]["zone1"]["current_temperature"] = None
-    
     sensor = ZoneTemperatureSensor(
-        mock_coordinator, "zone1", "Zone 1", "current_temperature"
+        mock_coordinator, "zone3", "Zone 3", "current_temperature"
     )
     
     # Should return None
@@ -68,13 +69,13 @@ def test_zone_temperature_sensor_none_value(mock_coordinator):
 
 
 def test_zone_temperature_sensor_numeric_string(mock_coordinator):
-    """Test that ZoneTemperatureSensor parses numeric strings."""
+    """Test that ZoneTemperatureSensor does NOT parse numeric strings."""
     sensor = ZoneTemperatureSensor(
         mock_coordinator, "zone1", "Zone 1", "target_temperature"
     )
     
-    # Should parse "22" to 22.0
-    assert sensor.native_value == 22.0
+    # String values should return None (backend should send numbers)
+    assert sensor.native_value is None
 
 
 def test_zone_temperature_sensor_float_value(mock_coordinator):
@@ -87,13 +88,13 @@ def test_zone_temperature_sensor_float_value(mock_coordinator):
     assert sensor.native_value == 21.5
 
 
-def test_multizone_temperature_sensor_na_value(mock_coordinator):
-    """Test that MultizoneTemperatureSensor returns None for N/A values."""
+def test_multizone_temperature_sensor_missing_value(mock_coordinator):
+    """Test that MultizoneTemperatureSensor returns None for missing values."""
     sensor = MultizoneTemperatureSensor(
         mock_coordinator, "main_current_temperature"
     )
     
-    # Should return None for "N/A" string
+    # Should return None when key is not in data
     assert sensor.native_value is None
 
 

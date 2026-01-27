@@ -385,7 +385,6 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			"name":                         name,
 			"enabled":                      getStringOrDefault(zone, "enabled", "true"),
 			"target_temperature":           getStringOrDefault(zone, "target_temperature", "20"),
-			"current_temperature":          getStringOrDefault(zone, "current_temperature", "N/A"),
 			"satisfaction":                 getStringOrDefault(zone, "satisfaction", "unknown"),
 			"valve_state":                  getStringOrDefault(zone, "valve_state", "closed"),
 			"priority":                     getStringOrDefault(zone, "priority", "0"),
@@ -396,6 +395,11 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			"closing_offset":               getStringOrDefault(zone, "closing_offset", "0.3"),
 			"target_change_threshold":      getStringOrDefault(zone, "target_change_threshold", "0.1"),
 			"is_fallback_valve":            getStringOrDefault(zone, "is_fallback_valve", "false"),
+		}
+
+		// Only set current_temperature if it's provided and not empty
+		if currentTemp, ok := zone["current_temperature"].(string); ok && currentTemp != "" {
+			zoneData["current_temperature"] = currentTemp
 		}
 
 		// Save zone to Redis

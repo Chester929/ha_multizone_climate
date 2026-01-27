@@ -21,40 +21,6 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-def _parse_temperature_value(value: Any, context: str) -> float | None:
-    """
-    Parse and validate temperature value.
-
-    Args:
-        value: Raw value from coordinator data
-        context: Context for logging (e.g., sensor type or zone info)
-
-    Returns:
-        Parsed float value or None if invalid
-    """
-    # Handle "N/A" string values from backend
-    if value == "N/A" or value is None:
-        return None
-
-    # If value is already a float, return it
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    # If value is a string, try to parse it
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            _LOGGER.warning(
-                "Invalid temperature value for %s: %s",
-                context,
-                value,
-            )
-            return None
-
-    return None
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -163,41 +129,28 @@ class MultizoneTemperatureSensor(SensorEntity):
         Return sensor state.
 
         Returns:
-            State value from coordinator data
+            State value from coordinator data, or None if not available
         """
         if not self.coordinator.data:
             return None
 
         main_climate = self.coordinator.data.get("main_climate", {})
 
-        value = None
         if self.sensor_type == "main_current_temperature":
             value = main_climate.get("current_temperature")
         elif self.sensor_type == "main_target_temperature":
             value = main_climate.get("target_temperature")
         elif self.sensor_type == "outdoor_temperature":
             value = main_climate.get("outdoor_temperature")
-
-        # Handle "N/A" string values from backend
-        if value == "N/A" or value is None:
+        else:
             return None
-        
-        # If value is already a float, return it
+
+        # Return None if value is not present or not a number
+        if value is None:
+            return None
         if isinstance(value, (int, float)):
             return float(value)
         
-        # If value is a string, try to parse it
-        if isinstance(value, str):
-            try:
-                return float(value)
-            except (ValueError, TypeError):
-                _LOGGER.warning(
-                    "Invalid temperature value for %s: %s",
-                    self.sensor_type,
-                    value,
-                )
-                return None
-
         return None
 
     @callback
@@ -333,33 +286,19 @@ class ZoneTemperatureSensor(SensorEntity):
         Return sensor state.
 
         Returns:
-            State value from coordinator data
+            State value from coordinator data, or None if not available
         """
         zone_data = self.coordinator.get_zone_data(self.zone_id)
         if not zone_data:
             return None
 
         value = zone_data.get(self.sensor_type)
-        # Handle "N/A" string values from backend
-        if value == "N/A" or value is None:
-            return None
         
-        # If value is already a float, return it
+        # Return None if value is not present or not a number
+        if value is None:
+            return None
         if isinstance(value, (int, float)):
             return float(value)
-        
-        # If value is a string, try to parse it
-        if isinstance(value, str):
-            try:
-                return float(value)
-            except (ValueError, TypeError):
-                _LOGGER.warning(
-                    "Invalid temperature value for zone %s %s: %s",
-                    self.zone_id,
-                    self.sensor_type,
-                    value,
-                )
-                return None
         
         return None
 
