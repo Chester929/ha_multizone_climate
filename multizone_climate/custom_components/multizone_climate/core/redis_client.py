@@ -686,13 +686,11 @@ class RedisClient:
             keys_to_delete = []
             async for key in self._redis.scan_iter(match=pattern, count=batch_size):  # type: ignore[misc]
                 keys_to_delete.append(key)
-                
                 # Delete in batches to avoid building up too many keys in memory
                 if len(keys_to_delete) >= batch_size:
                     await self._redis.delete(*keys_to_delete)
                     deleted_count += len(keys_to_delete)
                     keys_to_delete = []
-            
             # Delete any remaining keys
             if keys_to_delete:
                 await self._redis.delete(*keys_to_delete)
