@@ -1360,3 +1360,116 @@ func IntegrationDeleteCommandsHandler(client *redis.Client) http.HandlerFunc {
 		})
 	}
 }
+
+// IntegrationGetStateHandler returns the current system state for the integration
+// GET /api/integration/state
+func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		ctx := r.Context()
+
+		// Get global configuration
+		config, err := client.HGetAll(ctx, "multizone:config")
+		if err != nil {
+			logger.Error("Failed to retrieve configuration: %v", err)
+			config = make(map[string]string)
+		}
+
+		// Get all zones
+		zoneKeys, err := client.Keys(ctx, "multizone:zone:*")
+		if err != nil {
+			logger.Error("Failed to retrieve zone keys: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to retrieve zone keys",
+			})
+			return
+		}
+
+		zones := make(map[string]map[string]interface{})
+		for _, key := range zoneKeys {
+			zoneData, err := client.HGetAll(ctx, key)
+			if err != nil {
+				continue
+			}
+
+			// Extract zone ID from key (multizone:zone:ZONE_ID)
+			zoneID := key[len("multizone:zone:"):]
+
+			// Convert zone data to interface map and parse numeric values
+			zoneMap := make(map[string]interface{})
+			for k, v := range zoneData {
+				// Try to parse numeric values
+				if k == "current_temperature" || k == "target_temperature" {
+					if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
+						zoneMap[k] = floatVal
+					} else {
+						zoneMap[k] = v
+					}
+				} else if k == "priority" {
+					if intVal, err := strconv.Atoi(v); err == nil {
+						zoneMap[k] = intVal
+					} else {
+						zoneMap[k] = v
+					}
+				} else if k == "temperature_rising" || k == "temperature_falling" {
+					zoneMap[k] = v == "true" || v == "True" || v == "1"
+				} else {
+					zoneMap[k] = v
+				}
+			}
+
+			zones[zoneID] = zoneMap
+		}
+
+		// Get main climate data from configuration
+		mainClimate := make(map[string]interface{})
+
+		// Parse main climate entity state from config
+		if mainClimateEntityID, ok := config["main_climate_entity_id"]; ok && mainClimateEntityID != "" {
+			mainClimate["entity_id"] = mainClimateEntityID
+		}
+
+		// Parse numeric config values
+		if currentTemp, ok := config["main_current_temperature"]; ok && currentTemp != "" {
+			if floatVal, err := strconv.ParseFloat(currentTemp, 64); err == nil {
+				mainClimate["current_temperature"] = floatVal
+			}
+		}
+
+		if targetTemp, ok := config["main_target_temperature"]; ok && targetTemp != "" {
+			if floatVal, err := strconv.ParseFloat(targetTemp, 64); err == nil {
+				mainClimate["target_temperature"] = floatVal
+			}
+		}
+
+		if outdoorTemp, ok := config["outdoor_temperature"]; ok && outdoorTemp != "" {
+			if floatVal, err := strconv.ParseFloat(outdoorTemp, 64); err == nil {
+				mainClimate["outdoor_temperature"] = floatVal
+			}
+		}
+
+		if hvacAction, ok := config["hvac_action"]; ok {
+			mainClimate["hvac_action"] = hvacAction
+		}
+
+		if multizoneEnabled, ok := config["multizone_enabled"]; ok {
+			mainClimate["multizone_enabled"] = multizoneEnabled == "true" || multizoneEnabled == "True" || multizoneEnabled == "1"
+		}
+
+		// Get job queue sizes
+		calculateQueueSize, _ := client.LLen(ctx, "multizone:jobs:calculate_main_temp")
+		valveQueueSize, _ := client.LLen(ctx, "multizone:jobs:update_valves")
+
+		// Build response
+		response := map[string]interface{}{
+			"config":                config,
+			"main_climate":          mainClimate,
+			"zones":                 zones,
+			"calculate_queue_size":  calculateQueueSize,
+			"valve_queue_size":      valveQueueSize,
+		}
+
+		json.NewEncoder(w).Encode(response)
+	}
+}
