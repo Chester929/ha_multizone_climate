@@ -55,16 +55,17 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             outdoor_sensor_entity_id = self.config.get("outdoor_temperature_sensor")
             if outdoor_sensor_entity_id:
                 outdoor_temp_state = self.hass.states.get(outdoor_sensor_entity_id)
-                if outdoor_temp_state and outdoor_temp_state.state not in ("unknown", "unavailable"):
+                # Check for valid state - exclude unknown, unavailable, None, and empty string
+                if outdoor_temp_state and outdoor_temp_state.state not in (
+                    "unknown", "unavailable", None, ""
+                ):
                     try:
                         outdoor_temp = float(outdoor_temp_state.state)
                         # Send outdoor temperature to backend
                         await self._send_outdoor_temperature(outdoor_temp)
                         # Also store in state_data for sensors to read
-                        if "main_climate" not in state_data:
-                            state_data["main_climate"] = {}
-                        state_data["main_climate"]["outdoor_temperature"] = outdoor_temp
-                    except ValueError:
+                        state_data.setdefault("main_climate", {})["outdoor_temperature"] = outdoor_temp
+                    except (ValueError, TypeError):
                         _LOGGER.warning(
                             f"Invalid outdoor temperature value: {outdoor_temp_state.state}"
                         )
@@ -244,7 +245,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 json={"outdoor_temperature": outdoor_temp},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
-                if response.status not in (200, 201):
+                if response.status != 200:
                     _LOGGER.debug(
                         f"Failed to send outdoor temperature to backend: status {response.status}"
                     )
