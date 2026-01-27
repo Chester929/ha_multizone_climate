@@ -22,7 +22,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     MAX_COMMAND_RETRIES = 5
     RETRY_DELAY_SECONDS = 5
 
-    def __init__(self, hass: HomeAssistant, backend_url: str):
+    def __init__(self, hass: HomeAssistant, backend_url: str, config: dict | None = None):
         """Initialize the coordinator."""
         # Get coordinator interval from environment variable (set by addon)
         raw_interval = os.environ.get("COORDINATOR_INTERVAL", "30")
@@ -40,6 +40,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=interval_seconds),
         )
         self.backend_url = backend_url.rstrip("/")
+        self.config = config or {}
         # Create session with default timeout
         timeout = aiohttp.ClientTimeout(total=10)
         self.session = aiohttp.ClientSession(timeout=timeout)
@@ -49,6 +50,24 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         try:
             # Fetch system state first
             state_data = await self._fetch_system_state()
+            
+            # Read outdoor temperature sensor if configured and send to backend
+            outdoor_sensor_entity_id = self.config.get("outdoor_temperature_sensor")
+            if outdoor_sensor_entity_id:
+                outdoor_temp_state = self.hass.states.get(outdoor_sensor_entity_id)
+                if outdoor_temp_state and outdoor_temp_state.state not in ("unknown", "unavailable"):
+                    try:
+                        outdoor_temp = float(outdoor_temp_state.state)
+                        # Send outdoor temperature to backend
+                        await self._send_outdoor_temperature(outdoor_temp)
+                        # Also store in state_data for sensors to read
+                        if "main_climate" not in state_data:
+                            state_data["main_climate"] = {}
+                        state_data["main_climate"]["outdoor_temperature"] = outdoor_temp
+                    except ValueError:
+                        _LOGGER.warning(
+                            f"Invalid outdoor temperature value: {outdoor_temp_state.state}"
+                        )
             
             # Get pending commands from backend
             async with self.session.get(
@@ -216,6 +235,23 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         _LOGGER.error(
             f"Failed to push state update for zone {zone_id} after {self.MAX_COMMAND_RETRIES} attempts"
         )
+
+    async def _send_outdoor_temperature(self, outdoor_temp: float) -> None:
+        """Send outdoor temperature to backend."""
+        try:
+            async with self.session.post(
+                f"{self.backend_url}/api/integration/outdoor_temperature",
+                json={"outdoor_temperature": outdoor_temp},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status not in (200, 201):
+                    _LOGGER.debug(
+                        f"Failed to send outdoor temperature to backend: status {response.status}"
+                    )
+                else:
+                    _LOGGER.debug(f"Sent outdoor temperature to backend: {outdoor_temp}°C")
+        except Exception as err:
+            _LOGGER.debug(f"Error sending outdoor temperature to backend: {err}")
 
     async def async_shutdown(self) -> None:
         """Cleanup on shutdown."""

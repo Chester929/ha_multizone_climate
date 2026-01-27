@@ -44,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await redis_client.connect()
 
     # Create coordinator that communicates with backend API
-    coordinator = MultizoneClimateCoordinator(hass, backend_url)
+    coordinator = MultizoneClimateCoordinator(hass, backend_url, entry.data)
 
     # Store coordinator, redis_client and config in hass.data
     hass.data.setdefault(DOMAIN, {})
