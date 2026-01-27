@@ -205,6 +205,9 @@ class TestMultizoneDisabledBehavior:
             hass=mock_hass,
         )
 
+        # Set previous temperature (required for _update_satisfaction_state)
+        zone_entity._previous_temperature = 19.5
+
         # Update satisfaction state
         await zone_entity._update_satisfaction_state()
 
