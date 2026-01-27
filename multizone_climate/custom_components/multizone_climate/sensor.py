@@ -21,6 +21,40 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+def _parse_temperature_value(value: Any, context: str) -> float | None:
+    """
+    Parse and validate temperature value.
+
+    Args:
+        value: Raw value from coordinator data
+        context: Context for logging (e.g., sensor type or zone info)
+
+    Returns:
+        Parsed float value or None if invalid
+    """
+    # Handle "N/A" string values from backend
+    if value == "N/A" or value is None:
+        return None
+
+    # If value is already a float, return it
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    # If value is a string, try to parse it
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            _LOGGER.warning(
+                "Invalid temperature value for %s: %s",
+                context,
+                value,
+            )
+            return None
+
+    return None
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
