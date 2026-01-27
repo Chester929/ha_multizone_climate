@@ -47,7 +47,7 @@ if [ ! -d "${CUSTOM_COMPONENTS_DIR}" ]; then
 fi
 
 # Function to compare semantic versions
-# Returns 0 if version1 > version2, 1 otherwise
+# Returns 0 if version1 > version2, 1 otherwise (1 means equal or less than)
 # Note: When comparing different pre-release suffixes (e.g., alpha vs beta) of the same version,
 # neither is considered greater as there's no standard ordering for pre-release identifiers
 version_greater_than() {
@@ -60,6 +60,7 @@ version_greater_than() {
     local v2_numeric="${v2%%-*}"
     
     # Extract suffixes using bash parameter expansion
+    # Initialize as empty (for versions without suffixes), then conditionally assign
     local v1_suffix=""
     local v2_suffix=""
     [[ "$v1" == *-* ]] && v1_suffix="${v1#*-}"
