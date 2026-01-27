@@ -136,12 +136,33 @@ class MultizoneTemperatureSensor(SensorEntity):
 
         main_climate = self.coordinator.data.get("main_climate", {})
 
+        value = None
         if self.sensor_type == "main_current_temperature":
-            return cast(float | None, main_climate.get("current_temperature"))
-        if self.sensor_type == "main_target_temperature":
-            return cast(float | None, main_climate.get("target_temperature"))
-        if self.sensor_type == "outdoor_temperature":
-            return cast(float | None, main_climate.get("outdoor_temperature"))
+            value = main_climate.get("current_temperature")
+        elif self.sensor_type == "main_target_temperature":
+            value = main_climate.get("target_temperature")
+        elif self.sensor_type == "outdoor_temperature":
+            value = main_climate.get("outdoor_temperature")
+
+        # Handle "N/A" string values from backend
+        if value == "N/A" or value is None:
+            return None
+        
+        # If value is already a float, return it
+        if isinstance(value, (int, float)):
+            return float(value)
+        
+        # If value is a string, try to parse it
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Invalid temperature value for %s: %s",
+                    self.sensor_type,
+                    value,
+                )
+                return None
 
         return None
 
@@ -284,7 +305,29 @@ class ZoneTemperatureSensor(SensorEntity):
         if not zone_data:
             return None
 
-        return cast(float | None, zone_data.get(self.sensor_type))
+        value = zone_data.get(self.sensor_type)
+        # Handle "N/A" string values from backend
+        if value == "N/A" or value is None:
+            return None
+        
+        # If value is already a float, return it
+        if isinstance(value, (int, float)):
+            return float(value)
+        
+        # If value is a string, try to parse it
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Invalid temperature value for zone %s %s: %s",
+                    self.zone_id,
+                    self.sensor_type,
+                    value,
+                )
+                return None
+        
+        return None
 
     @callback
     def _handle_coordinator_update(self) -> None:
