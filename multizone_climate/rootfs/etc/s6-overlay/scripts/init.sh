@@ -52,9 +52,14 @@ version_greater_than() {
     local v1=$1
     local v2=$2
     
+    # Strip any suffix (e.g., -dev, -alpha, -beta, -rc)
+    # Extract only the numeric version part before any hyphen
+    v1_numeric=$(echo "$v1" | cut -d'-' -f1)
+    v2_numeric=$(echo "$v2" | cut -d'-' -f1)
+    
     # Split versions into arrays
-    IFS='.' read -ra V1 <<< "$v1"
-    IFS='.' read -ra V2 <<< "$v2"
+    IFS='.' read -ra V1 <<< "$v1_numeric"
+    IFS='.' read -ra V2 <<< "$v2_numeric"
     
     # Compare major, minor, patch
     for i in 0 1 2; do
@@ -68,7 +73,7 @@ version_greater_than() {
         fi
     done
     
-    # Versions are equal
+    # Numeric versions are equal
     return 1
 }
 
