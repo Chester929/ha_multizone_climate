@@ -499,7 +499,7 @@ class ZoneClimateEntity(ClimateEntity):
             "valve_switch_entity_id": self._valve_switch_entity_id,
             "current_temperature": self._current_temperature,
             "target_temperature": self._target_temperature,
-            "state": "ON",  # Zones are always ON once created; OFF zones are removed
+            "enabled": "true",  # Zones are always enabled once created; disabled zones are removed
             "satisfaction": self._satisfaction_state,
             "valve_state": self._valve_state,
             "temperature_rising": self._temperature_direction == "rising",

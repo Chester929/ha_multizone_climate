@@ -77,7 +77,7 @@ class TestMultizoneDisabledBehavior:
         mock_redis_client.get_zone_ids.return_value = ["zone1"]
         mock_redis_client.get_zone_state.return_value = {
             "id": "zone1",
-            "state": "ON",
+            "enabled": "true",
             "target_temperature": 22.0,
             "current_temperature": 21.0,
             "satisfaction": "underheated",
@@ -112,7 +112,7 @@ class TestMultizoneDisabledBehavior:
         zones = [
             {
                 "id": "zone1",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.zone1_valve",
                 "current_temperature": 19.0,  # Below target - opening_offset (21.0 - 0.3 = 20.7)
                 "target_temperature": 21.0,
@@ -123,7 +123,7 @@ class TestMultizoneDisabledBehavior:
             },
             {
                 "id": "zone2",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.zone2_valve",
                 "current_temperature": 22.5,  # Above target + closing_offset (21.0 + 0.3 = 21.3)
                 "target_temperature": 21.0,
@@ -134,7 +134,7 @@ class TestMultizoneDisabledBehavior:
             },
             {
                 "id": "zone3",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.zone3_valve",
                 "current_temperature": 21.0,  # Within deadband
                 "target_temperature": 21.0,
@@ -233,7 +233,7 @@ class TestMultizoneDisabledBehavior:
         zones = [
             {
                 "id": "zone1",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.zone1_valve",
                 "current_temperature": 19.0,
                 "target_temperature": 21.0,
@@ -244,7 +244,7 @@ class TestMultizoneDisabledBehavior:
             },
             {
                 "id": "zone2",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.zone2_valve",
                 "current_temperature": 22.5,
                 "target_temperature": 21.0,
@@ -255,7 +255,7 @@ class TestMultizoneDisabledBehavior:
             },
             {
                 "id": "zone3",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.zone3_valve",
                 "current_temperature": 21.0,
                 "target_temperature": 21.0,

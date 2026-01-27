@@ -69,8 +69,8 @@ def calculate_main_target_temperature(
     if not zones:
         return None
 
-    # Filter active zones (state != OFF)
-    active_zones = [z for z in zones if z.get("state") != "OFF"]
+    # Filter active zones (enabled != false)
+    active_zones = [z for z in zones if z.get("enabled", "true") not in ["false", "False", "0"]]
     if not active_zones:
         return None
 

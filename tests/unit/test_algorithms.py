@@ -23,14 +23,14 @@ class TestCalculateMainTargetTemperature:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 19.0,
                 "satisfaction": "underheated",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 22.0,
                 "satisfaction": "satisfied",
@@ -60,21 +60,21 @@ class TestCalculateMainTargetTemperature:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 20.0,
                 "satisfaction": "satisfied",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 22.0,
                 "satisfaction": "satisfied",
             },
             {
                 "id": "living",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 24.0,
                 "satisfaction": "satisfied",
@@ -101,14 +101,14 @@ class TestCalculateMainTargetTemperature:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 19.0,
                 "satisfaction": "underheated",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 25.0,
                 "current_temperature": 26.0,
                 "satisfaction": "overheated",
@@ -138,7 +138,7 @@ class TestCalculateMainTargetTemperature:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 21.0,
                 "satisfaction": "underheated",
             },
@@ -203,7 +203,7 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "OFF",
+                "enabled": "false",
                 "target_temperature": 20.0,
                 "satisfaction": "underheated",
             },
@@ -223,14 +223,14 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 21.0,
                 "satisfaction": "overheated",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 23.0,
                 "satisfaction": "overheated",
@@ -252,7 +252,7 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 21.0,
                 "current_temperature": 20.0,
                 "satisfaction": "underheated",
@@ -275,14 +275,14 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 19.0,
                 "satisfaction": "underheated",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 23.0,
                 "satisfaction": "underheated",
@@ -305,14 +305,14 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 18.0,
                 "satisfaction": "underheated",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 20.0,
                 "satisfaction": "underheated",
@@ -335,7 +335,7 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 35.0,  # Above max limit
                 "current_temperature": 20.0,
                 "satisfaction": "underheated",
@@ -358,14 +358,14 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.3,
                 "current_temperature": 19.0,
                 "satisfaction": "underheated",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 21.3,
                 "current_temperature": 20.0,
                 "satisfaction": "underheated",
@@ -387,14 +387,14 @@ class TestCalculateMainTargetTemperatureEdgeCases:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 20.0,
                 "satisfaction": "satisfied",
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 24.0,
                 "satisfaction": "satisfied",
@@ -428,14 +428,14 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 22.0,
                 "satisfaction": "satisfied",
             },
             {
                 "id": "zone_b",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 22.0,
                 "satisfaction": "underheated",
@@ -467,14 +467,14 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 21.0,
                 "current_temperature": 20.0,
                 "satisfaction": "underheated",
             },
             {
                 "id": "zone_b",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 19.0,
                 "satisfaction": "underheated",
@@ -504,14 +504,14 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 22.0,
                 "satisfaction": "satisfied",
             },
             {
                 "id": "zone_b",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 23.0,
                 "satisfaction": "underheated",
@@ -542,14 +542,14 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 22.0,
                 "satisfaction": "satisfied",
             },
             {
                 "id": "zone_b",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 24.0,
                 "satisfaction": "satisfied",
@@ -578,7 +578,7 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 35.0,
                 "current_temperature": 30.0,
                 "satisfaction": "underheated",
@@ -606,7 +606,7 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 24.0,
                 "current_temperature": 22.0,
                 "satisfaction": "underheated",
@@ -636,14 +636,14 @@ class TestDynamicHeatingBoost:
         zones = [
             {
                 "id": "zone_a",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 22.0,
                 "current_temperature": 24.0,
                 "satisfaction": "overheated",
             },
             {
                 "id": "zone_b",
-                "state": "ON",
+                "enabled": "true",
                 "target_temperature": 23.0,
                 "current_temperature": 25.0,
                 "satisfaction": "overheated",

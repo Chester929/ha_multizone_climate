@@ -74,6 +74,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             zone_data = {
                 "id": zone_id,
                 "name": entry.data.get("zone_name", "Fallback Zone"),
+                "enabled": "true",
                 "temperature_sensor_entity_id": entry.data.get("temperature_sensor"),
                 "valve_switch_entity_id": entry.data.get("valve_switch"),
                 "target_temperature": entry.data.get("target_temperature", 20.0),
@@ -102,6 +103,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 zone_config = {
                     "id": zone_id,  # Backend expects 'id', not 'zone_id'
                     "name": zone_data["name"],
+                    "enabled": "true",
                     "temperature_sensor_entity_id": zone_data[
                         "temperature_sensor_entity_id"
                     ],
