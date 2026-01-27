@@ -409,7 +409,7 @@ class ZoneClimateEntity(ClimateEntity):
                     continue
                 zone_state = await self.redis_client.get_zone_state(zone_id)
                 if zone_state:
-                    is_fallback = zone_state.get("is_fallback_valve") in [True, "true", "True"]
+                    is_fallback = zone_state.get("is_fallback_valve", False) not in [False, "false", "False", "0"]
                     is_enabled = zone_state.get("enabled", "true") not in ["false", "False", "0"]
                     if is_fallback and is_enabled:
                         enabled_fallback_count += 1

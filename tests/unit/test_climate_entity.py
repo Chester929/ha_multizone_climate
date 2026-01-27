@@ -242,6 +242,9 @@ class TestZoneClimateEntity:
         # Verify Redis was updated
         mock_redis_client.set_zone_state.assert_awaited()
 
+        # Verify job was enqueued
+        mock_redis_client.enqueue_job.assert_awaited()
+
     @pytest.mark.asyncio
     async def test_cannot_disable_last_fallback_zone(
         self,
@@ -328,6 +331,12 @@ class TestZoneClimateEntity:
 
         # Verify zone is disabled
         assert entity._enabled is False
+
+        # Verify Redis was updated
+        mock_redis_client.set_zone_state.assert_awaited()
+
+        # Verify job was enqueued
+        mock_redis_client.enqueue_job.assert_awaited()
 
     def test_hvac_modes_includes_off(
         self,
