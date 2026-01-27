@@ -62,6 +62,20 @@ class CalculateMainTempJob(BaseJob):
             _LOGGER.warning("No config found in Redis")
             return {"error": "no_config"}
 
+        # Check if multizone is enabled
+        multizone_enabled = config.get("multizone_enabled", False)
+        if not multizone_enabled:
+            _LOGGER.debug(
+                "Multizone disabled, skipping main target calculation. "
+                "Zones control valves individually."
+            )
+            return {
+                "main_target_calculated": None,
+                "main_target_updated": False,
+                "zones_processed": 0,
+                "skipped_reason": "multizone_disabled",
+            }
+
         # Fetch all zone states
         zone_states = await self._fetch_zone_states()
         if not zone_states:
