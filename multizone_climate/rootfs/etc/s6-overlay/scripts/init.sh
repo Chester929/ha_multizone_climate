@@ -55,13 +55,13 @@ version_greater_than() {
     local v2=$2
     
     # Strip any suffix (e.g., -dev, -alpha, -beta, -rc)
-    # Extract only the numeric version part before any hyphen
-    v1_numeric=$(echo "$v1" | cut -d'-' -f1)
-    v2_numeric=$(echo "$v2" | cut -d'-' -f1)
+    # Extract only the numeric version part before any hyphen using bash parameter expansion
+    local v1_numeric="${v1%%-*}"
+    local v2_numeric="${v2%%-*}"
     
     # Extract suffixes using bash parameter expansion
-    v1_suffix=""
-    v2_suffix=""
+    local v1_suffix=""
+    local v2_suffix=""
     [[ "$v1" == *-* ]] && v1_suffix="${v1#*-}"
     [[ "$v2" == *-* ]] && v2_suffix="${v2#*-}"
     
