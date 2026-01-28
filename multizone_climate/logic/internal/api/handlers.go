@@ -1373,10 +1373,35 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 		ctx := r.Context()
 
 		// Get global configuration
-		config, err := client.HGetAll(ctx, "multizone:config")
+		configRaw, err := client.HGetAll(ctx, "multizone:config")
 		if err != nil {
 			logger.Error("Failed to retrieve configuration: %v", err)
-			config = make(map[string]string)
+			configRaw = make(map[string]string)
+		}
+
+		// Convert config to proper types
+		config := make(map[string]interface{})
+		for k, v := range configRaw {
+			// Convert integer config values
+			if k == "min_valves_open" || k == "valve_actuation_delay" || k == "coordinator_interval" {
+				if intVal, err := strconv.Atoi(v); err == nil {
+					config[k] = intVal
+				} else {
+					config[k] = v
+				}
+			// Convert float config values
+			} else if k == "main_target_all_zones_satisfied" || k == "main_min_temp" || k == "main_max_temp" || k == "main_change_threshold" || k == "satisfaction_eps" {
+				if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
+					config[k] = floatVal
+				} else {
+					config[k] = v
+				}
+			// Convert boolean config values
+			} else if k == "use_average_mode" || k == "multizone_enabled" {
+				config[k] = v == "true" || v == "True" || v == "1"
+			} else {
+				config[k] = v
+			}
 		}
 
 		// Get all zones
@@ -1469,7 +1494,8 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 
 		// Get multizone_enabled from config (it's a configuration setting, not runtime state)
 		if multizoneEnabled, ok := config["multizone_enabled"]; ok {
-			mainClimate["multizone_enabled"] = multizoneEnabled == "true" || multizoneEnabled == "True" || multizoneEnabled == "1"
+			// config["multizone_enabled"] is already converted to bool above
+			mainClimate["multizone_enabled"] = multizoneEnabled
 		}
 
 		// Get job queue sizes

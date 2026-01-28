@@ -243,3 +243,41 @@ class TestSafetyChecker:
         count = safety_checker._count_open_valves(zones)
 
         assert count == 2
+
+    @pytest.mark.asyncio
+    async def test_proper_int_min_valves_open_config(self, mock_redis_client):
+        """
+        Test that integer min_valves_open config value works correctly.
+
+        Scenario:
+            - min_valves_open = 2 (integer, properly converted by backend)
+            - Only 1 valve open
+            - Expected: forces 1 fallback valve open
+        """
+        # Create safety checker with integer config value (as from Go backend)
+        config_with_int = {"min_valves_open": 2}
+        safety_checker = SafetyChecker(mock_redis_client, config_with_int)
+
+        zones = [
+            {
+                "id": "bedroom",
+                "valve_id": "switch.bedroom_valve",
+                "valve_state": "open",
+                "is_fallback_valve": False,
+                "priority": 0,
+            },
+            {
+                "id": "kitchen",
+                "valve_id": "switch.kitchen_valve",
+                "valve_state": "closed",
+                "is_fallback_valve": True,
+                "priority": 5,
+            },
+        ]
+
+        valves_to_open = await safety_checker.check_minimum_valves(zones)
+
+        # Should force open 1 fallback valve (shortage = 2 - 1)
+        assert len(valves_to_open) == 1
+        assert valves_to_open[0] == "switch.kitchen_valve"
+
