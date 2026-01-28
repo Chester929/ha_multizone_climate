@@ -1,0 +1,241 @@
+"""Unit tests for Redis initialization in __init__.py."""
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+from custom_components.multizone_climate import async_setup_entry
+
+
+class TestRedisInitialization:
+    """Test Redis initialization during setup."""
+
+    @pytest.fixture
+    def mock_hass(self):
+        """Create mock hass instance."""
+        hass = MagicMock()
+        hass.data = {}
+        hass.loop = MagicMock()
+        hass.loop.time = MagicMock(return_value=1234567890)
+        
+        # Mock states
+        hass.states = MagicMock()
+        main_climate_state = MagicMock()
+        main_climate_state.state = "heat"
+        main_climate_state.attributes = {
+            "current_temperature": 21.5,
+            "temperature": 22.0,
+            "hvac_action": "heating",
+        }
+        
+        outdoor_sensor_state = MagicMock()
+        outdoor_sensor_state.state = "5.0"
+        
+        def mock_get_state(entity_id):
+            if entity_id == "climate.main_thermostat":
+                return main_climate_state
+            elif entity_id == "sensor.outdoor_temp":
+                return outdoor_sensor_state
+            return None
+        
+        hass.states.get = mock_get_state
+        
+        # Mock config_entries
+        hass.config_entries = MagicMock()
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        
+        return hass
+
+    @pytest.fixture
+    def mock_config_entry(self):
+        """Create mock config entry."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry_id"
+        entry.data = {
+            "main_climate_entity": "climate.main_thermostat",
+            "outdoor_temperature_sensor": "sensor.outdoor_temp",
+            "zone_name": "Fallback Zone",
+            "temperature_sensor": "sensor.bedroom_temp",
+            "valve_switch": "switch.bedroom_valve",
+            "target_temperature": 20.0,
+            "priority": 50,
+        }
+        entry.add_update_listener = MagicMock(return_value=lambda: None)
+        entry.async_on_unload = MagicMock()
+        return entry
+
+    @pytest.fixture
+    def mock_redis_client(self):
+        """Create mock Redis client."""
+        client = MagicMock()
+        client.connect = AsyncMock()
+        client.get_config = AsyncMock(return_value={})  # Empty = needs initialization
+        client.set_config = AsyncMock()
+        client.get_main_climate_state = AsyncMock(return_value={})  # Empty = needs initialization
+        client.set_main_climate_state = AsyncMock()
+        client.get_zone_ids = AsyncMock(return_value=[])  # No zones yet
+        client.add_zone = AsyncMock()
+        return client
+
+    @pytest.fixture
+    def mock_coordinator(self):
+        """Create mock coordinator."""
+        coordinator = MagicMock()
+        coordinator.async_config_entry_first_refresh = AsyncMock()
+        coordinator.async_add_listener = MagicMock(return_value=lambda: None)
+        return coordinator
+
+    @pytest.mark.asyncio
+    async def test_initializes_config_when_empty(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that global config is initialized when it doesn't exist."""
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch("os.environ.get", return_value="8080"):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should call set_config once
+        mock_redis_client.set_config.assert_called_once()
+        
+        # Verify config contents
+        config_call_args = mock_redis_client.set_config.call_args[0][0]
+        assert config_call_args["main_climate_entity_id"] == "climate.main_thermostat"
+        assert config_call_args["outdoor_temperature_sensor"] == "sensor.outdoor_temp"
+        assert config_call_args["min_valves_open"] == 1
+        assert config_call_args["multizone_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_initializes_main_climate_state_when_empty(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that main climate state is initialized when it doesn't exist."""
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch("os.environ.get", return_value="8080"):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should call set_main_climate_state once
+        mock_redis_client.set_main_climate_state.assert_called_once()
+        
+        # Verify main climate state contents
+        state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
+        assert state_call_args["entity_id"] == "climate.main_thermostat"
+        assert state_call_args["current_temperature"] == 21.5
+        assert state_call_args["target_temperature"] == 22.0
+        assert state_call_args["outdoor_temperature"] == 5.0
+        assert state_call_args["hvac_mode"] == "heat"
+        assert state_call_args["hvac_action"] == "heating"
+
+    @pytest.mark.asyncio
+    async def test_skips_initialization_when_config_exists(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that config initialization is skipped when config already exists."""
+        # Mock that config already exists
+        mock_redis_client.get_config = AsyncMock(return_value={
+            "main_climate_entity_id": "climate.existing",
+            "min_valves_open": 2,
+        })
+        
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch("os.environ.get", return_value="8080"):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should NOT call set_config (already exists)
+        mock_redis_client.set_config.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_initialization_when_main_climate_state_exists(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that main climate state initialization is skipped when it already exists."""
+        # Mock that main climate state already exists
+        mock_redis_client.get_main_climate_state = AsyncMock(return_value={
+            "entity_id": "climate.existing",
+            "current_temperature": 19.0,
+        })
+        
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch("os.environ.get", return_value="8080"):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should NOT call set_main_climate_state (already exists)
+        mock_redis_client.set_main_climate_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handles_missing_outdoor_sensor_gracefully(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that missing outdoor temperature sensor is handled gracefully."""
+        # Remove outdoor sensor from config
+        mock_config_entry.data = {
+            "main_climate_entity": "climate.main_thermostat",
+            "zone_name": "Fallback Zone",
+            "temperature_sensor": "sensor.bedroom_temp",
+            "valve_switch": "switch.bedroom_valve",
+        }
+        
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch("os.environ.get", return_value="8080"):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should call set_main_climate_state
+        mock_redis_client.set_main_climate_state.assert_called_once()
+        
+        # Verify outdoor temperature defaults to 0.0
+        state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
+        assert state_call_args["outdoor_temperature"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_handles_invalid_outdoor_temperature(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that invalid outdoor temperature value is handled gracefully."""
+        # Mock outdoor sensor with invalid state
+        outdoor_sensor_state = MagicMock()
+        outdoor_sensor_state.state = "unavailable"
+        
+        def mock_get_state(entity_id):
+            if entity_id == "sensor.outdoor_temp":
+                return outdoor_sensor_state
+            return None
+        
+        mock_hass.states.get = mock_get_state
+        
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch("os.environ.get", return_value="8080"):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should call set_main_climate_state
+        mock_redis_client.set_main_climate_state.assert_called_once()
+        
+        # Verify outdoor temperature defaults to 0.0 when parsing fails
+        state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
+        assert state_call_args["outdoor_temperature"] == 0.0
