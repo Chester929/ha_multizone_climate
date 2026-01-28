@@ -148,6 +148,27 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     
     bashio::log.info "Custom component installed successfully to ${COMPONENT_DIR}!"
     bashio::log.warning "Please restart Home Assistant for the integration to be available"
+    
+    # Create persistent notification in Home Assistant
+    bashio::log.info "Creating restart notification in Home Assistant..."
+    
+    # Prepare notification payload
+    NOTIFICATION_PAYLOAD=$(cat <<EOF
+{
+  "message": "The Multizone Climate custom component has been installed or updated. Please restart Home Assistant for the changes to take effect.",
+  "title": "Multizone Climate: Restart Required",
+  "notification_id": "multizone_climate_restart_required"
+}
+EOF
+)
+    
+    # Call Home Assistant API to create persistent notification
+    curl -s -X POST \
+        -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "${NOTIFICATION_PAYLOAD}" \
+        http://supervisor/core/api/services/persistent_notification/create \
+        > /dev/null 2>&1 || bashio::log.warning "Failed to create restart notification (non-critical)"
 else
     bashio::log.info "Custom component installation up to date"
 fi
