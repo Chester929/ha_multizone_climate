@@ -46,8 +46,8 @@ async def async_setup_entry(
     # Temperature sensors
     entities.extend(
         [
-            MultizoneTemperatureSensor(coordinator, "main_current_temperature"),
-            MultizoneTemperatureSensor(coordinator, "main_target_temperature"),
+            MultizoneTemperatureSensor(coordinator, "main_current_temperature", hass, config_entry),
+            MultizoneTemperatureSensor(coordinator, "main_target_temperature", hass, config_entry),
             MultizoneTemperatureSensor(coordinator, "outdoor_temperature", hass, config_entry),
         ]
     )
