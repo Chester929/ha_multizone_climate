@@ -89,6 +89,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"Global config already exists in Redis (found {len(existing_config)} keys), skipping initialization"
         )
 
+    # Initialize main climate state if it doesn't exist
+    existing_main_climate = await redis_client.get_main_climate_state()
+    if not existing_main_climate:
+        # Get initial state from main climate entity
+        main_climate_entity_id = entry.data.get("main_climate_entity", "")
+        main_climate_state_obj = hass.states.get(main_climate_entity_id) if main_climate_entity_id else None
+        
+        # Create initial main climate state
+        initial_main_climate = {
+            "entity_id": main_climate_entity_id,
+            "current_temperature": 0.0,
+            "target_temperature": 20.0,
+            "outdoor_temperature": 0.0,
+            "hvac_mode": "unknown",
+            "hvac_action": "unknown",
+            "multizone_enabled": False,
+        }
+        
+        # Populate from actual state if available
+        if main_climate_state_obj:
+            attrs = main_climate_state_obj.attributes
+            initial_main_climate["current_temperature"] = attrs.get("current_temperature", 0.0)
+            initial_main_climate["target_temperature"] = attrs.get("temperature", 20.0)
+            initial_main_climate["hvac_mode"] = main_climate_state_obj.state
+            initial_main_climate["hvac_action"] = attrs.get("hvac_action", "unknown")
+        
+        # Get outdoor temperature from sensor if provided
+        outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
+        if outdoor_sensor:
+            outdoor_state = hass.states.get(outdoor_sensor)
+            if outdoor_state:
+                try:
+                    initial_main_climate["outdoor_temperature"] = float(outdoor_state.state)
+                except (ValueError, TypeError):
+                    _LOGGER.warning(f"Could not parse outdoor temperature from {outdoor_sensor}")
+        
+        await redis_client.set_main_climate_state(initial_main_climate)
+        _LOGGER.info(
+            f"Initialized main climate state in Redis for {main_climate_entity_id}"
+        )
+    else:
+        _LOGGER.info(
+            f"Main climate state already exists in Redis (found {len(existing_main_climate)} keys), skipping initialization"
+        )
+
     # Check if this is initial setup with zone data in entry.data
     # Only create initial zone if Redis is empty (prevents duplicates on restart)
     required_zone_fields = ["zone_name", "temperature_sensor", "valve_switch"]
