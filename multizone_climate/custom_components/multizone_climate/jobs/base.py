@@ -22,8 +22,8 @@ class BaseJob(ABC):
     - Execution lifecycle management
     
     Note:
-        Job-level locking is managed by the coordinator to ensure jobs
-        are not dequeued before lock acquisition, preventing data loss.
+        Jobs are processed sequentially by a single worker.
+        Redis RPOP ensures atomic dequeue with no race conditions.
     """
 
     def __init__(

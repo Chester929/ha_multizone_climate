@@ -323,49 +323,36 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"Job instance for {job_type} not initialized")
             return
 
-        # Try to acquire lock for this job type before processing any jobs
-        # This prevents jobs from being dequeued and lost if another worker is processing
-        lock_acquired = await self.redis_client.acquire_job_lock(job_type, timeout=60)
-        if not lock_acquired:
-            _LOGGER.debug(f"Job type {job_type} is already being processed, skipping queue")
-            return
+        # Process all jobs in the queue sequentially
+        # Since there's only one job worker, no locking is needed
+        jobs_processed = 0
+        while True:
+            # Dequeue next job (atomic operation via Redis RPOP)
+            job_data = await self.redis_client.dequeue_job(job_type)
+            if not job_data:
+                # Queue is empty
+                if jobs_processed > 0:
+                    _LOGGER.debug(f"Processed {jobs_processed} {job_type} job(s)")
+                break
 
-        try:
-            # Process all jobs in the queue while we hold the lock
-            jobs_processed = 0
-            while True:
-                # Dequeue next job (only after we have the lock)
-                job_data = await self.redis_client.dequeue_job(job_type)
-                if not job_data:
-                    # Queue is empty
-                    if jobs_processed > 0:
-                        _LOGGER.debug(f"Processed {jobs_processed} {job_type} job(s)")
-                    break
+            # Execute the job
+            _LOGGER.debug(f"Job {job_type} started: {job_data}")
 
-                # Execute the job
-                _LOGGER.debug(f"Job {job_type} started: {job_data}")
+            try:
+                result = await job_instance.execute(job_data)
 
-                try:
-                    result = await job_instance.execute(job_data)
+                if result.get("status") == "completed":
+                    _LOGGER.info(f"Job {job_type} finished successfully: {result.get('result', {})}")
+                elif result.get("status") == "failed":
+                    _LOGGER.error(f"Job {job_type} failed: {result.get('error', 'unknown')}")
+                else:
+                    _LOGGER.warning(f"Job {job_type} returned unknown status: {result.get('status')}")
 
-                    if result.get("status") == "completed":
-                        _LOGGER.info(f"Job {job_type} finished successfully: {result.get('result', {})}")
-                    elif result.get("status") == "skipped":
-                        _LOGGER.debug(f"Job {job_type} skipped: {result.get('reason', 'unknown')}")
-                    elif result.get("status") == "failed":
-                        _LOGGER.error(f"Job {job_type} failed: {result.get('error', 'unknown')}")
-                    else:
-                        _LOGGER.warning(f"Job {job_type} returned unknown status: {result.get('status')}")
+                jobs_processed += 1
 
-                    jobs_processed += 1
-
-                except Exception as err:
-                    _LOGGER.error(f"Exception executing job {job_type}: {err}", exc_info=True)
-                    jobs_processed += 1
-
-        finally:
-            # Always release the lock when done processing
-            await self.redis_client.release_job_lock(job_type)
+            except Exception as err:
+                _LOGGER.error(f"Exception executing job {job_type}: {err}", exc_info=True)
+                jobs_processed += 1
 
     def get_config(self) -> dict | None:
         """Get configuration from coordinator data."""

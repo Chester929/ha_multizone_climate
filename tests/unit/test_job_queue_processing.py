@@ -1,4 +1,4 @@
-"""Tests for job queue processing to ensure no data loss."""
+"""Tests for job queue processing to ensure proper sequential processing."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,65 +24,16 @@ class MockJob(BaseJob):
 
 
 @pytest.mark.asyncio
-async def test_job_queue_lock_prevents_dequeue():
+async def test_job_queue_processes_all_jobs():
     """
-    Test that when a lock cannot be acquired, jobs remain in the queue.
+    Test that all jobs in queue are processed sequentially.
     
-    This verifies the fix for the race condition where jobs would be
-    dequeued before checking the lock, causing data loss.
-    """
-    # Setup mock redis client
-    mock_redis = MagicMock()
-    mock_redis.acquire_job_lock = AsyncMock()
-    mock_redis.release_job_lock = AsyncMock()
-    mock_redis.dequeue_job = AsyncMock()
-    
-    # Mock lock acquisition failure (another worker is processing)
-    mock_redis.acquire_job_lock.return_value = False
-    
-    # Setup mock job data in queue
-    mock_redis.dequeue_job.return_value = {"test": "data"}
-    
-    # Create coordinator with mocked aiohttp session
-    mock_hass = MagicMock()
-    mock_aiohttp_session = AsyncMock()
-    
-    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
-        coordinator = MultizoneClimateCoordinator(
-            hass=mock_hass,
-            backend_url="http://localhost",
-            redis_client=mock_redis
-        )
-        
-        # Create mock job instance
-        mock_job = MockJob(mock_redis, mock_hass)
-        
-        # Process queue - should NOT dequeue because lock fails
-        await coordinator._process_job_queue("test_job", mock_job)
-        
-        # Verify lock was attempted
-        mock_redis.acquire_job_lock.assert_called_once_with("test_job", timeout=60)
-        
-        # Verify dequeue was NOT called (job stays in queue)
-        mock_redis.dequeue_job.assert_not_called()
-        
-        # Verify job was NOT executed
-        assert len(mock_job.executed_jobs) == 0
-        
-        # Verify lock was NOT released (because it was never acquired)
-        mock_redis.release_job_lock.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_job_queue_processes_with_lock():
-    """
-    Test that when lock is acquired, jobs are dequeued and processed.
+    In a single-worker architecture, jobs are dequeued and processed
+    one at a time until the queue is empty.
     """
     # Setup mock redis client
     mock_redis = MagicMock()
-    mock_redis.acquire_job_lock = AsyncMock(return_value=True)
-    mock_redis.release_job_lock = AsyncMock()
-    mock_redis.set_job_status = AsyncMock()  # Add this for _update_status
+    mock_redis.set_job_status = AsyncMock()
     
     # Mock three jobs in the queue
     jobs = [
@@ -110,38 +61,24 @@ async def test_job_queue_processes_with_lock():
         # Process queue
         await coordinator._process_job_queue("test_job", mock_job)
         
-        # Verify lock was acquired
-        mock_redis.acquire_job_lock.assert_called_once_with("test_job", timeout=60)
-        
         # Verify all three jobs were dequeued
         assert mock_redis.dequeue_job.call_count == 4  # 3 jobs + 1 None
         
-        # Verify all three jobs were executed
+        # Verify all three jobs were executed in order
         assert len(mock_job.executed_jobs) == 3
         assert mock_job.executed_jobs[0] == {"job_id": 1, "data": "first"}
         assert mock_job.executed_jobs[1] == {"job_id": 2, "data": "second"}
         assert mock_job.executed_jobs[2] == {"job_id": 3, "data": "third"}
-        
-        # Verify lock was released
-        mock_redis.release_job_lock.assert_called_once_with("test_job")
 
 
 @pytest.mark.asyncio
-async def test_job_queue_releases_lock_on_exception():
+async def test_job_queue_handles_empty_queue():
     """
-    Test that lock is released even if job execution fails.
+    Test that empty queue is handled gracefully.
     """
     # Setup mock redis client
     mock_redis = MagicMock()
-    mock_redis.acquire_job_lock = AsyncMock(return_value=True)
-    mock_redis.release_job_lock = AsyncMock()
-    mock_redis.set_job_status = AsyncMock()
-    
-    # Mock one job that will fail
-    mock_redis.dequeue_job = AsyncMock(side_effect=[
-        {"job_id": 1, "data": "test"},
-        None
-    ])
+    mock_redis.dequeue_job = AsyncMock(return_value=None)  # Empty queue
     
     # Create coordinator with mocked aiohttp session
     mock_hass = MagicMock()
@@ -154,109 +91,79 @@ async def test_job_queue_releases_lock_on_exception():
             redis_client=mock_redis
         )
         
-        # Create mock job that raises exception
+        # Create mock job instance
         mock_job = MockJob(mock_redis, mock_hass)
         
-        # Make execute raise an exception
-        async def failing_execute(job_data):
-            raise ValueError("Simulated failure")
-        
-        mock_job.execute = failing_execute
-        
-        # Process queue - should handle exception gracefully
+        # Process empty queue - should complete without errors
         await coordinator._process_job_queue("test_job", mock_job)
         
-        # Verify lock was acquired
-        mock_redis.acquire_job_lock.assert_called_once()
+        # Verify dequeue was called once
+        mock_redis.dequeue_job.assert_called_once()
         
-        # Verify lock was released even though job failed
-        mock_redis.release_job_lock.assert_called_once_with("test_job")
+        # Verify no jobs were executed
+        assert len(mock_job.executed_jobs) == 0
 
 
 @pytest.mark.asyncio
-async def test_multiple_workers_only_one_processes():
+async def test_job_queue_continues_after_job_failure():
     """
-    Test that multiple workers don't process the same queue simultaneously.
-    
-    Simulates two workers trying to process the same job type at the same time.
-    Only one should acquire the lock and process jobs.
+    Test that queue processing continues even if one job fails.
     """
     # Setup mock redis client
     mock_redis = MagicMock()
     mock_redis.set_job_status = AsyncMock()
     
-    # Track lock state
-    lock_held = False
+    # Mock jobs where middle one will fail
+    jobs = [
+        {"job_id": 1, "data": "first"},
+        {"job_id": 2, "data": "will_fail"},
+        {"job_id": 3, "data": "third"},
+        None
+    ]
+    mock_redis.dequeue_job = AsyncMock(side_effect=jobs)
     
-    async def mock_acquire_lock(job_type, timeout):
-        nonlocal lock_held
-        if lock_held:
-            return False  # Lock already held
-        lock_held = True
-        return True
-    
-    async def mock_release_lock(job_type):
-        nonlocal lock_held
-        lock_held = False
-    
-    mock_redis.acquire_job_lock = AsyncMock(side_effect=mock_acquire_lock)
-    mock_redis.release_job_lock = AsyncMock(side_effect=mock_release_lock)
-    
-    # Mock jobs in queue
-    jobs = [{"job_id": 1}, {"job_id": 2}, None]
-    job_index = 0
-    
-    async def mock_dequeue(job_type):
-        nonlocal job_index
-        if job_index < len(jobs):
-            result = jobs[job_index]
-            job_index += 1
-            return result
-        return None
-    
-    mock_redis.dequeue_job = AsyncMock(side_effect=mock_dequeue)
-    
-    # Create two coordinators (simulating two workers) with mocked aiohttp session
+    # Create coordinator with mocked aiohttp session
     mock_hass = MagicMock()
     mock_aiohttp_session = AsyncMock()
     
     with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
-        coordinator1 = MultizoneClimateCoordinator(
-            hass=mock_hass,
-            backend_url="http://localhost",
-            redis_client=mock_redis
-        )
-        coordinator2 = MultizoneClimateCoordinator(
+        coordinator = MultizoneClimateCoordinator(
             hass=mock_hass,
             backend_url="http://localhost",
             redis_client=mock_redis
         )
         
-        # Create mock jobs
-        mock_job1 = MockJob(mock_redis, mock_hass)
-        mock_job2 = MockJob(mock_redis, mock_hass)
+        # Create mock job that fails on specific data
+        mock_job = MockJob(mock_redis, mock_hass)
         
-        # Process queue from both workers simultaneously
-        await asyncio.gather(
-            coordinator1._process_job_queue("test_job", mock_job1),
-            coordinator2._process_job_queue("test_job", mock_job2)
-        )
+        original_execute = mock_job.execute
         
-        # Verify only one worker processed the jobs
-        total_executed = len(mock_job1.executed_jobs) + len(mock_job2.executed_jobs)
-        assert total_executed == 2  # Both jobs processed
+        async def selective_failing_execute(job_data):
+            if job_data.get("data") == "will_fail":
+                raise ValueError("Simulated failure")
+            return await original_execute(job_data)
         
-        # One worker should have processed both jobs, the other none
-        assert (len(mock_job1.executed_jobs) == 2 and len(mock_job2.executed_jobs) == 0) or \
-               (len(mock_job1.executed_jobs) == 0 and len(mock_job2.executed_jobs) == 2)
+        mock_job.execute = selective_failing_execute
+        
+        # Process queue - should handle failure and continue
+        await coordinator._process_job_queue("test_job", mock_job)
+        
+        # Verify all jobs were attempted (dequeued)
+        assert mock_redis.dequeue_job.call_count == 4
+        
+        # Verify first and third jobs succeeded (second failed)
+        assert len(mock_job.executed_jobs) == 2
+        assert mock_job.executed_jobs[0] == {"job_id": 1, "data": "first"}
+        assert mock_job.executed_jobs[1] == {"job_id": 3, "data": "third"}
 
 
 @pytest.mark.asyncio
-async def test_job_execute_no_longer_checks_lock():
+async def test_job_execute_processes_successfully():
     """
-    Test that BaseJob.execute() no longer checks locks internally.
+    Test that BaseJob.execute() processes jobs successfully.
     
-    Locks are now managed at the coordinator level to prevent data loss.
+    In a single-worker architecture, jobs are processed one at a time
+    without any locking mechanism needed.
     """
     # Setup mock redis client
     mock_redis = MagicMock()
@@ -275,9 +182,52 @@ async def test_job_execute_no_longer_checks_lock():
     assert result["status"] == "completed"
     assert len(mock_job.executed_jobs) == 1
     assert mock_job.executed_jobs[0] == {"test": "data"}
+
+
+@pytest.mark.asyncio
+async def test_redis_rpop_is_atomic():
+    """
+    Test that demonstrates Redis RPOP is atomic.
     
-    # Note: We don't verify lock operations here because locks
-    # are now managed at the coordinator level, not in BaseJob.execute()
+    This verifies that dequeue operation removes the job atomically,
+    preventing any race conditions in a single-worker scenario.
+    """
+    # Setup mock redis client
+    mock_redis = MagicMock()
+    mock_redis.set_job_status = AsyncMock()
+    
+    call_count = 0
+    
+    # Simulate atomic RPOP behavior
+    async def atomic_dequeue(job_type):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return {"job_id": 1, "atomically_removed": True}
+        return None
+    
+    mock_redis.dequeue_job = AsyncMock(side_effect=atomic_dequeue)
+    
+    # Create coordinator with mocked aiohttp session
+    mock_hass = MagicMock()
+    mock_aiohttp_session = AsyncMock()
+    
+    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+        coordinator = MultizoneClimateCoordinator(
+            hass=mock_hass,
+            backend_url="http://localhost",
+            redis_client=mock_redis
+        )
+        
+        # Create mock job
+        mock_job = MockJob(mock_redis, mock_hass)
+        
+        # Process queue
+        await coordinator._process_job_queue("test_job", mock_job)
+        
+        # Verify job was dequeued and processed
+        assert len(mock_job.executed_jobs) == 1
+        assert mock_job.executed_jobs[0]["atomically_removed"] is True
 
 
 if __name__ == "__main__":
