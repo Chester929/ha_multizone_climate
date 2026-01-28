@@ -10,7 +10,7 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +21,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     # Command retry configuration
     MAX_COMMAND_RETRIES = 5
     RETRY_DELAY_SECONDS = 5
+    # Job worker configuration
+    JOB_WORKER_INTERVAL = 10  # seconds between job queue checks
 
-    def __init__(self, hass: HomeAssistant, backend_url: str):
+    def __init__(self, hass: HomeAssistant, backend_url: str, redis_client: Any = None):
         """Initialize the coordinator."""
         # Get coordinator interval from environment variable (set by addon)
         raw_interval = os.environ.get("COORDINATOR_INTERVAL", "30")
@@ -43,6 +45,13 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         # Create session with default timeout
         timeout = aiohttp.ClientTimeout(total=10)
         self.session = aiohttp.ClientSession(timeout=timeout)
+        # Store redis_client for job worker
+        self.redis_client = redis_client
+        # Job worker task
+        self._job_worker_task: asyncio.Task | None = None
+        # Job instances (will be initialized later)
+        self._update_valves_job: Any = None
+        self._calculate_main_temp_job: Any = None
 
     async def _async_update_data(self) -> dict:
         """Fetch commands from backend and execute them."""
@@ -219,8 +228,132 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Cleanup on shutdown."""
+        # Stop job worker
+        await self.stop_job_worker()
+        # Close session
         if self.session:
             await self.session.close()
+
+    async def start_job_worker(self) -> None:
+        """
+        Start the background job worker.
+        
+        The job worker processes jobs from Redis queues when multizone is enabled.
+        It runs continuously in the background, checking for new jobs every JOB_WORKER_INTERVAL seconds.
+        """
+        if self._job_worker_task is not None:
+            _LOGGER.warning("Job worker already running")
+            return
+        
+        if not self.redis_client:
+            _LOGGER.error("Cannot start job worker: redis_client not available")
+            return
+        
+        # Initialize job instances
+        from .jobs import UpdateValvesJob, CalculateMainTempJob
+        self._update_valves_job = UpdateValvesJob(self.redis_client, self.hass)
+        self._calculate_main_temp_job = CalculateMainTempJob(self.redis_client, self.hass)
+        
+        # Start worker task
+        self._job_worker_task = asyncio.create_task(self._job_worker_loop())
+        _LOGGER.info("Job worker started")
+
+    async def stop_job_worker(self) -> None:
+        """Stop the background job worker."""
+        if self._job_worker_task:
+            self._job_worker_task.cancel()
+            try:
+                await self._job_worker_task
+            except asyncio.CancelledError:
+                pass
+            self._job_worker_task = None
+            _LOGGER.info("Job worker stopped")
+
+    async def _job_worker_loop(self) -> None:
+        """
+        Main job worker loop.
+        
+        Continuously processes jobs from Redis queues when multizone is enabled.
+        Checks both calculate_main_temp and update_valves queues.
+        """
+        _LOGGER.info("Job worker loop starting")
+        
+        while True:
+            try:
+                # Check if multizone is enabled
+                config = await self.redis_client.get_config()
+                multizone_enabled = config.get("multizone_enabled", False) if config else False
+                
+                if not multizone_enabled:
+                    _LOGGER.debug("Job worker: multizone disabled, skipping job processing")
+                    await asyncio.sleep(self.JOB_WORKER_INTERVAL)
+                    continue
+                
+                # Process calculate_main_temp jobs
+                await self._process_job_queue(
+                    JOB_TYPE_CALCULATE_MAIN_TEMP,
+                    self._calculate_main_temp_job
+                )
+                
+                # Process update_valves jobs
+                await self._process_job_queue(
+                    JOB_TYPE_UPDATE_VALVES,
+                    self._update_valves_job
+                )
+                
+                # Wait before next iteration
+                await asyncio.sleep(self.JOB_WORKER_INTERVAL)
+                
+            except asyncio.CancelledError:
+                _LOGGER.info("Job worker loop cancelled")
+                raise
+            except Exception as err:
+                _LOGGER.error(f"Error in job worker loop: {err}", exc_info=True)
+                await asyncio.sleep(self.JOB_WORKER_INTERVAL)
+
+    async def _process_job_queue(self, job_type: str, job_instance: Any) -> None:
+        """
+        Process all jobs in a specific queue.
+        
+        Args:
+            job_type: Type of job (calculate_main_temp or update_valves)
+            job_instance: Job instance to execute
+        """
+        if not job_instance:
+            _LOGGER.error(f"Job instance for {job_type} not initialized")
+            return
+        
+        # Process all jobs in the queue
+        jobs_processed = 0
+        while True:
+            # Dequeue next job
+            job_data = await self.redis_client.dequeue_job(job_type)
+            if not job_data:
+                # Queue is empty
+                if jobs_processed > 0:
+                    _LOGGER.debug(f"Processed {jobs_processed} {job_type} job(s)")
+                break
+            
+            # Execute the job
+            _LOGGER.debug(f"Job {job_type} started: {job_data}")
+            
+            try:
+                result = await job_instance.execute(job_data)
+                
+                if result.get("status") == "completed":
+                    _LOGGER.info(f"Job {job_type} finished successfully: {result.get('result', {})}")
+                elif result.get("status") == "skipped":
+                    _LOGGER.debug(f"Job {job_type} skipped: {result.get('reason', 'unknown')}")
+                elif result.get("status") == "failed":
+                    _LOGGER.error(f"Job {job_type} failed: {result.get('error', 'unknown')}")
+                else:
+                    _LOGGER.warning(f"Job {job_type} returned unknown status: {result.get('status')}")
+                    
+                jobs_processed += 1
+                
+            except Exception as err:
+                _LOGGER.error(f"Exception executing job {job_type}: {err}", exc_info=True)
+                jobs_processed += 1
 
     def get_config(self) -> dict | None:
         """Get configuration from coordinator data."""
