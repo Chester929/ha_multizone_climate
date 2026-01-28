@@ -323,3 +323,63 @@ class TestRedisInitialization:
         assert state_call_args["target_temperature"] == 22.0
         assert state_call_args["hvac_mode"] == "heat"
         assert state_call_args["hvac_action"] == "heating"
+
+    @pytest.mark.asyncio
+    async def test_creates_notification_on_first_setup(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that restart notification is created on first setup."""
+        # Mock that config doesn't exist (first setup)
+        mock_redis_client.get_config = AsyncMock(return_value={})
+
+        # Mock services.async_call
+        mock_hass.services = MagicMock()
+        mock_hass.services.async_call = AsyncMock()
+
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("homeassistant.helpers.device_registry.async_get"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+
+        # Should return True for successful setup
+        assert result is True
+
+        # Should call services.async_call to create notification
+        mock_hass.services.async_call.assert_called()
+
+        # Verify the notification was created with correct parameters
+        call_args = mock_hass.services.async_call.call_args
+        assert call_args[0][0] == "persistent_notification"
+        assert call_args[0][1] == "create"
+        assert "title" in call_args[0][2]
+        assert "message" in call_args[0][2]
+        assert "notification_id" in call_args[0][2]
+        assert call_args[0][2]["notification_id"] == "multizone_climate_restart_required"
+
+    @pytest.mark.asyncio
+    async def test_does_not_create_notification_when_config_exists(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that restart notification is NOT created when config already exists."""
+        # Mock that config already exists (not first setup)
+        mock_redis_client.get_config = AsyncMock(return_value={
+            "main_climate_entity_id": "climate.existing",
+            "min_valves_open": 1,
+        })
+
+        # Mock services.async_call
+        mock_hass.services = MagicMock()
+        mock_hass.services.async_call = AsyncMock()
+
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("homeassistant.helpers.device_registry.async_get"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+
+        # Should return True for successful setup
+        assert result is True
+
+        # Should NOT call services.async_call (no notification)
+        mock_hass.services.async_call.assert_not_called()
