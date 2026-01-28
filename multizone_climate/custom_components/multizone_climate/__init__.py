@@ -57,6 +57,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
 
+    # Initialize global config if it doesn't exist
+    existing_config = await redis_client.get_config()
+    if not existing_config:
+        # Create initial config with default values
+        initial_config = {
+            "main_climate_entity_id": entry.data.get("main_climate_entity", ""),
+            "main_target_all_zones_satisfied": 0.5,
+            "use_average_mode": False,
+            "min_valves_open": 1,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+            "valve_actuation_delay": 120,
+            "coordinator_interval": int(os.environ.get("COORDINATOR_INTERVAL", "15")),
+            "satisfaction_eps": 0.0,
+            "multizone_enabled": False,
+        }
+        
+        # Add outdoor temperature sensor if provided
+        outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
+        if outdoor_sensor:
+            initial_config["outdoor_temperature_sensor"] = outdoor_sensor
+        
+        await redis_client.set_config(initial_config)
+        _LOGGER.info(
+            f"Initialized global config in Redis with main_climate_entity_id={initial_config['main_climate_entity_id']}"
+        )
+    else:
+        _LOGGER.info(
+            f"Global config already exists in Redis (found {len(existing_config)} keys), skipping initialization"
+        )
+
     # Check if this is initial setup with zone data in entry.data
     # Only create initial zone if Redis is empty (prevents duplicates on restart)
     required_zone_fields = ["zone_name", "temperature_sensor", "valve_switch"]
