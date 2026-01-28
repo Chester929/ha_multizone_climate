@@ -151,10 +151,17 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     
     # Create persistent notification to inform user about restart requirement
     if [ -n "${SUPERVISOR_TOKEN}" ]; then
-        # Create notification message
+        # Create notification message (jq will handle proper JSON escaping)
         NOTIFICATION_MESSAGE="The Multizone Climate custom component has been updated to version ${ADDON_VERSION}. Please restart Home Assistant to load the updated integration.
 
 Go to **Settings** → **System** → **Restart** to restart Home Assistant."
+        
+        # Use jq to properly construct JSON payload (handles escaping of special characters)
+        JSON_PAYLOAD=$(jq -n \
+            --arg message "${NOTIFICATION_MESSAGE}" \
+            --arg title "Multizone Climate: Restart Required" \
+            --arg notification_id "multizone_climate_restart_required" \
+            '{message: $message, title: $title, notification_id: $notification_id}')
         
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 10 \
@@ -162,7 +169,7 @@ Go to **Settings** → **System** → **Restart** to restart Home Assistant."
             -X POST \
             -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"message\": \"${NOTIFICATION_MESSAGE}\", \"title\": \"Multizone Climate: Restart Required\", \"notification_id\": \"multizone_climate_restart_required\"}" \
+            -d "${JSON_PAYLOAD}" \
             http://supervisor/core/api/services/persistent_notification/create)
         CURL_EXIT_CODE=$?
         
