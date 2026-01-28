@@ -14,13 +14,23 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    NOTIFICATION_ID_RESTART,
+    NOTIFICATION_MESSAGE_RESTART,
+    NOTIFICATION_TITLE_RESTART,
+)
 from .coordinator import MultizoneClimateCoordinator
 from .core import RedisClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+PLATFORMS: list[Platform] = [
+    Platform.CLIMATE,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SWITCH,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -75,12 +85,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "satisfaction_eps": 0.0,
             "multizone_enabled": False,
         }
-        
+
         # Add outdoor temperature sensor if provided
         outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
         if outdoor_sensor:
             initial_config["outdoor_temperature_sensor"] = outdoor_sensor
-        
+
         await redis_client.set_config(initial_config)
         _LOGGER.info(
             f"Initialized global config in Redis with main_climate_entity_id={initial_config['main_climate_entity_id']}"
@@ -95,8 +105,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not existing_main_climate:
         # Get initial state from main climate entity
         main_climate_entity_id = entry.data.get("main_climate_entity", "")
-        main_climate_state_obj = hass.states.get(main_climate_entity_id) if main_climate_entity_id else None
-        
+        main_climate_state_obj = (
+            hass.states.get(main_climate_entity_id) if main_climate_entity_id else None
+        )
+
         # Retry once if entity is not available (entity might be initializing)
         if not main_climate_state_obj and main_climate_entity_id:
             _LOGGER.info(
@@ -104,11 +116,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             await asyncio.sleep(1)
             main_climate_state_obj = hass.states.get(main_climate_entity_id)
-        
+
         # Initialize with actual data from HA entity if available
         if main_climate_state_obj:
             attrs = main_climate_state_obj.attributes
-            
+
             # Create initial main climate state with actual data from HA entity
             initial_main_climate = {
                 "entity_id": main_climate_entity_id,
@@ -118,17 +130,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "hvac_mode": main_climate_state_obj.state,
                 "hvac_action": attrs.get("hvac_action", "idle"),
             }
-            
+
             # Get outdoor temperature from sensor if provided
             outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
             if outdoor_sensor:
                 outdoor_state = hass.states.get(outdoor_sensor)
                 if outdoor_state:
                     try:
-                        initial_main_climate["outdoor_temperature"] = float(outdoor_state.state)
+                        initial_main_climate["outdoor_temperature"] = float(
+                            outdoor_state.state
+                        )
                     except (ValueError, TypeError):
-                        _LOGGER.warning(f"Could not parse outdoor temperature from {outdoor_sensor}, using 0.0")
-            
+                        _LOGGER.warning(
+                            f"Could not parse outdoor temperature from {outdoor_sensor}, using 0.0"
+                        )
+
             await redis_client.set_main_climate_state(initial_main_climate)
             _LOGGER.info(
                 f"Initialized main climate state in Redis for {main_climate_entity_id} with actual data from HA"
@@ -139,7 +155,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 f"Cannot fetch data from main climate entity {main_climate_entity_id} after retry. "
                 f"Initializing with default values."
             )
-            
+
             # Create initial main climate state with default values
             initial_main_climate = {
                 "entity_id": main_climate_entity_id,
@@ -149,7 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "hvac_mode": "unknown",
                 "hvac_action": "idle",
             }
-            
+
             await redis_client.set_main_climate_state(initial_main_climate)
             _LOGGER.info(
                 f"Initialized main climate state in Redis for {main_climate_entity_id} with default values"
@@ -241,6 +257,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register main device in device registry
     from homeassistant.helpers import device_registry as dr
+
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
@@ -256,6 +273,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register update listener for options flow changes
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+
+    # Create persistent notification for restart requirement on first installation
+    # This notification reminds users to restart Home Assistant after installation
+    # The notification will persist until dismissed by the user
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "title": NOTIFICATION_TITLE_RESTART,
+            "message": NOTIFICATION_MESSAGE_RESTART,
+            "notification_id": NOTIFICATION_ID_RESTART,
+        },
+        blocking=False,
+    )
+    _LOGGER.info("Created restart notification for Multizone Climate integration")
 
     return True
 

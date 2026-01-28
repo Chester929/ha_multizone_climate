@@ -2,6 +2,14 @@
 
 DOMAIN = "multizone_climate"
 
+# Notification constants
+NOTIFICATION_ID_RESTART = "multizone_climate_restart_required"
+NOTIFICATION_TITLE_RESTART = "Multizone Climate: Restart Required"
+NOTIFICATION_MESSAGE_RESTART = (
+    "The Multizone Climate integration has been installed or updated. "
+    "Please restart Home Assistant for the changes to take effect."
+)
+
 # Job type constants
 JOB_TYPE_CALCULATE_MAIN_TEMP = "calculate_main_temp"
 JOB_TYPE_UPDATE_VALVES = "update_valves"
