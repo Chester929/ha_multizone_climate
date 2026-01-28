@@ -161,6 +161,7 @@ class ZoneClimateEntity(ClimateEntity):
         self._is_fallback = zone_config.get("is_fallback_valve", False)
 
         # State tracking
+        self._enabled = zone_config.get("enabled", "true") not in ["false", "False", "0"]
         self._current_temperature: float | None = cast(
             float | None, zone_config.get("current_temperature")
         )
@@ -252,10 +253,9 @@ class ZoneClimateEntity(ClimateEntity):
         Return the current HVAC mode.
 
         Returns:
-            HVACMode: Always HEAT (zones don't control mode)
+            HVACMode: HEAT if enabled, OFF if disabled
         """
-        # Zones are always in HEAT mode (or follow main climate)
-        return HVACMode.HEAT
+        return HVACMode.HEAT if self._enabled else HVACMode.OFF
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
@@ -263,9 +263,9 @@ class ZoneClimateEntity(ClimateEntity):
         Return the list of available HVAC modes.
 
         Returns:
-            list: Available modes
+            list: Available modes (HEAT and OFF)
         """
-        return [HVACMode.HEAT]
+        return [HVACMode.HEAT, HVACMode.OFF]
 
     @property
     def supported_features(self) -> ClimateEntityFeature:
@@ -275,7 +275,11 @@ class ZoneClimateEntity(ClimateEntity):
         Returns:
             int: Supported features flags
         """
-        return ClimateEntityFeature.TARGET_TEMPERATURE
+        return (
+            ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
+        )
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """
@@ -347,6 +351,108 @@ class ZoneClimateEntity(ClimateEntity):
             {
                 "job_id": f"update_valves_{self.zone_id}_{job_id_suffix}",
                 "trigger": f"zone_{self.zone_id}_target_changed",
+                "changed_zones": [self.zone_id],
+                "enqueued_at": self.hass.loop.time(),
+            },
+        )
+
+        # Update HA state
+        self.async_write_ha_state()
+
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        """
+        Set HVAC mode (HEAT to enable, OFF to disable zone).
+
+        Args:
+            hvac_mode: The HVAC mode to set (HEAT or OFF)
+
+        Tasks:
+            - Validate fallback zone requirements if disabling
+            - Update enabled state
+            - Write to Redis
+            - Trigger valve update
+        """
+        if hvac_mode == HVACMode.OFF:
+            await self._set_enabled(False)
+        elif hvac_mode == HVACMode.HEAT:
+            await self._set_enabled(True)
+        else:
+            _LOGGER.warning(
+                "Unsupported HVAC mode %s for zone %s", hvac_mode, self.zone_id
+            )
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable the zone.
+
+        Args:
+            enabled: True to enable, False to disable
+
+        Raises:
+            ValueError: If disabling would violate minimum valve requirements
+
+        Tasks:
+            - Validate minimum fallback zones if disabling
+            - Update enabled state
+            - Write to Redis
+            - Trigger valve update
+        """
+        # If disabling a fallback zone, validate minimum requirements
+        if not enabled and self._is_fallback:
+            # Get all zone IDs from Redis
+            zone_ids = await self.redis_client.get_zone_ids()
+            
+            # Count currently enabled fallback zones (excluding this one)
+            enabled_fallback_count = 0
+            for zone_id in zone_ids:
+                if zone_id == self.zone_id:
+                    continue
+                zone_state = await self.redis_client.get_zone_state(zone_id)
+                if zone_state:
+                    is_fallback = zone_state.get("is_fallback_valve", False) not in [False, "false", "False", "0"]
+                    is_enabled = zone_state.get("enabled", "true") not in ["false", "False", "0"]
+                    if is_fallback and is_enabled:
+                        enabled_fallback_count += 1
+            
+            # Get minimum requirement
+            config = self.coordinator.get_config() or {}
+            min_valves_required = config.get("min_valves_open", 1)
+            
+            # Check if we would violate the minimum
+            if enabled_fallback_count < min_valves_required:
+                _LOGGER.error(
+                    "Cannot disable fallback zone %s: would have %d fallback zones but need at least %d",
+                    self.zone_id,
+                    enabled_fallback_count,
+                    min_valves_required,
+                )
+                raise ValueError(
+                    f"Cannot disable this fallback zone. At least {min_valves_required} "
+                    f"fallback zone(s) must remain enabled for safety."
+                )
+
+        # Update enabled state
+        old_enabled = self._enabled
+        self._enabled = enabled
+
+        _LOGGER.info(
+            "Zone %s %s (was %s)",
+            self.zone_id,
+            "enabled" if enabled else "disabled",
+            "enabled" if old_enabled else "disabled",
+        )
+
+        # Write to Redis
+        await self._update_zone_state_in_redis()
+
+        # Trigger valve update job
+        job_id_suffix = f"{int(self.hass.loop.time() * 1000)}_{hashlib.md5(self.zone_id.encode()).hexdigest()[:8]}"
+        
+        await self.redis_client.enqueue_job(
+            JOB_TYPE_UPDATE_VALVES,
+            {
+                "job_id": f"update_valves_{self.zone_id}_{job_id_suffix}",
+                "trigger": f"zone_{self.zone_id}_{'enabled' if enabled else 'disabled'}",
                 "changed_zones": [self.zone_id],
                 "enqueued_at": self.hass.loop.time(),
             },
@@ -499,7 +605,7 @@ class ZoneClimateEntity(ClimateEntity):
             "valve_switch_entity_id": self._valve_switch_entity_id,
             "current_temperature": self._current_temperature,
             "target_temperature": self._target_temperature,
-            "state": "ON",  # Zones are always ON once created; OFF zones are removed
+            "enabled": "true" if self._enabled else "false",
             "satisfaction": self._satisfaction_state,
             "valve_state": self._valve_state,
             "temperature_rising": self._temperature_direction == "rising",

@@ -91,13 +91,14 @@ class ValveController:
             if not valve_id:
                 continue
 
-            zone_state = zone.get("state", "OFF")
-            satisfaction = zone.get("satisfaction", "unknown")
-
-            # Zone turned OFF -> close valve (unless it's a required fallback)
-            if zone_state == "OFF":
+            # Skip disabled zones
+            if zone.get("enabled", "true") in ["false", "False", "0"]:
                 valves_to_close.append(valve_id)
-            elif main_climate_state.upper() == "HEATING":
+                continue
+            
+            satisfaction = zone.get("satisfaction", "unknown")
+            
+            if main_climate_state.upper() == "HEATING":
                 if satisfaction == "underheated":
                     valves_to_open.append(valve_id)
                 elif satisfaction == "overheated":
@@ -161,9 +162,9 @@ class ValveController:
 
         Heating mode: deficit = target - current
         Cooling mode: deficit = current - target
-        OFF zones: (-1000, -1000) for lowest priority
+        Disabled zones: (-1000, -1000) for lowest priority
         """
-        if zone.get("state") == "OFF":
+        if zone.get("enabled", "true") in ["false", "False", "0"]:
             return (-1000, -1000)
 
         current_temp = zone.get("current_temperature", 0.0)
@@ -199,7 +200,7 @@ class ValveController:
         actions = []
 
         for zone in zones:
-            if zone.get("state") == "OFF":
+            if zone.get("enabled", "true") in ["false", "False", "0"]:
                 continue
 
             valve_id = zone.get("valve_id")
@@ -421,9 +422,11 @@ class ValveController:
         Returns:
             list: Fallback valve IDs sorted by priority
         """
-        # Filter zones with is_fallback_valve=True
+        # Filter zones with is_fallback_valve=True and enabled=true
         fallback_zones = [
-            zone for zone in zones if zone.get("is_fallback_valve", False)
+            zone for zone in zones 
+            if zone.get("is_fallback_valve", False) 
+            and zone.get("enabled", "true") not in ["false", "False", "0"]
         ]
 
         # Exclude already open/planned valves

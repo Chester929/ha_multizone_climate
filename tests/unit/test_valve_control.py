@@ -41,7 +41,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 19.0,
                 "target_temperature": 21.0,
@@ -74,7 +74,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 23.0,
                 "target_temperature": 21.0,
@@ -85,7 +85,7 @@ class TestValveController:
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.kitchen_valve",
                 "current_temperature": 21.5,
                 "target_temperature": 22.0,
@@ -120,7 +120,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 22.0,
                 "target_temperature": 21.0,
@@ -157,7 +157,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 19.0,
                 "target_temperature": 21.0,
@@ -168,7 +168,7 @@ class TestValveController:
             },
             {
                 "id": "kitchen",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.kitchen_valve",
                 "current_temperature": 19.5,
                 "target_temperature": 22.0,
@@ -202,7 +202,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 21.0,
                 "target_temperature": 21.0,
@@ -238,7 +238,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 25.0,
                 "target_temperature": 23.0,
@@ -272,7 +272,7 @@ class TestValveController:
         zones = [
             {
                 "id": "bedroom",
-                "state": "ON",
+                "enabled": "true",
                 "valve_id": "switch.bedroom_valve",
                 "current_temperature": 19.0,
                 "target_temperature": 21.0,
