@@ -8,7 +8,7 @@ bashio::log.info "Multizone Climate Add-on is shutting down..."
 #   /homeassistant/custom_components/multizone_climate/
 # or:
 #   /config/custom_components/multizone_climate/
-# 
+#
 # After manual removal, restart Home Assistant to complete the cleanup.
 
 bashio::log.info "Multizone Climate Add-on shutdown complete"
