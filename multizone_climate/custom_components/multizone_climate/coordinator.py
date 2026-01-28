@@ -104,10 +104,12 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
         except aiohttp.ClientError as err:
             _LOGGER.warning(f"Backend unavailable, will retry: {err}")
-            return {}
+            # Return state_data if we have it, otherwise empty dict
+            return state_data if 'state_data' in locals() else {}
         except Exception as err:
-            _LOGGER.error(f"Unexpected error: {err}")
-            return {}
+            _LOGGER.warning(f"Unexpected error communicating with backend: {err}")
+            # Return state_data if we have it, otherwise empty dict
+            return state_data if 'state_data' in locals() else {}
 
     async def _fetch_system_state(self) -> dict:
         """Fetch current system state from backend."""
