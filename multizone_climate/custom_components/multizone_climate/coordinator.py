@@ -237,23 +237,23 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     async def start_job_worker(self) -> None:
         """
         Start the background job worker.
-        
+
         The job worker processes jobs from Redis queues when multizone is enabled.
         It runs continuously in the background, checking for new jobs every JOB_WORKER_INTERVAL seconds.
         """
         if self._job_worker_task is not None:
             _LOGGER.warning("Job worker already running")
             return
-        
+
         if not self.redis_client:
             _LOGGER.error("Cannot start job worker: redis_client not available")
             return
-        
+
         # Initialize job instances
         from .jobs import UpdateValvesJob, CalculateMainTempJob
         self._update_valves_job = UpdateValvesJob(self.redis_client, self.hass)
         self._calculate_main_temp_job = CalculateMainTempJob(self.redis_client, self.hass)
-        
+
         # Start worker task
         self._job_worker_task = asyncio.create_task(self._job_worker_loop())
         _LOGGER.info("Job worker started")
@@ -272,38 +272,38 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     async def _job_worker_loop(self) -> None:
         """
         Main job worker loop.
-        
+
         Continuously processes jobs from Redis queues when multizone is enabled.
         Checks both calculate_main_temp and update_valves queues.
         """
         _LOGGER.info("Job worker loop starting")
-        
+
         while True:
             try:
                 # Check if multizone is enabled
                 config = await self.redis_client.get_config()
                 multizone_enabled = config.get("multizone_enabled", False) if config else False
-                
+
                 if not multizone_enabled:
                     _LOGGER.debug("Job worker: multizone disabled, skipping job processing")
                     await asyncio.sleep(self.JOB_WORKER_INTERVAL)
                     continue
-                
+
                 # Process calculate_main_temp jobs
                 await self._process_job_queue(
                     JOB_TYPE_CALCULATE_MAIN_TEMP,
                     self._calculate_main_temp_job
                 )
-                
+
                 # Process update_valves jobs
                 await self._process_job_queue(
                     JOB_TYPE_UPDATE_VALVES,
                     self._update_valves_job
                 )
-                
+
                 # Wait before next iteration
                 await asyncio.sleep(self.JOB_WORKER_INTERVAL)
-                
+
             except asyncio.CancelledError:
                 _LOGGER.info("Job worker loop cancelled")
                 raise
@@ -314,7 +314,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
     async def _process_job_queue(self, job_type: str, job_instance: Any) -> None:
         """
         Process all jobs in a specific queue.
-        
+
         Args:
             job_type: Type of job (calculate_main_temp or update_valves)
             job_instance: Job instance to execute
@@ -322,7 +322,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         if not job_instance:
             _LOGGER.error(f"Job instance for {job_type} not initialized")
             return
-        
+
         # Process all jobs in the queue
         jobs_processed = 0
         while True:
@@ -333,13 +333,13 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 if jobs_processed > 0:
                     _LOGGER.debug(f"Processed {jobs_processed} {job_type} job(s)")
                 break
-            
+
             # Execute the job
             _LOGGER.debug(f"Job {job_type} started: {job_data}")
-            
+
             try:
                 result = await job_instance.execute(job_data)
-                
+
                 if result.get("status") == "completed":
                     _LOGGER.info(f"Job {job_type} finished successfully: {result.get('result', {})}")
                 elif result.get("status") == "skipped":
@@ -348,9 +348,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                     _LOGGER.error(f"Job {job_type} failed: {result.get('error', 'unknown')}")
                 else:
                     _LOGGER.warning(f"Job {job_type} returned unknown status: {result.get('status')}")
-                    
+
                 jobs_processed += 1
-                
+
             except Exception as err:
                 _LOGGER.error(f"Exception executing job {job_type}: {err}", exc_info=True)
                 jobs_processed += 1
