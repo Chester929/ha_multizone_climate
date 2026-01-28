@@ -120,11 +120,24 @@ This will remove all zone climate entities and devices created by the integratio
 3. Click **UNINSTALL**
 4. Confirm the uninstallation
 
-**Automatic Cleanup**: When the add-on is stopped or uninstalled, it automatically:
-- Removes the custom component from `/homeassistant/custom_components/multizone_climate/` (or `/config/custom_components/multizone_climate/`)
-- Cleans up the custom component files
+### Step 3: Remove the Custom Component (Manual)
 
-### Step 3: Restart Home Assistant
+The custom component files are intentionally NOT removed automatically during shutdown or uninstall to preserve the integration across addon restarts and upgrades. To manually remove them:
+
+1. Access your Home Assistant file system (via SSH, File Editor add-on, or similar)
+2. Navigate to the custom components directory:
+   - Modern installations: `/homeassistant/custom_components/`
+   - Legacy installations: `/config/custom_components/`
+3. Remove the `multizone_climate` folder:
+   ```bash
+   rm -rf /homeassistant/custom_components/multizone_climate/
+   ```
+   or
+   ```bash
+   rm -rf /config/custom_components/multizone_climate/
+   ```
+
+### Step 4: Restart Home Assistant
 
 1. Navigate to **Settings** → **System**
 2. Click **RESTART**
