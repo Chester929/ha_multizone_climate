@@ -69,8 +69,8 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             ) as response:
                 if response.status != 200:
                     _LOGGER.warning(
-                        f"Backend returned status {response.status}. "
-                        f"Returning partial state (has {len(state_data)} keys)"
+                        f"Backend command endpoint returned status {response.status}. "
+                        f"Returning state without executing commands (state has {len(state_data)} keys)"
                     )
                     return state_data
 
@@ -110,14 +110,14 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
         except aiohttp.ClientError as err:
             _LOGGER.warning(
-                f"Backend unavailable, will retry: {err}. "
-                f"Returning partial state (has {len(state_data)} keys)"
+                f"Backend command endpoint unavailable, will retry: {err}. "
+                f"Returning state without executing commands (state has {len(state_data)} keys)"
             )
             return state_data
         except Exception as err:
             _LOGGER.warning(
                 f"Unexpected error communicating with backend: {err}. "
-                f"Returning partial state (has {len(state_data)} keys)",
+                f"Returning state without executing commands (state has {len(state_data)} keys)",
                 exc_info=True
             )
             return state_data
