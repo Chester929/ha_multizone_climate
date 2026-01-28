@@ -15,12 +15,15 @@ configuration:
   redis.mode:
     name: "Redis Mode"
     description: "Use bundled Redis container or connect to external Redis server"
+  redis.bundled_port:
+    name: "Bundled Redis Port"
+    description: "Port for bundled Redis server (default: 6380)"
   redis.host:
     name: "Redis Host"
-    description: "Redis server hostname or IP address (required when mode is external)"
+    description: "Redis server hostname or IP address (default: 127.0.0.1)"
   redis.port:
     name: "Redis Port"
-    description: "Redis server port number (required when mode is external)"
+    description: "Redis server port number (default: 6379)"
   redis.password:
     name: "Redis Password"
     description: "Redis authentication password (optional, recommended for external servers)"

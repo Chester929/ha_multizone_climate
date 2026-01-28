@@ -15,12 +15,15 @@ configuration:
   redis.mode:
     name: "Tryb Redis"
     description: "Użyj wbudowanego kontenera Redis lub połącz się z zewnętrznym serwerem Redis"
+  redis.bundled_port:
+    name: "Port wbudowanego Redis"
+    description: "Port dla wbudowanego serwera Redis (domyślnie: 6380)"
   redis.host:
     name: "Host Redis"
-    description: "Nazwa hosta lub adres IP serwera Redis (wymagane, gdy tryb jest zewnętrzny)"
+    description: "Nazwa hosta lub adres IP serwera Redis (domyślnie: 127.0.0.1)"
   redis.port:
     name: "Port Redis"
-    description: "Numer portu serwera Redis (wymagane, gdy tryb jest zewnętrzny)"
+    description: "Numer portu serwera Redis (domyślnie: 6379)"
   redis.password:
     name: "Hasło Redis"
     description: "Hasło uwierzytelniania Redis (opcjonalne, zalecane dla serwerów zewnętrznych)"
