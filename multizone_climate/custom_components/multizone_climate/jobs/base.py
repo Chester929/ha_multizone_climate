@@ -20,7 +20,7 @@ class BaseJob(ABC):
     - Status tracking
     - Error handling
     - Execution lifecycle management
-    
+
     Note:
         Jobs are processed sequentially by a single worker.
         Redis RPOP ensures atomic dequeue with no race conditions.
