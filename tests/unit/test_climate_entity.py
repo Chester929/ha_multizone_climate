@@ -384,3 +384,176 @@ class TestZoneClimateEntity:
         assert features & ClimateEntityFeature.TURN_OFF
         assert features & ClimateEntityFeature.TARGET_TEMPERATURE
 
+    @pytest.mark.asyncio
+    async def test_sync_valve_state_from_ha_on(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test syncing valve state when HA entity is 'on'."""
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+        
+        # Mock valve switch entity state as 'on'
+        valve_state_obj = MagicMock()
+        valve_state_obj.state = "on"
+        mock_hass.states.get = MagicMock(return_value=valve_state_obj)
+        
+        # Call sync method
+        await entity._sync_valve_state_from_ha()
+        
+        # Verify valve state was updated to 'opened'
+        assert entity._valve_state == "opened"
+        
+        # Verify Redis was updated
+        mock_redis_client.set_zone_state.assert_called_once()
+        zone_state = mock_redis_client.set_zone_state.call_args[0][1]
+        assert zone_state["valve_state"] == "opened"
+
+    @pytest.mark.asyncio
+    async def test_sync_valve_state_from_ha_off(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test syncing valve state when HA entity is 'off'."""
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+        
+        # Mock valve switch entity state as 'off'
+        valve_state_obj = MagicMock()
+        valve_state_obj.state = "off"
+        mock_hass.states.get = MagicMock(return_value=valve_state_obj)
+        
+        # Call sync method
+        await entity._sync_valve_state_from_ha()
+        
+        # Verify valve state was updated to 'closed'
+        assert entity._valve_state == "closed"
+        
+        # Verify Redis was updated
+        mock_redis_client.set_zone_state.assert_called_once()
+        zone_state = mock_redis_client.set_zone_state.call_args[0][1]
+        assert zone_state["valve_state"] == "closed"
+
+    @pytest.mark.asyncio
+    async def test_sync_valve_state_from_ha_unavailable(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test syncing valve state when HA entity is unavailable."""
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+        
+        # Mock valve switch entity state as 'unavailable'
+        valve_state_obj = MagicMock()
+        valve_state_obj.state = "unavailable"
+        mock_hass.states.get = MagicMock(return_value=valve_state_obj)
+        
+        # Store original valve state
+        original_valve_state = entity._valve_state
+        
+        # Call sync method
+        await entity._sync_valve_state_from_ha()
+        
+        # Verify valve state was NOT changed
+        assert entity._valve_state == original_valve_state
+        
+        # Verify Redis was NOT updated (no call or call count is 0)
+        assert mock_redis_client.set_zone_state.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_sync_valve_state_from_ha_entity_not_found(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test syncing valve state when HA entity doesn't exist."""
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+        
+        # Mock valve switch entity as not found
+        mock_hass.states.get = MagicMock(return_value=None)
+        
+        # Store original valve state
+        original_valve_state = entity._valve_state
+        
+        # Call sync method
+        await entity._sync_valve_state_from_ha()
+        
+        # Verify valve state was NOT changed
+        assert entity._valve_state == original_valve_state
+        
+        # Verify Redis was NOT updated
+        assert mock_redis_client.set_zone_state.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_sync_valve_state_from_ha_no_valve_entity_id(
+        self,
+        mock_coordinator,
+        mock_redis_client,
+        mock_hass,
+        mock_config_entry,
+        zone_config,
+    ):
+        """Test syncing valve state when valve_switch_entity_id is not set."""
+        # Modify zone config to not have valve_switch_entity_id
+        zone_config_no_valve = zone_config.copy()
+        zone_config_no_valve["valve_switch_entity_id"] = None
+        
+        entity = ZoneClimateEntity(
+            coordinator=mock_coordinator,
+            redis_client=mock_redis_client,
+            zone_id="zone1",
+            zone_config=zone_config_no_valve,
+            config_entry=mock_config_entry,
+            hass=mock_hass,
+        )
+        
+        # Call sync method - should return early without errors
+        await entity._sync_valve_state_from_ha()
+        
+        # Verify states.get was NOT called
+        mock_hass.states.get.assert_not_called()
+        
+        # Verify Redis was NOT updated
+        assert mock_redis_client.set_zone_state.call_count == 0
+
+

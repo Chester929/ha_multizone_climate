@@ -33,6 +33,8 @@ class ValveStateChangeAutomation:
         self.hass = hass
         self.redis_client = redis_client
         self._cancel_listeners: list = []
+        # Mapping from entity_id to zone_id for O(1) lookups
+        self._entity_to_zone: dict[str, str] = {}
 
     async def setup(self) -> None:
         """
@@ -40,16 +42,19 @@ class ValveStateChangeAutomation:
 
         Tasks:
             - Register state change listeners for all zone valve switches
+            - Build entity_id to zone_id mapping for efficient lookups
         """
         zone_ids = await self.redis_client.get_zone_ids()
         valve_entity_ids: list[str] = []
 
+        # Build mapping and collect entity IDs
         for zone_id in zone_ids:
             zone_state = await self.redis_client.get_zone_state(zone_id)
             if zone_state and "valve_switch_entity_id" in zone_state:
                 entity_id = zone_state["valve_switch_entity_id"]
                 if isinstance(entity_id, str):
                     valve_entity_ids.append(entity_id)
+                    self._entity_to_zone[entity_id] = zone_id
 
         if valve_entity_ids:
             cancel = async_track_state_change_event(
@@ -118,33 +123,34 @@ class ValveStateChangeAutomation:
             valve_state: New valve state ("opened" or "closed")
 
         Tasks:
-            - Find zone by valve_switch_entity_id
+            - Use mapping to find zone by valve_switch_entity_id (O(1))
             - Update zone valve_state
             - Write to Redis
         """
         try:
-            zone_ids = await self.redis_client.get_zone_ids()
-            for zone_id in zone_ids:
-                zone_state = await self.redis_client.get_zone_state(zone_id)
-                if (
-                    zone_state
-                    and zone_state.get("valve_switch_entity_id") == entity_id
-                ):
-                    old_valve_state = zone_state.get("valve_state", "unknown")
-                    zone_state["valve_state"] = valve_state
-                    await self.redis_client.set_zone_state(zone_id, zone_state)
-                    _LOGGER.debug(
-                        "Updated valve state for zone %s (entity %s): %s -> %s",
-                        zone_id,
-                        entity_id,
-                        old_valve_state,
-                        valve_state,
-                    )
-                    break
-            else:
+            # Use mapping for O(1) lookup
+            zone_id = self._entity_to_zone.get(entity_id)
+            if not zone_id:
                 _LOGGER.warning(
                     "No zone found with valve_switch_entity_id %s", entity_id
                 )
+                return
+
+            zone_state = await self.redis_client.get_zone_state(zone_id)
+            if not zone_state:
+                _LOGGER.warning("Zone state not found for zone %s", zone_id)
+                return
+
+            old_valve_state = zone_state.get("valve_state", "unknown")
+            zone_state["valve_state"] = valve_state
+            await self.redis_client.set_zone_state(zone_id, zone_state)
+            _LOGGER.debug(
+                "Updated valve state for zone %s (entity %s): %s -> %s",
+                zone_id,
+                entity_id,
+                old_valve_state,
+                valve_state,
+            )
         except Exception as err:
             _LOGGER.error(
                 "Error updating valve state in Redis for %s: %s",
@@ -158,3 +164,5 @@ class ValveStateChangeAutomation:
         for cancel in self._cancel_listeners:
             cancel()
         self._cancel_listeners.clear()
+        # Clear mapping
+        self._entity_to_zone.clear()
