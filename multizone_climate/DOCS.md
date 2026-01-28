@@ -122,7 +122,7 @@ This will remove all zone climate entities and devices created by the integratio
 
 ### Step 3: Remove the Custom Component (Manual)
 
-The custom component files are intentionally NOT removed automatically during shutdown or uninstall to preserve the integration across addon restarts and upgrades. To manually remove them:
+The custom component files are intentionally not removed automatically during shutdown or uninstall to preserve the integration across add-on restarts and upgrades. To manually remove them:
 
 1. Access your Home Assistant file system (via SSH, File Editor add-on, or similar)
 2. Navigate to the custom components directory:

@@ -2,8 +2,8 @@
 
 bashio::log.info "Multizone Climate Add-on is shutting down..."
 
-# Note: Custom components are NOT removed during shutdown to preserve the integration
-# across addon restarts and upgrades. If you are uninstalling the addon, you can
+# Note: Custom components are not removed during shutdown to preserve the integration
+# across add-on restarts and upgrades. If you are uninstalling the add-on, you can
 # manually remove the custom component from:
 #   /homeassistant/custom_components/multizone_climate/
 # or:

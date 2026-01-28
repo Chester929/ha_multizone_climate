@@ -142,11 +142,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Custom Component Persistence** - Custom component is now preserved during addon shutdown and restart
-  - Removed automatic cleanup from finish script to prevent component removal on addon stop/restart
-  - Custom component now persists across addon upgrades and restarts
-  - Manual removal required when uninstalling addon (see updated documentation)
-  - This allows the integration to continue functioning after addon restarts without requiring Home Assistant restart
+- **Custom Component Persistence** - Custom component is now preserved during add-on shutdown and restart
+  - Removed automatic cleanup from finish script to prevent component removal on add-on stop/restart
+  - Custom component now persists across add-on upgrades and restarts
+  - Manual removal required when uninstalling add-on (see updated documentation)
+  - This allows the integration to continue functioning after add-on restarts without requiring Home Assistant restart
 
 ### Fixed
 
