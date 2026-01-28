@@ -18,9 +18,12 @@ class BaseJob(ABC):
     Provides:
     - Job identification
     - Status tracking
-    - Job locking via Redis
     - Error handling
     - Execution lifecycle management
+    
+    Note:
+        Job-level locking is managed by the coordinator to ensure jobs
+        are not dequeued before lock acquisition, preventing data loss.
     """
 
     def __init__(
