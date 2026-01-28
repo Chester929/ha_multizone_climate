@@ -73,6 +73,7 @@ class TestRedisInitialization:
         client.set_main_climate_state = AsyncMock()
         client.get_zone_ids = AsyncMock(return_value=[])  # No zones yet
         client.add_zone = AsyncMock()
+        client.set_zone_state = AsyncMock()  # Add set_zone_state mock
         return client
 
     @pytest.fixture
@@ -81,6 +82,7 @@ class TestRedisInitialization:
         coordinator = MagicMock()
         coordinator.async_config_entry_first_refresh = AsyncMock()
         coordinator.async_add_listener = MagicMock(return_value=lambda: None)
+        coordinator.start_job_worker = AsyncMock()  # Add start_job_worker mock
         return coordinator
 
     @pytest.fixture

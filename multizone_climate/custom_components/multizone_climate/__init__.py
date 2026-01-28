@@ -45,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await redis_client.connect()
 
     # Create coordinator that communicates with backend API
-    coordinator = MultizoneClimateCoordinator(hass, backend_url)
+    coordinator = MultizoneClimateCoordinator(hass, backend_url, redis_client)
 
     # Store coordinator, redis_client and config in hass.data
     hass.data.setdefault(DOMAIN, {})
@@ -201,6 +201,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     f"Added initial fallback zone {zone_id} ({zone_data['name']}) to Redis"
                 )
 
+                # Get actual valve state from Home Assistant and update Redis
+                valve_switch_entity_id = zone_data["valve_switch_entity_id"]
+                if valve_switch_entity_id:
+                    try:
+                        valve_state_obj = hass.states.get(valve_switch_entity_id)
+                        if valve_state_obj:
+                            # Map HA state to valve_state (on/off -> opened/closed)
+                            actual_valve_state = "opened" if valve_state_obj.state == "on" else "closed"
+                            zone_data["valve_state"] = actual_valve_state
+                            await redis_client.set_zone_state(zone_id, zone_data)
+                            _LOGGER.info(
+                                f"Initialized valve state for zone {zone_id}: {actual_valve_state} (from entity {valve_switch_entity_id})"
+                            )
+                        else:
+                            _LOGGER.warning(
+                                f"Valve switch entity {valve_switch_entity_id} not found for zone {zone_id}, valve state remains 'unknown'"
+                            )
+                    except Exception as valve_err:
+                        _LOGGER.error(
+                            f"Failed to get valve state for zone {zone_id}: {valve_err}"
+                        )
+
                 # Also register zone with backend via API
                 zone_config = {
                     "id": zone_id,  # Backend expects 'id', not 'zone_id'
@@ -223,9 +245,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             f"{backend_url}/api/zones",
                             json=zone_config,
                         ) as response:
-                            if response.status not in (200, 201):
+                            # 409 Conflict means zone already exists in backend, which is acceptable
+                            if response.status not in (200, 201, 409):
                                 _LOGGER.warning(
                                     f"Failed to register initial zone {zone_id} with backend: status {response.status}"
+                                )
+                            elif response.status == 409:
+                                _LOGGER.info(
+                                    f"Zone {zone_id} already exists in backend (status 409), skipping registration"
+                                )
+                            else:
+                                _LOGGER.info(
+                                    f"Successfully registered zone {zone_id} with backend"
                                 )
                 except Exception as err:
                     _LOGGER.error(
@@ -254,6 +285,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Forward to climate platform to create zone entities
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Start job worker to process background jobs
+    await coordinator.start_job_worker()
+
     # Register update listener for options flow changes
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
@@ -274,8 +308,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     if unload_ok:
-        # Cleanup coordinator
+        # Stop job worker first
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+        await coordinator.stop_job_worker()
+        
+        # Cleanup coordinator
         await coordinator.async_shutdown()
 
         # Cleanup redis client - clear all data before disconnecting
