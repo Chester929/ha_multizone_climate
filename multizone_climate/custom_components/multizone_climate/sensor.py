@@ -48,7 +48,7 @@ async def async_setup_entry(
         [
             MultizoneTemperatureSensor(coordinator, "main_current_temperature"),
             MultizoneTemperatureSensor(coordinator, "main_target_temperature"),
-            OutdoorTemperatureSensor(hass, config_entry),
+            MultizoneTemperatureSensor(coordinator, "outdoor_temperature", hass, config_entry),
         ]
     )
 
@@ -89,26 +89,45 @@ async def async_setup_entry(
 class MultizoneTemperatureSensor(SensorEntity):
     """Temperature sensor for multizone climate."""
 
-    def __init__(self, coordinator: Any, sensor_type: str) -> None:
+    def __init__(
+        self,
+        coordinator: Any,
+        sensor_type: str,
+        hass: HomeAssistant | None = None,
+        config_entry: ConfigEntry | None = None,
+    ) -> None:
         """
         Initialize temperature sensor.
 
         Args:
             coordinator: Data update coordinator
-            sensor_type: Type of sensor (main_current_temperature, main_target_temperature)
+            sensor_type: Type of sensor (main_current_temperature, main_target_temperature, outdoor_temperature)
+            hass: Home Assistant instance (required for outdoor_temperature)
+            config_entry: Config entry (required for outdoor_temperature)
         """
         self.coordinator = coordinator
         self.sensor_type = sensor_type
+        self.hass = hass
+        self._config_entry = config_entry
+        self._outdoor_sensor_entity_id = None
+        
+        # For outdoor temperature, get the configured sensor entity ID
+        if sensor_type == "outdoor_temperature" and config_entry:
+            self._outdoor_sensor_entity_id = config_entry.data.get("outdoor_temperature_sensor")
+        
         self._attr_unique_id = f"{DOMAIN}_{sensor_type}"
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_should_poll = False
+        
+        # Outdoor temperature needs polling to update when referenced sensor changes
+        self._attr_should_poll = (sensor_type == "outdoor_temperature")
 
         # Set name based on sensor type
         type_names = {
             "main_current_temperature": "Main Current Temperature",
             "main_target_temperature": "Main Target Temperature",
+            "outdoor_temperature": "Outdoor Temperature",
         }
         self._attr_name = type_names.get(sensor_type, f"Multizone {sensor_type}")
 
@@ -128,8 +147,27 @@ class MultizoneTemperatureSensor(SensorEntity):
         Return sensor state.
 
         Returns:
-            State value from coordinator data, or None if not available
+            State value from coordinator data or configured HA sensor, or None if not available
         """
+        # For outdoor temperature, read directly from configured HA sensor
+        if self.sensor_type == "outdoor_temperature":
+            if not self._outdoor_sensor_entity_id or not self.hass:
+                return None
+            
+            sensor_state = self.hass.states.get(self._outdoor_sensor_entity_id)
+            if sensor_state and sensor_state.state not in ("unknown", "unavailable"):
+                try:
+                    return float(sensor_state.state)
+                except (ValueError, TypeError):
+                    _LOGGER.warning(
+                        "Invalid outdoor temperature value from %s: %s",
+                        self._outdoor_sensor_entity_id,
+                        sensor_state.state,
+                    )
+                    return None
+            return None
+        
+        # For other sensors, read from coordinator data
         if not self.coordinator.data:
             return None
 
@@ -160,64 +198,6 @@ class MultizoneTemperatureSensor(SensorEntity):
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
-
-
-class OutdoorTemperatureSensor(SensorEntity):
-    """Outdoor temperature sensor that reads from configured HA sensor."""
-
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        """
-        Initialize outdoor temperature sensor.
-
-        Args:
-            hass: Home Assistant instance
-            config_entry: Config entry containing outdoor sensor entity ID
-        """
-        self.hass = hass
-        self._config_entry = config_entry
-        self._outdoor_sensor_entity_id = config_entry.data.get("outdoor_temperature_sensor")
-        self._attr_unique_id = f"{DOMAIN}_outdoor_temperature"
-        self._attr_device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_should_poll = True  # Poll to update when referenced sensor changes
-        self._attr_name = "Outdoor Temperature"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for grouping entities."""
-        return {
-            "identifiers": {(DOMAIN, "main")},
-            "name": "Multizone Climate",
-            "manufacturer": "Multizone Climate",
-            "model": "Main Controller",
-        }
-
-    @property
-    def native_value(self) -> float | None:
-        """
-        Return sensor state by reading from configured outdoor sensor.
-
-        Returns:
-            Temperature value from the configured outdoor sensor, or None
-        """
-        if not self._outdoor_sensor_entity_id:
-            return None
-        
-        # Read directly from the configured HA sensor (like zone sensors do)
-        sensor_state = self.hass.states.get(self._outdoor_sensor_entity_id)
-        if sensor_state and sensor_state.state not in ("unknown", "unavailable"):
-            try:
-                return float(sensor_state.state)
-            except (ValueError, TypeError):
-                _LOGGER.warning(
-                    "Invalid outdoor temperature value from %s: %s",
-                    self._outdoor_sensor_entity_id,
-                    sensor_state.state,
-                )
-                return None
-        
-        return None
 
 
 class MultizoneTextSensor(SensorEntity):
