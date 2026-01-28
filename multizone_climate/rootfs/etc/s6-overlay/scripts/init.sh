@@ -147,10 +147,44 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     }
     
     bashio::log.info "Custom component installed successfully to ${COMPONENT_DIR}!"
-    bashio::log.warning "=========================================="
-    bashio::log.warning "IMPORTANT: Please restart Home Assistant"
-    bashio::log.warning "to load the updated integration!"
-    bashio::log.warning "=========================================="
+    bashio::log.info "Creating notification to inform user that Home Assistant restart is required..."
+    
+    # Create persistent notification to inform user about restart requirement
+    if [ -n "${SUPERVISOR_TOKEN}" ]; then
+        # Create notification message (jq will handle proper JSON escaping)
+        NOTIFICATION_MESSAGE="The Multizone Climate custom component (version ${ADDON_VERSION}) is now available. Please restart Home Assistant to load the integration.
+
+Go to **Settings** → **System** → **Restart** to restart Home Assistant."
+        
+        # Use jq to properly construct JSON payload (handles escaping of special characters)
+        JSON_PAYLOAD=$(jq -n \
+            --arg message "${NOTIFICATION_MESSAGE}" \
+            --arg title "Multizone Climate: Restart Required" \
+            --arg notification_id "multizone_climate_restart_required" \
+            '{message: $message, title: $title, notification_id: $notification_id}')
+        
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            --connect-timeout 5 \
+            -X POST \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${JSON_PAYLOAD}" \
+            http://supervisor/core/api/services/persistent_notification/create)
+        CURL_EXIT_CODE=$?
+        
+        # Check curl exit code first (network errors, timeouts, etc.)
+        if [ "${CURL_EXIT_CODE}" -ne 0 ]; then
+            bashio::log.warning "Failed to create notification (curl exit code: ${CURL_EXIT_CODE}). Please restart Home Assistant manually for the integration to be available."
+        # Accept both 200 (OK) and 202 (Accepted) as success
+        elif [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "202" ]; then
+            bashio::log.info "Notification created successfully. User will be notified to restart Home Assistant."
+        else
+            bashio::log.warning "Failed to create notification (HTTP ${HTTP_CODE}). Please restart Home Assistant manually for the integration to be available."
+        fi
+    else
+        bashio::log.warning "SUPERVISOR_TOKEN not available. Please restart Home Assistant manually for the integration to be available."
+    fi
 else
     bashio::log.info "Custom component installation up to date"
 fi

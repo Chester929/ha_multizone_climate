@@ -15,7 +15,10 @@ This add-on provides intelligent management of multiple heating/cooling zones in
 5. **The custom integration is automatically installed!**
    - The add-on copies the integration files to `/config/custom_components/` on first start
    - Check the add-on logs to confirm installation
+   - **A notification will appear** asking you to restart Home Assistant
 6. Restart Home Assistant to load the integration
+   - Navigate to Settings → System → Restart
+   - The add-on will NOT automatically restart Home Assistant
 7. Configure zones:
    - Go to Settings → Devices & Services
    - Click "Add Integration"
