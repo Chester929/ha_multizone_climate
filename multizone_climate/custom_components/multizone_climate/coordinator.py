@@ -8,7 +8,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN, JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
 
@@ -55,6 +55,9 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict:
         """Fetch commands from backend and execute them."""
+        # Initialize state_data to ensure consistent error handling
+        state_data = {}
+        
         try:
             # Fetch system state first
             state_data = await self._fetch_system_state()
@@ -65,7 +68,8 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:
-                    raise UpdateFailed(f"Backend returned status {response.status}")
+                    _LOGGER.warning(f"Backend returned status {response.status}")
+                    return state_data
 
                 response_data = await response.json()
                 commands = response_data.get("commands", [])
@@ -102,9 +106,11 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 return state_data
 
         except aiohttp.ClientError as err:
-            raise UpdateFailed(f"Error communicating with backend: {err}")
+            _LOGGER.warning(f"Backend unavailable, will retry: {err}")
+            return state_data
         except Exception as err:
-            raise UpdateFailed(f"Unexpected error: {err}")
+            _LOGGER.warning(f"Unexpected error communicating with backend: {err}")
+            return state_data
 
     async def _fetch_system_state(self) -> dict:
         """Fetch current system state from backend."""
