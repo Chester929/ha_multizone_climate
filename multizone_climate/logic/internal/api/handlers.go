@@ -1467,7 +1467,8 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 			mainClimate["hvac_action"] = hvacAction
 		}
 
-		if multizoneEnabled, ok := mainClimateData["multizone_enabled"]; ok {
+		// Get multizone_enabled from config (it's a configuration setting, not runtime state)
+		if multizoneEnabled, ok := config["multizone_enabled"]; ok {
 			mainClimate["multizone_enabled"] = multizoneEnabled == "true" || multizoneEnabled == "True" || multizoneEnabled == "1"
 		}
 

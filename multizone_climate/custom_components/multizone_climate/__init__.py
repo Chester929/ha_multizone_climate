@@ -104,7 +104,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "outdoor_temperature": 0.0,
             "hvac_mode": "unknown",
             "hvac_action": "unknown",
-            "multizone_enabled": False,
         }
         
         # Populate from actual state if available

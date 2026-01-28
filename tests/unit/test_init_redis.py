@@ -91,7 +91,7 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
-                    with patch("os.environ.get", return_value="8080"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
@@ -106,6 +106,7 @@ class TestRedisInitialization:
         assert config_call_args["outdoor_temperature_sensor"] == "sensor.outdoor_temp"
         assert config_call_args["min_valves_open"] == 1
         assert config_call_args["multizone_enabled"] is False
+        assert config_call_args["coordinator_interval"] == 15  # Should be 15, not 8080
 
     @pytest.mark.asyncio
     async def test_initializes_main_climate_state_when_empty(
@@ -115,7 +116,7 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
-                    with patch("os.environ.get", return_value="8080"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
@@ -132,6 +133,8 @@ class TestRedisInitialization:
         assert state_call_args["outdoor_temperature"] == 5.0
         assert state_call_args["hvac_mode"] == "heat"
         assert state_call_args["hvac_action"] == "heating"
+        # multizone_enabled should NOT be in main_climate state (it's in config)
+        assert "multizone_enabled" not in state_call_args
 
     @pytest.mark.asyncio
     async def test_skips_initialization_when_config_exists(
@@ -147,7 +150,7 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
-                    with patch("os.environ.get", return_value="8080"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
@@ -170,7 +173,7 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
-                    with patch("os.environ.get", return_value="8080"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
@@ -195,7 +198,7 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
-                    with patch("os.environ.get", return_value="8080"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
@@ -227,7 +230,7 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
-                    with patch("os.environ.get", return_value="8080"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
