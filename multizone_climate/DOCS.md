@@ -86,9 +86,14 @@ The add-on automatically installs the custom integration to `/config/custom_comp
 
 ### Step 5: Restart Home Assistant
 
-1. Navigate to **Settings** → **System**
-2. Click **RESTART**
-3. Wait for Home Assistant to restart
+After the add-on installs or updates the custom component, you will receive a notification in Home Assistant.
+
+1. Check for a **"Multizone Climate: Restart Required"** notification in your Home Assistant UI
+2. Navigate to **Settings** → **System**
+3. Click **RESTART**
+4. Wait for Home Assistant to restart
+
+**Note**: The add-on will create a notification when the custom component is installed or updated, but will NOT automatically restart Home Assistant. You must manually restart for the integration to be loaded.
 
 ### Step 6: Configure Zones
 
