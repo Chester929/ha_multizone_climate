@@ -248,7 +248,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name="Multizone Climate",
         manufacturer="Multizone Climate",
         model="Main Controller",
-        sw_version="0.1.6-dev",
+        sw_version="0.1.7-dev",
     )
 
     # Forward to climate platform to create zone entities
