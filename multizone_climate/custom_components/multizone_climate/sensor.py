@@ -46,9 +46,9 @@ async def async_setup_entry(
     # Temperature sensors
     entities.extend(
         [
-            MultizoneTemperatureSensor(coordinator, "main_current_temperature", hass, config_entry),
-            MultizoneTemperatureSensor(coordinator, "main_target_temperature", hass, config_entry),
-            MultizoneTemperatureSensor(coordinator, "outdoor_temperature", hass, config_entry),
+            MultizoneTemperatureSensor(coordinator, "main_current_temperature"),
+            MultizoneTemperatureSensor(coordinator, "main_target_temperature"),
+            MultizoneTemperatureSensor(coordinator, "outdoor_temperature"),
         ]
     )
 
@@ -89,39 +89,21 @@ async def async_setup_entry(
 class MultizoneTemperatureSensor(SensorEntity):
     """Temperature sensor for multizone climate."""
 
-    def __init__(
-        self,
-        coordinator: Any,
-        sensor_type: str,
-        hass: HomeAssistant | None = None,
-        config_entry: ConfigEntry | None = None,
-    ) -> None:
+    def __init__(self, coordinator: Any, sensor_type: str) -> None:
         """
         Initialize temperature sensor.
 
         Args:
             coordinator: Data update coordinator
             sensor_type: Type of sensor (main_current_temperature, main_target_temperature, outdoor_temperature)
-            hass: Home Assistant instance (required for outdoor_temperature)
-            config_entry: Config entry (required for outdoor_temperature)
         """
         self.coordinator = coordinator
         self.sensor_type = sensor_type
-        self.hass = hass
-        self._config_entry = config_entry
-        self._outdoor_sensor_entity_id = None
-        
-        # For outdoor temperature, get the configured sensor entity ID
-        if sensor_type == "outdoor_temperature" and config_entry:
-            self._outdoor_sensor_entity_id = config_entry.data.get("outdoor_temperature_sensor")
-        
         self._attr_unique_id = f"{DOMAIN}_{sensor_type}"
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        
-        # Outdoor temperature needs polling to update when referenced sensor changes
-        self._attr_should_poll = (sensor_type == "outdoor_temperature")
+        self._attr_should_poll = False
 
         # Set name based on sensor type
         type_names = {
@@ -147,27 +129,8 @@ class MultizoneTemperatureSensor(SensorEntity):
         Return sensor state.
 
         Returns:
-            State value from coordinator data or configured HA sensor, or None if not available
+            State value from coordinator data, or None if not available
         """
-        # For outdoor temperature, read directly from configured HA sensor
-        if self.sensor_type == "outdoor_temperature":
-            if not self._outdoor_sensor_entity_id or not self.hass:
-                return None
-            
-            sensor_state = self.hass.states.get(self._outdoor_sensor_entity_id)
-            if sensor_state and sensor_state.state not in ("unknown", "unavailable"):
-                try:
-                    return float(sensor_state.state)
-                except (ValueError, TypeError):
-                    _LOGGER.warning(
-                        "Invalid outdoor temperature value from %s: %s",
-                        self._outdoor_sensor_entity_id,
-                        sensor_state.state,
-                    )
-                    return None
-            return None
-        
-        # For other sensors, read from coordinator data
         if not self.coordinator.data:
             return None
 
@@ -177,6 +140,8 @@ class MultizoneTemperatureSensor(SensorEntity):
             value = main_climate.get("current_temperature")
         elif self.sensor_type == "main_target_temperature":
             value = main_climate.get("target_temperature")
+        elif self.sensor_type == "outdoor_temperature":
+            value = main_climate.get("outdoor_temperature")
         else:
             return None
 
