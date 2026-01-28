@@ -1389,14 +1389,14 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 				} else {
 					config[k] = v
 				}
-			// Convert float config values
+				// Convert float config values
 			} else if k == "main_target_all_zones_satisfied" || k == "main_min_temp" || k == "main_max_temp" || k == "main_change_threshold" || k == "satisfaction_eps" {
 				if floatVal, err := strconv.ParseFloat(v, 64); err == nil {
 					config[k] = floatVal
 				} else {
 					config[k] = v
 				}
-			// Convert boolean config values
+				// Convert boolean config values
 			} else if k == "use_average_mode" || k == "multizone_enabled" {
 				config[k] = v == "true" || v == "True" || v == "1"
 			} else {
@@ -1504,11 +1504,11 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 
 		// Build response
 		response := map[string]interface{}{
-			"config":                config,
-			"main_climate":          mainClimate,
-			"zones":                 zones,
-			"calculate_queue_size":  calculateQueueSize,
-			"valve_queue_size":      valveQueueSize,
+			"config":               config,
+			"main_climate":         mainClimate,
+			"zones":                zones,
+			"calculate_queue_size": calculateQueueSize,
+			"valve_queue_size":     valveQueueSize,
 		}
 
 		json.NewEncoder(w).Encode(response)
