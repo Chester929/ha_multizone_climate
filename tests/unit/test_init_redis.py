@@ -83,16 +83,30 @@ class TestRedisInitialization:
         coordinator.async_add_listener = MagicMock(return_value=lambda: None)
         return coordinator
 
+    @pytest.fixture
+    def mock_aiohttp_session(self):
+        """Create mock aiohttp.ClientSession to prevent thread creation."""
+        mock_session = MagicMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_response = MagicMock()
+        mock_response.status = 201
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = MagicMock(return_value=mock_response)
+        return mock_session
+
     @pytest.mark.asyncio
     async def test_initializes_config_when_empty(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that global config is initialized when it doesn't exist."""
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -110,14 +124,15 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_initializes_main_climate_state_when_empty(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that main climate state is initialized when it doesn't exist."""
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -138,7 +153,7 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_skips_initialization_when_config_exists(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that config initialization is skipped when config already exists."""
         # Mock that config already exists
@@ -150,8 +165,9 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -161,7 +177,7 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_skips_initialization_when_main_climate_state_exists(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that main climate state initialization is skipped when it already exists."""
         # Mock that main climate state already exists
@@ -173,8 +189,9 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -184,7 +201,7 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_handles_missing_outdoor_sensor_gracefully(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that missing outdoor temperature sensor is handled gracefully."""
         # Remove outdoor sensor from config
@@ -198,8 +215,9 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -213,7 +231,7 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_handles_invalid_outdoor_temperature(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that invalid outdoor temperature value is handled gracefully."""
         # Mock outdoor sensor with invalid state
@@ -230,8 +248,9 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -245,7 +264,7 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_uses_defaults_when_entity_not_available_after_retry(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that main climate state uses defaults when entity is not available after retry."""
         # Mock that main climate entity is not available
@@ -254,9 +273,10 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-                            result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                                result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
@@ -276,7 +296,7 @@ class TestRedisInitialization:
 
     @pytest.mark.asyncio
     async def test_entity_available_on_retry(
-        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
     ):
         """Test that entity becomes available on retry attempt."""
         # Mock that entity is not available first time, but available on retry
@@ -305,9 +325,10 @@ class TestRedisInitialization:
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
-                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-                            result = await async_setup_entry(mock_hass, mock_config_entry)
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                            with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                                result = await async_setup_entry(mock_hass, mock_config_entry)
 
         # Should return True for successful setup
         assert result is True
