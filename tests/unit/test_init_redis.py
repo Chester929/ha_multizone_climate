@@ -242,3 +242,23 @@ class TestRedisInitialization:
         # Verify outdoor temperature defaults to 0.0 when parsing fails
         state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
         assert state_call_args["outdoor_temperature"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_skips_main_climate_init_when_entity_not_available(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that main climate state initialization is skipped when entity is not available."""
+        # Mock that main climate entity is not available
+        mock_hass.states.get = MagicMock(return_value=None)
+        
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                        result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should NOT call set_main_climate_state (entity not available)
+        mock_redis_client.set_main_climate_state.assert_not_called()

@@ -96,38 +96,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         main_climate_entity_id = entry.data.get("main_climate_entity", "")
         main_climate_state_obj = hass.states.get(main_climate_entity_id) if main_climate_entity_id else None
         
-        # Create initial main climate state
-        initial_main_climate = {
-            "entity_id": main_climate_entity_id,
-            "current_temperature": 0.0,
-            "target_temperature": 20.0,
-            "outdoor_temperature": 0.0,
-            "hvac_mode": "unknown",
-            "hvac_action": "unknown",
-        }
-        
-        # Populate from actual state if available
+        # Only initialize if we can fetch actual data from HA entity
         if main_climate_state_obj:
             attrs = main_climate_state_obj.attributes
-            initial_main_climate["current_temperature"] = attrs.get("current_temperature", 0.0)
-            initial_main_climate["target_temperature"] = attrs.get("temperature", 20.0)
-            initial_main_climate["hvac_mode"] = main_climate_state_obj.state
-            initial_main_climate["hvac_action"] = attrs.get("hvac_action", "unknown")
-        
-        # Get outdoor temperature from sensor if provided
-        outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
-        if outdoor_sensor:
-            outdoor_state = hass.states.get(outdoor_sensor)
-            if outdoor_state:
-                try:
-                    initial_main_climate["outdoor_temperature"] = float(outdoor_state.state)
-                except (ValueError, TypeError):
-                    _LOGGER.warning(f"Could not parse outdoor temperature from {outdoor_sensor}")
-        
-        await redis_client.set_main_climate_state(initial_main_climate)
-        _LOGGER.info(
-            f"Initialized main climate state in Redis for {main_climate_entity_id}"
-        )
+            
+            # Create initial main climate state with actual data from HA entity
+            initial_main_climate = {
+                "entity_id": main_climate_entity_id,
+                "current_temperature": attrs.get("current_temperature", 0.0),
+                "target_temperature": attrs.get("temperature", 20.0),
+                "outdoor_temperature": 0.0,  # Will be populated from sensor below if available
+                "hvac_mode": main_climate_state_obj.state,
+                "hvac_action": attrs.get("hvac_action", "idle"),
+            }
+            
+            # Get outdoor temperature from sensor if provided
+            outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
+            if outdoor_sensor:
+                outdoor_state = hass.states.get(outdoor_sensor)
+                if outdoor_state:
+                    try:
+                        initial_main_climate["outdoor_temperature"] = float(outdoor_state.state)
+                    except (ValueError, TypeError):
+                        _LOGGER.warning(f"Could not parse outdoor temperature from {outdoor_sensor}, using 0.0")
+            
+            await redis_client.set_main_climate_state(initial_main_climate)
+            _LOGGER.info(
+                f"Initialized main climate state in Redis for {main_climate_entity_id} with actual data from HA"
+            )
+        else:
+            _LOGGER.warning(
+                f"Cannot initialize main climate state: entity {main_climate_entity_id} not found in HA. "
+                f"State will be initialized when entity becomes available."
+            )
     else:
         _LOGGER.info(
             f"Main climate state already exists in Redis (found {len(existing_main_climate)} keys), skipping initialization"
