@@ -603,6 +603,7 @@ class ZoneClimateEntity(ClimateEntity):
             "name": self._name,
             "temperature_sensor_entity_id": self._temp_sensor_entity_id,
             "valve_switch_entity_id": self._valve_switch_entity_id,
+            "valve_id": self._valve_switch_entity_id,  # Alias for compatibility with valve controller
             "current_temperature": self._current_temperature,
             "target_temperature": self._target_temperature,
             "enabled": "true" if self._enabled else "false",
@@ -619,6 +620,60 @@ class ZoneClimateEntity(ClimateEntity):
         }
 
         await self.redis_client.set_zone_state(self.zone_id, zone_state)
+
+    async def _sync_valve_state_from_ha(self) -> None:
+        """
+        Sync valve state from Home Assistant entity to Redis.
+        
+        This is called on entity initialization to ensure Redis has the
+        actual current state of the valve switch.
+        
+        Tasks:
+            - Read valve switch entity state from HA
+            - Map HA state (on/off) to valve state (opened/closed)
+            - Update internal state and Redis
+        """
+        if not self._valve_switch_entity_id:
+            return
+            
+        valve_state_obj = self.hass.states.get(self._valve_switch_entity_id)
+        if valve_state_obj:
+            # Map HA state to valve state
+            ha_state = valve_state_obj.state
+            if ha_state == "on":
+                valve_state = "opened"
+            elif ha_state == "off":
+                valve_state = "closed"
+            else:
+                # Unknown or unavailable state, keep as unknown
+                _LOGGER.debug(
+                    "Valve switch %s has state %s, keeping valve_state as %s",
+                    self._valve_switch_entity_id,
+                    ha_state,
+                    self._valve_state,
+                )
+                return
+            
+            # Update internal state
+            old_valve_state = self._valve_state
+            self._valve_state = valve_state
+            
+            # Update Redis
+            await self._update_zone_state_in_redis()
+            
+            _LOGGER.debug(
+                "Synced valve state for zone %s from HA entity %s: %s -> %s",
+                self.zone_id,
+                self._valve_switch_entity_id,
+                old_valve_state,
+                valve_state,
+            )
+        else:
+            _LOGGER.warning(
+                "Valve switch entity %s not found for zone %s during state sync",
+                self._valve_switch_entity_id,
+                self.zone_id,
+            )
 
     def _round_to_threshold(self, temperature: float) -> float:
         """
@@ -674,3 +729,6 @@ class ZoneClimateEntity(ClimateEntity):
 
         # Initial update from sensor
         await self._async_update_from_sensor()
+        
+        # Sync valve state from HA entity to Redis
+        await self._sync_valve_state_from_ha()
