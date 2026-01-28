@@ -15,12 +15,15 @@ configuration:
   redis.mode:
     name: "Redis režim"
     description: "Použiť vstavaný Redis kontajner alebo sa pripojiť k externému Redis serveru"
+  redis.bundled_port:
+    name: "Port vstavaného Redis"
+    description: "Port pre vstavaný Redis server (predvolené: 6380)"
   redis.host:
     name: "Redis hostiteľ"
-    description: "Názov hostiteľa alebo IP adresa Redis serveru (vyžadované, keď je režim externý)"
+    description: "Názov hostiteľa alebo IP adresa Redis serveru (predvolené: 127.0.0.1)"
   redis.port:
     name: "Redis port"
-    description: "Číslo portu Redis serveru (vyžadované, keď je režim externý)"
+    description: "Číslo portu Redis serveru (predvolené: 6379)"
   redis.password:
     name: "Redis heslo"
     description: "Heslo pre autentifikáciu Redis (voliteľné, odporúčané pre externé servery)"
