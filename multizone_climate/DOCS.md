@@ -181,10 +181,11 @@ integration:
 
 ```yaml
 redis:
-  mode: bundled  # Options: bundled or external
-  host: ""       # Required if mode is external
-  port: 6379     # Required if mode is external
-  password: ""   # Optional Redis password
+  mode: bundled         # Options: bundled or external
+  host: 127.0.0.1       # Optional for external mode (default: 127.0.0.1)
+  port: 6379            # Optional for external mode (default: 6379)
+  bundled_port: 6380    # Optional for bundled mode (default: 6380)
+  password: ""          # Optional Redis password
 ```
 
 #### mode
@@ -199,15 +200,16 @@ redis:
 
 - **Description**: Redis server hostname or IP address
 - **Type**: String
-- **Required**: Yes, when mode is `external`
+- **Default**: `127.0.0.1`
+- **Required**: No (uses default if not specified)
 - **Example**: `192.168.1.100` or `redis.local`
 
 #### port
 
 - **Description**: Redis server port
 - **Type**: Port number
-- **Default**: 6379
-- **Required**: Yes, when mode is `external`
+- **Default**: `6379`
+- **Required**: No (uses default if not specified)
 
 #### password
 

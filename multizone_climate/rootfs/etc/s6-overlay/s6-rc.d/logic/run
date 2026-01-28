@@ -14,10 +14,8 @@ if [ "${REDIS_MODE}" = "external" ]; then
     REDIS_HOST=$(bashio::config 'redis.host')
     REDIS_PORT=$(bashio::config 'redis.port')
     
-    if [ -z "${REDIS_HOST}" ]; then
-        bashio::log.error "External Redis mode requires redis.host to be configured"
-        exit 1
-    fi
+    # Use default host if not specified
+    REDIS_HOST=${REDIS_HOST:-127.0.0.1}
     
     # Use default port if not specified
     REDIS_PORT=${REDIS_PORT:-6379}
