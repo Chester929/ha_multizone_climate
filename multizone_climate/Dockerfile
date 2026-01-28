@@ -21,12 +21,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o multizone-logic .
 FROM ${BUILD_FROM}
 
 # Install required packages
-# Redis for data storage, jq for JSON parsing, bash for scripts
+# Redis for data storage, jq for JSON parsing, bash for scripts, curl for API calls
 RUN apk add --no-cache \
     redis \
     jq \
     bash \
-    ca-certificates
+    ca-certificates \
+    curl
 
 # Copy the Go logic binary from builder
 COPY --from=logic-builder /build/multizone-logic /usr/local/bin/
