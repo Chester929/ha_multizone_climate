@@ -244,10 +244,10 @@ class TestRedisInitialization:
         assert state_call_args["outdoor_temperature"] == 0.0
 
     @pytest.mark.asyncio
-    async def test_skips_main_climate_init_when_entity_not_available(
+    async def test_uses_defaults_when_entity_not_available_after_retry(
         self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
     ):
-        """Test that main climate state initialization is skipped when entity is not available."""
+        """Test that main climate state uses defaults when entity is not available after retry."""
         # Mock that main climate entity is not available
         mock_hass.states.get = MagicMock(return_value=None)
         
@@ -255,10 +255,71 @@ class TestRedisInitialization:
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("custom_components.multizone_climate.dr.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
-                        result = await async_setup_entry(mock_hass, mock_config_entry)
+                        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
         
         # Should return True for successful setup
         assert result is True
         
-        # Should NOT call set_main_climate_state (entity not available)
-        mock_redis_client.set_main_climate_state.assert_not_called()
+        # Should sleep once for retry
+        mock_sleep.assert_called_once_with(1)
+        
+        # Should call set_main_climate_state with defaults
+        mock_redis_client.set_main_climate_state.assert_called_once()
+        state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
+        assert state_call_args["entity_id"] == "climate.main_thermostat"
+        assert state_call_args["current_temperature"] == 0.0
+        assert state_call_args["target_temperature"] == 22.0  # Changed from 20.0 to 22.0
+        assert state_call_args["outdoor_temperature"] == 0.0
+        assert state_call_args["hvac_mode"] == "unknown"
+        assert state_call_args["hvac_action"] == "idle"
+
+    @pytest.mark.asyncio
+    async def test_entity_available_on_retry(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator
+    ):
+        """Test that entity becomes available on retry attempt."""
+        # Mock that entity is not available first time, but available on retry
+        main_climate_state = MagicMock()
+        main_climate_state.state = "heat"
+        main_climate_state.attributes = {
+            "current_temperature": 21.5,
+            "temperature": 22.0,
+            "hvac_action": "heating",
+        }
+        
+        call_count = [0]
+        def mock_get_state(entity_id):
+            if entity_id == "climate.main_thermostat":
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    # First call - entity not available
+                    return None
+                else:
+                    # Second call (after retry) - entity available
+                    return main_climate_state
+            return None
+        
+        mock_hass.states.get = mock_get_state
+        
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("custom_components.multizone_climate.dr.async_get"):
+                    with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
+                        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
+        
+        # Should return True for successful setup
+        assert result is True
+        
+        # Should sleep once for retry
+        mock_sleep.assert_called_once_with(1)
+        
+        # Should call set_main_climate_state with actual data (not defaults)
+        mock_redis_client.set_main_climate_state.assert_called_once()
+        state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
+        assert state_call_args["entity_id"] == "climate.main_thermostat"
+        assert state_call_args["current_temperature"] == 21.5
+        assert state_call_args["target_temperature"] == 22.0
+        assert state_call_args["hvac_mode"] == "heat"
+        assert state_call_args["hvac_action"] == "heating"
