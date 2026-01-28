@@ -68,7 +68,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:
-                    _LOGGER.warning(f"Backend returned status {response.status}")
+                    _LOGGER.warning(
+                        f"Backend returned status {response.status}. "
+                        f"Returning partial state (has {len(state_data)} keys)"
+                    )
                     return state_data
 
                 response_data = await response.json()
@@ -106,10 +109,17 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 return state_data
 
         except aiohttp.ClientError as err:
-            _LOGGER.warning(f"Backend unavailable, will retry: {err}")
+            _LOGGER.warning(
+                f"Backend unavailable, will retry: {err}. "
+                f"Returning partial state (has {len(state_data)} keys)"
+            )
             return state_data
         except Exception as err:
-            _LOGGER.warning(f"Unexpected error communicating with backend: {err}")
+            _LOGGER.warning(
+                f"Unexpected error communicating with backend: {err}. "
+                f"Returning partial state (has {len(state_data)} keys)",
+                exc_info=True
+            )
             return state_data
 
     async def _fetch_system_state(self) -> dict:
@@ -129,10 +139,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 return state_data
 
         except aiohttp.ClientError as err:
-            _LOGGER.error(f"Error fetching system state: {err}")
+            _LOGGER.warning(f"Error fetching system state: {err}")
             return {}
         except Exception as err:
-            _LOGGER.error(f"Unexpected error fetching system state: {err}")
+            _LOGGER.warning(f"Unexpected error fetching system state: {err}", exc_info=True)
             return {}
 
     async def _execute_command(self, entity_id: str, action: str, value: Any) -> None:

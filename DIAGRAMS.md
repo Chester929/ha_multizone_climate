@@ -583,8 +583,8 @@ async def async_fetch_commands():
             await execute_command(cmd)
             await backend_api.mark_complete(cmd.id)
     except Exception as err:
-        _LOGGER.error("Error fetching commands: %s", err)
-        raise UpdateFailed(err)
+        _LOGGER.warning("Error fetching commands: %s", err)
+        return {}  # Return empty state on error instead of raising UpdateFailed
 ```
 
 ---
