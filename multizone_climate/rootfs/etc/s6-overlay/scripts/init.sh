@@ -147,7 +147,24 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     }
     
     bashio::log.info "Custom component installed successfully to ${COMPONENT_DIR}!"
-    bashio::log.warning "Please restart Home Assistant for the integration to be available"
+    bashio::log.info "Triggering Home Assistant restart to load the updated integration..."
+    
+    # Trigger Home Assistant restart via Supervisor API
+    if [ -n "${SUPERVISOR_TOKEN}" ]; then
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            -H "Content-Type: application/json" \
+            http://supervisor/core/restart)
+        
+        if [ "${HTTP_CODE}" = "200" ]; then
+            bashio::log.info "Home Assistant restart triggered successfully"
+        else
+            bashio::log.warning "Failed to trigger Home Assistant restart (HTTP ${HTTP_CODE}). Please restart manually for the integration to be available."
+        fi
+    else
+        bashio::log.warning "SUPERVISOR_TOKEN not available. Please restart Home Assistant manually for the integration to be available."
+    fi
 else
     bashio::log.info "Custom component installation up to date"
 fi
