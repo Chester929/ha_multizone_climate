@@ -315,6 +315,14 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         """
         Process all jobs in a specific queue.
 
+        Uses reliable queue processing pattern:
+        1. Peek at job (don't remove yet)
+        2. Process job
+        3. On success: Remove job from queue
+        4. On failure: Move to error queue with details
+
+        This ensures jobs are not lost on addon restart.
+
         Args:
             job_type: Type of job (calculate_main_temp or update_valves)
             job_instance: Job instance to execute
@@ -324,11 +332,10 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
             return
 
         # Process all jobs in the queue sequentially
-        # Since there's only one job worker, no locking is needed
         jobs_processed = 0
         while True:
-            # Dequeue next job (atomic operation via Redis RPOP)
-            job_data = await self.redis_client.dequeue_job(job_type)
+            # Peek at next job WITHOUT removing it (ensures restart resilience)
+            job_data = await self.redis_client.peek_job(job_type)
             if not job_data:
                 # Queue is empty
                 if jobs_processed > 0:
@@ -342,16 +349,32 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
                 result = await job_instance.execute(job_data)
 
                 if result.get("status") == "completed":
+                    # Success: Remove job from queue
+                    await self.redis_client.remove_job(job_type, job_data)
                     _LOGGER.info(f"Job {job_type} finished successfully: {result.get('result', {})}")
+                    jobs_processed += 1
                 elif result.get("status") == "failed":
-                    _LOGGER.error(f"Job {job_type} failed: {result.get('error', 'unknown')}")
+                    # Failure: Move to error queue
+                    error = result.get("error", "unknown error")
+                    await self.redis_client.move_job_to_error_queue(
+                        job_type, job_data, error
+                    )
+                    _LOGGER.error(f"Job {job_type} failed and moved to error queue: {error}")
+                    jobs_processed += 1
                 else:
-                    _LOGGER.warning(f"Job {job_type} returned unknown status: {result.get('status')}")
-
-                jobs_processed += 1
+                    # Unknown status: Log warning but remove job to avoid infinite loop
+                    _LOGGER.warning(
+                        f"Job {job_type} returned unknown status: {result.get('status')}. Removing from queue."
+                    )
+                    await self.redis_client.remove_job(job_type, job_data)
+                    jobs_processed += 1
 
             except Exception as err:
+                # Exception during execution: Move to error queue
                 _LOGGER.error(f"Exception executing job {job_type}: {err}", exc_info=True)
+                await self.redis_client.move_job_to_error_queue(
+                    job_type, job_data, str(err)
+                )
                 jobs_processed += 1
 
     def get_config(self) -> dict | None:
