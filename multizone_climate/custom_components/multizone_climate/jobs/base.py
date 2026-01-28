@@ -18,9 +18,12 @@ class BaseJob(ABC):
     Provides:
     - Job identification
     - Status tracking
-    - Job locking via Redis
     - Error handling
     - Execution lifecycle management
+    
+    Note:
+        Jobs are processed sequentially by a single worker.
+        Redis RPOP ensures atomic dequeue with no race conditions.
     """
 
     def __init__(
@@ -44,7 +47,7 @@ class BaseJob(ABC):
 
     async def execute(self, job_data: dict[str, Any]) -> dict[str, Any]:
         """
-        Execute the job with locking and status tracking.
+        Execute the job with status tracking.
 
         Args:
             job_data: Job parameters
@@ -53,21 +56,16 @@ class BaseJob(ABC):
             dict: Job execution result
 
         Lifecycle:
-            1. Try to acquire job lock
-            2. If locked, return (another instance running)
-            3. Set job status to "running"
-            4. Execute job logic (implemented by subclass)
-            5. Set job status to "completed" or "failed"
-            6. Release job lock
-            7. Return result
+            1. Set job status to "running"
+            2. Execute job logic (implemented by subclass)
+            3. Set job status to "completed" or "failed"
+            4. Return result
+
+        Note:
+            Job-level locking is now handled by the coordinator to prevent
+            jobs from being dequeued and lost when a lock cannot be acquired.
         """
         started_at = datetime.now().isoformat()
-
-        # Try to acquire lock
-        lock_acquired = await self._acquire_lock()
-        if not lock_acquired:
-            _LOGGER.debug("Job %s already running, skipping execution", self.job_type)
-            return {"status": "skipped", "reason": "already_running"}
 
         try:
             # Update status to "running"
@@ -104,10 +102,6 @@ class BaseJob(ABC):
             )
 
             return {"status": "failed", "error": str(err)}
-
-        finally:
-            # Always release lock
-            await self._release_lock()
 
     @abstractmethod
     async def _execute_impl(self, job_data: dict[str, Any]) -> dict[str, Any]:

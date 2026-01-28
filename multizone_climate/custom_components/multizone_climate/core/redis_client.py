@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import logging
 import time
@@ -437,12 +438,12 @@ class RedisClient:
         except Exception as err:
             _LOGGER.error("Failed to enqueue job %s: %s", job_type, err)
 
-    async def dequeue_job(self, job_type: str) -> dict[str, Any] | None:
+    async def peek_job(self, job_type: str) -> dict[str, Any] | None:
         """
-        Remove and return next job from queue.
+        Peek at next job in queue without removing it.
 
         Args:
-            job_type: Job type queue to dequeue from
+            job_type: Job type queue to peek from
 
         Returns:
             dict: Job data or None if queue empty
@@ -456,18 +457,97 @@ class RedisClient:
         try:
             queue_key = self._get_key(f"queue:{job_type}")
 
-            # RPOP for FIFO (left push, right pop)
-            job_json = await self._redis.rpop(queue_key)  # type: ignore[misc]
+            # LINDEX -1 gets the rightmost element (next to be popped) without removing it
+            job_json = await self._redis.lindex(queue_key, -1)  # type: ignore[misc]
 
             if job_json:
                 job_data: dict[str, Any] = json.loads(job_json)
-                _LOGGER.debug("Dequeued job type %s", job_type)
+                _LOGGER.debug("Peeked at job type %s", job_type)
                 return job_data
 
             return None
         except Exception as err:
-            _LOGGER.error("Failed to dequeue job %s: %s", job_type, err)
+            _LOGGER.error("Failed to peek job %s: %s", job_type, err)
             return None
+
+    async def remove_job(self, job_type: str, job_data: dict[str, Any]) -> bool:
+        """
+        Remove a specific job from queue (after successful processing).
+
+        Args:
+            job_type: Job type queue to remove from
+            job_data: Job data to remove (must match exactly)
+
+        Returns:
+            bool: True if removed, False otherwise
+
+        Redis Key: {prefix}:queue:{job_type}
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return False
+
+        try:
+            queue_key = self._get_key(f"queue:{job_type}")
+            job_json = json.dumps(job_data)
+
+            # LREM removes the job from the list
+            # count=-1 removes from tail (right side) which matches our FIFO pattern
+            removed = await self._redis.lrem(queue_key, -1, job_json)  # type: ignore[misc]
+
+            if removed:
+                _LOGGER.debug("Removed job from queue %s", job_type)
+                return True
+            else:
+                _LOGGER.warning("Job not found in queue %s for removal", job_type)
+                return False
+        except Exception as err:
+            _LOGGER.error("Failed to remove job from %s: %s", job_type, err)
+            return False
+
+    async def move_job_to_error_queue(
+        self, job_type: str, job_data: dict[str, Any], error: str
+    ) -> None:
+        """
+        Move a failed job to the error queue with error details.
+
+        Args:
+            job_type: Job type that failed
+            job_data: Original job data
+            error: Error description
+
+        Redis Key: {prefix}:errors_queue
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return
+
+        try:
+            errors_queue_key = self._get_key("errors_queue")
+
+            # Create error entry with job data and error details
+            error_entry = {
+                "job_type": job_type,
+                "job_data": job_data,
+                "error": error,
+                "timestamp": time.time(),
+                "failed_at": datetime.now().isoformat(),
+            }
+            error_json = json.dumps(error_entry)
+
+            # Add to errors queue
+            await self._redis.lpush(errors_queue_key, error_json)  # type: ignore[misc]
+            _LOGGER.info(
+                "Moved failed job of type %s to error queue: %s", job_type, error
+            )
+
+            # Also remove from original queue
+            await self.remove_job(job_type, job_data)
+
+        except Exception as err:
+            _LOGGER.error(
+                "Failed to move job to error queue for %s: %s", job_type, err
+            )
 
     async def get_queue_size(self, job_type: str) -> int:
         """
@@ -491,6 +571,66 @@ class RedisClient:
             return size if size else 0
         except Exception as err:
             _LOGGER.error("Failed to get queue size for %s: %s", job_type, err)
+            return 0
+
+    async def get_error_queue_entries(
+        self, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """
+        Get entries from the error queue.
+
+        Args:
+            limit: Maximum number of entries to retrieve
+
+        Returns:
+            list: List of error entries
+
+        Redis Key: {prefix}:errors_queue
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return []
+
+        try:
+            errors_queue_key = self._get_key("errors_queue")
+            # Get entries from the right (oldest errors first)
+            error_jsons = await self._redis.lrange(errors_queue_key, -limit, -1)  # type: ignore[misc]
+
+            errors = []
+            for error_json in error_jsons:
+                try:
+                    errors.append(json.loads(error_json))
+                except json.JSONDecodeError:
+                    _LOGGER.warning("Failed to parse error queue entry")
+
+            return errors
+        except Exception as err:
+            _LOGGER.error("Failed to get error queue entries: %s", err)
+            return []
+
+    async def clear_error_queue(self) -> int:
+        """
+        Clear all entries from the error queue.
+
+        Returns:
+            int: Number of entries cleared
+
+        Redis Key: {prefix}:errors_queue
+        """
+        if not self._redis:
+            _LOGGER.error("Redis client not connected")
+            return 0
+
+        try:
+            errors_queue_key = self._get_key("errors_queue")
+            size = await self._redis.llen(errors_queue_key)  # type: ignore[misc]
+            if size and size > 0:
+                await self._redis.delete(errors_queue_key)
+                _LOGGER.info("Cleared %d entries from error queue", size)
+                return size
+            return 0
+        except Exception as err:
+            _LOGGER.error("Failed to clear error queue: %s", err)
             return 0
 
     async def acquire_job_lock(self, job_type: str, timeout: int = 60) -> bool:
@@ -769,6 +909,11 @@ class RedisClient:
                 queue_key = self._get_key(f"queue:{job_type}")
                 await self._redis.delete(queue_key)
                 _LOGGER.debug("Cleared job queue for %s", job_type)
+
+            # Clear error queue
+            errors_queue_key = self._get_key("errors_queue")
+            await self._redis.delete(errors_queue_key)
+            _LOGGER.debug("Cleared error queue")
 
             # Clear job locks
             for job_type in [JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES]:
