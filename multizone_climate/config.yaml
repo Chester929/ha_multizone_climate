@@ -46,6 +46,6 @@ map:
   - homeassistant_config:rw
 
 hassio_api: true
-hassio_role: admin
+hassio_role: manager
 
 ingress: false
