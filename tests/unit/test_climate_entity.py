@@ -217,7 +217,7 @@ class TestZoneClimateEntity:
         """Test turning on a zone (setting HVAC mode to HEAT)."""
         # Start with disabled zone
         zone_config["enabled"] = "false"
-        
+
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
             redis_client=mock_redis_client,
@@ -257,7 +257,7 @@ class TestZoneClimateEntity:
         """Test that last fallback zone cannot be disabled."""
         # Make this a fallback zone
         zone_config["is_fallback_valve"] = True
-        
+
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
             redis_client=mock_redis_client,
@@ -269,7 +269,7 @@ class TestZoneClimateEntity:
 
         # Mock get_zone_ids to return only this zone
         mock_redis_client.get_zone_ids = AsyncMock(return_value=["zone1"])
-        
+
         # Mock coordinator to require at least 1 fallback zone
         mock_coordinator.get_config = MagicMock(
             return_value={"min_valves_open": 1}
@@ -295,7 +295,7 @@ class TestZoneClimateEntity:
         """Test that fallback zone can be disabled when other fallback zones exist."""
         # Make this a fallback zone
         zone_config["is_fallback_valve"] = True
-        
+
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
             redis_client=mock_redis_client,
@@ -307,7 +307,7 @@ class TestZoneClimateEntity:
 
         # Mock get_zone_ids to return two zones
         mock_redis_client.get_zone_ids = AsyncMock(return_value=["zone1", "zone2"])
-        
+
         # Mock get_zone_state for zone2 (another enabled fallback zone)
         async def mock_get_zone_state(zone_id):
             if zone_id == "zone2":
@@ -317,9 +317,9 @@ class TestZoneClimateEntity:
                     "enabled": "true",
                 }
             return None
-        
+
         mock_redis_client.get_zone_state = AsyncMock(side_effect=mock_get_zone_state)
-        
+
         # Mock coordinator to require at least 1 fallback zone
         mock_coordinator.get_config = MagicMock(
             return_value={"min_valves_open": 1}
@@ -369,7 +369,7 @@ class TestZoneClimateEntity:
     ):
         """Test that supported features includes TURN_ON and TURN_OFF."""
         from homeassistant.components.climate import ClimateEntityFeature
-        
+
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
             redis_client=mock_redis_client,

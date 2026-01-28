@@ -150,7 +150,7 @@ class MultizoneTemperatureSensor(SensorEntity):
             return None
         if isinstance(value, (int, float)):
             return float(value)
-        
+
         return None
 
     @callback
@@ -293,13 +293,13 @@ class ZoneTemperatureSensor(SensorEntity):
             return None
 
         value = zone_data.get(self.sensor_type)
-        
+
         # Return None if value is not present or not a number
         if value is None:
             return None
         if isinstance(value, (int, float)):
             return float(value)
-        
+
         return None
 
     @callback

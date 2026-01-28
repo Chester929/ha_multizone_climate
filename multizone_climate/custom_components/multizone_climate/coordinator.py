@@ -49,7 +49,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         try:
             # Fetch system state first
             state_data = await self._fetch_system_state()
-            
+
             # Get pending commands from backend
             async with self.session.get(
                 f"{self.backend_url}/api/integration/commands",

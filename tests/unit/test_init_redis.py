@@ -15,7 +15,7 @@ class TestRedisInitialization:
         hass.data = {}
         hass.loop = MagicMock()
         hass.loop.time = MagicMock(return_value=1234567890)
-        
+
         # Mock states
         hass.states = MagicMock()
         main_climate_state = MagicMock()
@@ -25,23 +25,23 @@ class TestRedisInitialization:
             "temperature": 22.0,
             "hvac_action": "heating",
         }
-        
+
         outdoor_sensor_state = MagicMock()
         outdoor_sensor_state.state = "5.0"
-        
+
         def mock_get_state(entity_id):
             if entity_id == "climate.main_thermostat":
                 return main_climate_state
             elif entity_id == "sensor.outdoor_temp":
                 return outdoor_sensor_state
             return None
-        
+
         hass.states.get = mock_get_state
-        
+
         # Mock config_entries
         hass.config_entries = MagicMock()
         hass.config_entries.async_forward_entry_setups = AsyncMock()
-        
+
         return hass
 
     @pytest.fixture
@@ -93,13 +93,13 @@ class TestRedisInitialization:
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should call set_config once
         mock_redis_client.set_config.assert_called_once()
-        
+
         # Verify config contents
         config_call_args = mock_redis_client.set_config.call_args[0][0]
         assert config_call_args["main_climate_entity_id"] == "climate.main_thermostat"
@@ -118,13 +118,13 @@ class TestRedisInitialization:
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should call set_main_climate_state once
         mock_redis_client.set_main_climate_state.assert_called_once()
-        
+
         # Verify main climate state contents
         state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
         assert state_call_args["entity_id"] == "climate.main_thermostat"
@@ -146,16 +146,16 @@ class TestRedisInitialization:
             "main_climate_entity_id": "climate.existing",
             "min_valves_open": 2,
         })
-        
+
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should NOT call set_config (already exists)
         mock_redis_client.set_config.assert_not_called()
 
@@ -169,16 +169,16 @@ class TestRedisInitialization:
             "entity_id": "climate.existing",
             "current_temperature": 19.0,
         })
-        
+
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should NOT call set_main_climate_state (already exists)
         mock_redis_client.set_main_climate_state.assert_not_called()
 
@@ -194,19 +194,19 @@ class TestRedisInitialization:
             "temperature_sensor": "sensor.bedroom_temp",
             "valve_switch": "switch.bedroom_valve",
         }
-        
+
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should call set_main_climate_state
         mock_redis_client.set_main_climate_state.assert_called_once()
-        
+
         # Verify outdoor temperature defaults to 0.0
         state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
         assert state_call_args["outdoor_temperature"] == 0.0
@@ -219,26 +219,26 @@ class TestRedisInitialization:
         # Mock outdoor sensor with invalid state
         outdoor_sensor_state = MagicMock()
         outdoor_sensor_state.state = "unavailable"
-        
+
         def mock_get_state(entity_id):
             if entity_id == "sensor.outdoor_temp":
                 return outdoor_sensor_state
             return None
-        
+
         mock_hass.states.get = mock_get_state
-        
+
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should call set_main_climate_state
         mock_redis_client.set_main_climate_state.assert_called_once()
-        
+
         # Verify outdoor temperature defaults to 0.0 when parsing fails
         state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
         assert state_call_args["outdoor_temperature"] == 0.0
@@ -250,20 +250,20 @@ class TestRedisInitialization:
         """Test that main climate state uses defaults when entity is not available after retry."""
         # Mock that main climate entity is not available
         mock_hass.states.get = MagicMock(return_value=None)
-        
+
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
                             result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should sleep once for retry
         mock_sleep.assert_called_once_with(1)
-        
+
         # Should call set_main_climate_state with defaults
         mock_redis_client.set_main_climate_state.assert_called_once()
         state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]
@@ -287,7 +287,7 @@ class TestRedisInitialization:
             "temperature": 22.0,
             "hvac_action": "heating",
         }
-        
+
         call_count = [0]
         def mock_get_state(entity_id):
             if entity_id == "climate.main_thermostat":
@@ -299,22 +299,22 @@ class TestRedisInitialization:
                     # Second call (after retry) - entity available
                     return main_climate_state
             return None
-        
+
         mock_hass.states.get = mock_get_state
-        
+
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
                 with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
                             result = await async_setup_entry(mock_hass, mock_config_entry)
-        
+
         # Should return True for successful setup
         assert result is True
-        
+
         # Should sleep once for retry
         mock_sleep.assert_called_once_with(1)
-        
+
         # Should call set_main_climate_state with actual data (not defaults)
         mock_redis_client.set_main_climate_state.assert_called_once()
         state_call_args = mock_redis_client.set_main_climate_state.call_args[0][0]

@@ -31,15 +31,15 @@ def mock_coordinator():
             "multizone_enabled": "false",
         },
     }
-    
+
     def get_config():
         return coordinator.data.get("config", {})
-    
+
     coordinator.get_config = get_config
     coordinator.async_request_refresh = AsyncMock()
     coordinator.hass = MagicMock()
     coordinator.hass.loop.time = lambda: 1234567890
-    
+
     return coordinator
 
 
@@ -56,10 +56,10 @@ def mock_redis_client():
 async def test_switch_recognizes_enabled_zone(mock_coordinator, mock_redis_client):
     """Test that switch recognizes zones with enabled='true'."""
     switch = MultizoneEnableSwitch(mock_coordinator, mock_redis_client)
-    
+
     # Should allow turning on when at least one zone is enabled
     await switch.async_turn_on()
-    
+
     # Verify that set_config was called
     assert mock_redis_client.set_config.called
 
@@ -69,12 +69,12 @@ async def test_switch_rejects_when_no_enabled_zones(mock_coordinator, mock_redis
     """Test that switch rejects when no zones are enabled."""
     # Set all zones to disabled
     mock_coordinator.data["zones"]["zone1"]["enabled"] = "false"
-    
+
     switch = MultizoneEnableSwitch(mock_coordinator, mock_redis_client)
-    
+
     # Should not allow turning on when no zones are enabled
     await switch.async_turn_on()
-    
+
     # Verify that set_config was NOT called
     assert not mock_redis_client.set_config.called
 
@@ -87,10 +87,10 @@ async def test_switch_handles_various_enabled_values(mock_coordinator, mock_redi
     switch = MultizoneEnableSwitch(mock_coordinator, mock_redis_client)
     await switch.async_turn_on()
     assert mock_redis_client.set_config.called
-    
+
     # Reset
     mock_redis_client.set_config.reset_mock()
-    
+
     # Test with "1"
     mock_coordinator.data["zones"]["zone1"]["enabled"] = "1"
     switch = MultizoneEnableSwitch(mock_coordinator, mock_redis_client)
