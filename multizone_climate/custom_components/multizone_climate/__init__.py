@@ -275,19 +275,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     # Create persistent notification for restart requirement on first installation
-    # This notification reminds users to restart Home Assistant after installation
-    # The notification will persist until dismissed by the user
-    await hass.services.async_call(
-        "persistent_notification",
-        "create",
-        {
-            "title": NOTIFICATION_TITLE_RESTART,
-            "message": NOTIFICATION_MESSAGE_RESTART,
-            "notification_id": NOTIFICATION_ID_RESTART,
-        },
-        blocking=False,
-    )
-    _LOGGER.info("Created restart notification for Multizone Climate integration")
+    # Only show this notification if Redis config didn't exist (first setup)
+    # This reminds users to restart Home Assistant after initial installation
+    if not existing_config:
+        await hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "title": NOTIFICATION_TITLE_RESTART,
+                "message": NOTIFICATION_MESSAGE_RESTART,
+                "notification_id": NOTIFICATION_ID_RESTART,
+            },
+            blocking=False,
+        )
+        _LOGGER.info(
+            "Created restart notification for Multizone Climate integration (first setup)"
+        )
 
     return True
 
