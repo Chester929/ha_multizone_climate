@@ -140,13 +140,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- **Automatic Cleanup on Uninstall** - Added automatic cleanup of custom component when add-on is uninstalled
-  - Created finish script for logic service to remove custom component directory
-  - Cleanup runs automatically when add-on is stopped or uninstalled
-  - Removes `/homeassistant/custom_components/multizone_climate/` (or `/config/custom_components/multizone_climate/`)
-  - Updated documentation with complete uninstallation steps
+- **Custom Component Persistence** - Custom component is now preserved during add-on shutdown and restart
+  - Removed automatic cleanup from finish script to prevent component removal on add-on stop/restart
+  - Custom component now persists across add-on upgrades and restarts
+  - Manual removal required when uninstalling add-on (see updated documentation)
+  - This allows the integration to continue functioning after add-on restarts without requiring Home Assistant restart
 
 ### Fixed
 
