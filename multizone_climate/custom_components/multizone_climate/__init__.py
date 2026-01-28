@@ -311,7 +311,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Stop job worker first
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         await coordinator.stop_job_worker()
-        
+
         # Cleanup coordinator
         await coordinator.async_shutdown()
 
