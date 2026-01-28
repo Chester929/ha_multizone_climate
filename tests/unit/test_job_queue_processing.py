@@ -128,7 +128,6 @@ async def test_job_failure_moves_to_error_queue():
     # Setup mock redis client
     mock_redis = MagicMock()
     mock_redis.set_job_status = AsyncMock()
-    mock_redis.move_job_to_error_queue = AsyncMock()
     
     # Mock jobs where middle one will fail
     jobs = [
@@ -150,8 +149,14 @@ async def test_job_failure_moves_to_error_queue():
         job_index += 1
         return True
     
+    async def mock_move_to_error(job_type, job_data, error):
+        nonlocal job_index
+        # Moving to error queue also increments the index (job removed from queue)
+        job_index += 1
+    
     mock_redis.peek_job = AsyncMock(side_effect=mock_peek)
     mock_redis.remove_job = AsyncMock(side_effect=mock_remove)
+    mock_redis.move_job_to_error_queue = AsyncMock(side_effect=mock_move_to_error)
     
     # Create coordinator with mocked aiohttp session
     mock_hass = MagicMock()
@@ -206,7 +211,6 @@ async def test_job_exception_moves_to_error_queue():
     # Setup mock redis client
     mock_redis = MagicMock()
     mock_redis.set_job_status = AsyncMock()
-    mock_redis.move_job_to_error_queue = AsyncMock()
     
     # Mock one job that will raise exception
     jobs = [
@@ -226,8 +230,14 @@ async def test_job_exception_moves_to_error_queue():
         job_index += 1
         return True
     
+    async def mock_move_to_error(job_type, job_data, error):
+        nonlocal job_index
+        # Moving to error queue also increments the index (job removed from queue)
+        job_index += 1
+    
     mock_redis.peek_job = AsyncMock(side_effect=mock_peek)
     mock_redis.remove_job = AsyncMock(side_effect=mock_remove)
+    mock_redis.move_job_to_error_queue = AsyncMock(side_effect=mock_move_to_error)
     
     # Create coordinator with mocked aiohttp session
     mock_hass = MagicMock()
