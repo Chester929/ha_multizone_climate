@@ -95,9 +95,9 @@ class ValveController:
             if zone.get("enabled", "true") in ["false", "False", "0"]:
                 valves_to_close.append(valve_id)
                 continue
-            
+
             satisfaction = zone.get("satisfaction", "unknown")
-            
+
             if main_climate_state.upper() == "HEATING":
                 if satisfaction == "underheated":
                     valves_to_open.append(valve_id)
@@ -424,8 +424,8 @@ class ValveController:
         """
         # Filter zones with is_fallback_valve=True and enabled=true
         fallback_zones = [
-            zone for zone in zones 
-            if zone.get("is_fallback_valve", False) 
+            zone for zone in zones
+            if zone.get("is_fallback_valve", False)
             and zone.get("enabled", "true") not in ["false", "False", "0"]
         ]
 

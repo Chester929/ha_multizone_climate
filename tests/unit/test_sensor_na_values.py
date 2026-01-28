@@ -40,10 +40,10 @@ def mock_coordinator():
             },
         },
     }
-    
+
     def get_zone_data(zone_id):
         return coordinator.data.get("zones", {}).get(zone_id)
-    
+
     coordinator.get_zone_data = get_zone_data
     return coordinator
 
@@ -53,7 +53,7 @@ def test_zone_temperature_sensor_missing_value(mock_coordinator):
     sensor = ZoneTemperatureSensor(
         mock_coordinator, "zone1", "Zone 1", "current_temperature"
     )
-    
+
     # Should return None when key is not in data
     assert sensor.native_value is None
 
@@ -63,7 +63,7 @@ def test_zone_temperature_sensor_none_value(mock_coordinator):
     sensor = ZoneTemperatureSensor(
         mock_coordinator, "zone3", "Zone 3", "current_temperature"
     )
-    
+
     # Should return None
     assert sensor.native_value is None
 
@@ -73,7 +73,7 @@ def test_zone_temperature_sensor_numeric_string(mock_coordinator):
     sensor = ZoneTemperatureSensor(
         mock_coordinator, "zone1", "Zone 1", "target_temperature"
     )
-    
+
     # String values should return None (backend should send numbers)
     assert sensor.native_value is None
 
@@ -83,7 +83,7 @@ def test_zone_temperature_sensor_float_value(mock_coordinator):
     sensor = ZoneTemperatureSensor(
         mock_coordinator, "zone2", "Zone 2", "current_temperature"
     )
-    
+
     # Should return float value
     assert sensor.native_value == 21.5
 
@@ -93,7 +93,7 @@ def test_multizone_temperature_sensor_missing_value(mock_coordinator):
     sensor = MultizoneTemperatureSensor(
         mock_coordinator, "main_current_temperature"
     )
-    
+
     # Should return None when key is not in data
     assert sensor.native_value is None
 
@@ -103,7 +103,7 @@ def test_multizone_temperature_sensor_none_value(mock_coordinator):
     sensor = MultizoneTemperatureSensor(
         mock_coordinator, "outdoor_temperature"
     )
-    
+
     # Should return None
     assert sensor.native_value is None
 
@@ -113,6 +113,6 @@ def test_multizone_temperature_sensor_valid_value(mock_coordinator):
     sensor = MultizoneTemperatureSensor(
         mock_coordinator, "main_target_temperature"
     )
-    
+
     # Should return float value
     assert sensor.native_value == 20.0

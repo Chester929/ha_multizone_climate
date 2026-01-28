@@ -401,7 +401,7 @@ class ZoneClimateEntity(ClimateEntity):
         if not enabled and self._is_fallback:
             # Get all zone IDs from Redis
             zone_ids = await self.redis_client.get_zone_ids()
-            
+
             # Count currently enabled fallback zones (excluding this one)
             enabled_fallback_count = 0
             for zone_id in zone_ids:
@@ -413,11 +413,11 @@ class ZoneClimateEntity(ClimateEntity):
                     is_enabled = zone_state.get("enabled", "true") not in ["false", "False", "0"]
                     if is_fallback and is_enabled:
                         enabled_fallback_count += 1
-            
+
             # Get minimum requirement
             config = self.coordinator.get_config() or {}
             min_valves_required = config.get("min_valves_open", 1)
-            
+
             # Check if we would violate the minimum
             if enabled_fallback_count < min_valves_required:
                 _LOGGER.error(
@@ -447,7 +447,7 @@ class ZoneClimateEntity(ClimateEntity):
 
         # Trigger valve update job
         job_id_suffix = f"{int(self.hass.loop.time() * 1000)}_{hashlib.md5(self.zone_id.encode()).hexdigest()[:8]}"
-        
+
         await self.redis_client.enqueue_job(
             JOB_TYPE_UPDATE_VALVES,
             {

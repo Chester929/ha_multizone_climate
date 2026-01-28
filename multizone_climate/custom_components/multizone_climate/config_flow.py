@@ -63,12 +63,12 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Validate the main climate entity exists
                 if not self.hass.states.get(user_input["main_climate_entity"]):
                     errors["main_climate_entity"] = "entity_not_found"
-                
+
                 # Validate outdoor temperature sensor if provided
                 outdoor_sensor = user_input.get("outdoor_temperature_sensor")
                 if outdoor_sensor and not self.hass.states.get(outdoor_sensor):
                     errors["outdoor_temperature_sensor"] = "entity_not_found"
-                
+
                 if not errors:
                     # Store main climate entity and proceed to zone setup
                     self.data = user_input
@@ -239,16 +239,16 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
         """Edit main climate entity configuration."""
         if user_input is not None:
             errors: dict[str, str] = {}
-            
+
             # Validate the main climate entity exists
             if not self.hass.states.get(user_input["main_climate_entity"]):
                 errors["main_climate_entity"] = "entity_not_found"
-            
+
             # Validate outdoor temperature sensor if provided
             outdoor_sensor = user_input.get("outdoor_temperature_sensor")
             if outdoor_sensor and not self.hass.states.get(outdoor_sensor):
                 errors["outdoor_temperature_sensor"] = "entity_not_found"
-            
+
             if errors:
                 return self.async_show_form(  # type: ignore[return-value]
                     step_id="edit_main",
