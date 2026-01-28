@@ -152,7 +152,7 @@ if [ "${INSTALL_NEEDED}" = true ]; then
     # Create persistent notification to inform user about restart requirement
     if [ -n "${SUPERVISOR_TOKEN}" ]; then
         # Create notification message (jq will handle proper JSON escaping)
-        NOTIFICATION_MESSAGE="The Multizone Climate custom component has been updated to version ${ADDON_VERSION}. Please restart Home Assistant to load the updated integration.
+        NOTIFICATION_MESSAGE="The Multizone Climate custom component (version ${ADDON_VERSION}) is now available. Please restart Home Assistant to load the integration.
 
 Go to **Settings** → **System** → **Restart** to restart Home Assistant."
         
