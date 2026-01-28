@@ -47,7 +47,4 @@ ports_description:
 map:
   - homeassistant_config:rw
 
-hassio_api: true
-hassio_role: manager
-
 ingress: false
