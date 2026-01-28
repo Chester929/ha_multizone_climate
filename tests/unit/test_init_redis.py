@@ -90,7 +90,7 @@ class TestRedisInitialization:
         """Test that global config is initialized when it doesn't exist."""
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
@@ -115,7 +115,7 @@ class TestRedisInitialization:
         """Test that main climate state is initialized when it doesn't exist."""
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
@@ -149,7 +149,7 @@ class TestRedisInitialization:
         
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
@@ -172,7 +172,7 @@ class TestRedisInitialization:
         
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
@@ -197,7 +197,7 @@ class TestRedisInitialization:
         
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
@@ -229,7 +229,7 @@ class TestRedisInitialization:
         
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         result = await async_setup_entry(mock_hass, mock_config_entry)
         
@@ -253,7 +253,7 @@ class TestRedisInitialization:
         
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
                             result = await async_setup_entry(mock_hass, mock_config_entry)
@@ -304,7 +304,7 @@ class TestRedisInitialization:
         
         with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
             with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
-                with patch("custom_components.multizone_climate.dr.async_get"):
+                with patch("homeassistant.helpers.device_registry.async_get"):
                     with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "15"}):
                         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
                             result = await async_setup_entry(mock_hass, mock_config_entry)
