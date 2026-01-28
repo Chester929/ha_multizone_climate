@@ -1426,37 +1426,48 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 			zones[zoneID] = zoneMap
 		}
 
-		// Get main climate data from configuration
-		mainClimate := make(map[string]interface{})
-
-		// Parse main climate entity state from config
-		if mainClimateEntityID, ok := config["main_climate_entity_id"]; ok && mainClimateEntityID != "" {
-			mainClimate["entity_id"] = mainClimateEntityID
+		// Get main climate state from multizone:main_climate
+		mainClimateData, err := client.HGetAll(ctx, "multizone:main_climate")
+		if err != nil {
+			logger.Error("Failed to retrieve main climate state: %v", err)
+			mainClimateData = make(map[string]string)
 		}
 
-		// Parse numeric config values
-		if currentTemp, ok := config["main_current_temperature"]; ok && currentTemp != "" {
+		mainClimate := make(map[string]interface{})
+
+		// Parse main climate entity state
+		if entityID, ok := mainClimateData["entity_id"]; ok && entityID != "" {
+			mainClimate["entity_id"] = entityID
+		}
+
+		// Parse numeric values from main climate state
+		if currentTemp, ok := mainClimateData["current_temperature"]; ok && currentTemp != "" {
 			if floatVal, err := strconv.ParseFloat(currentTemp, 64); err == nil {
 				mainClimate["current_temperature"] = floatVal
 			}
 		}
 
-		if targetTemp, ok := config["main_target_temperature"]; ok && targetTemp != "" {
+		if targetTemp, ok := mainClimateData["target_temperature"]; ok && targetTemp != "" {
 			if floatVal, err := strconv.ParseFloat(targetTemp, 64); err == nil {
 				mainClimate["target_temperature"] = floatVal
 			}
 		}
 
-		if outdoorTemp, ok := config["outdoor_temperature"]; ok && outdoorTemp != "" {
+		if outdoorTemp, ok := mainClimateData["outdoor_temperature"]; ok && outdoorTemp != "" {
 			if floatVal, err := strconv.ParseFloat(outdoorTemp, 64); err == nil {
 				mainClimate["outdoor_temperature"] = floatVal
 			}
 		}
 
-		if hvacAction, ok := config["hvac_action"]; ok {
+		if hvacMode, ok := mainClimateData["hvac_mode"]; ok {
+			mainClimate["hvac_mode"] = hvacMode
+		}
+
+		if hvacAction, ok := mainClimateData["hvac_action"]; ok {
 			mainClimate["hvac_action"] = hvacAction
 		}
 
+		// Get multizone_enabled from config (it's a configuration setting, not runtime state)
 		if multizoneEnabled, ok := config["multizone_enabled"]; ok {
 			mainClimate["multizone_enabled"] = multizoneEnabled == "true" || multizoneEnabled == "True" || multizoneEnabled == "1"
 		}

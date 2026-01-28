@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -56,6 +57,107 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
+
+    # Initialize global config if it doesn't exist
+    existing_config = await redis_client.get_config()
+    if not existing_config:
+        # Create initial config with default values
+        initial_config = {
+            "main_climate_entity_id": entry.data.get("main_climate_entity", ""),
+            "main_target_all_zones_satisfied": 0.5,
+            "use_average_mode": False,
+            "min_valves_open": 1,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+            "valve_actuation_delay": 120,
+            "coordinator_interval": int(os.environ.get("COORDINATOR_INTERVAL", "15")),
+            "satisfaction_eps": 0.0,
+            "multizone_enabled": False,
+        }
+        
+        # Add outdoor temperature sensor if provided
+        outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
+        if outdoor_sensor:
+            initial_config["outdoor_temperature_sensor"] = outdoor_sensor
+        
+        await redis_client.set_config(initial_config)
+        _LOGGER.info(
+            f"Initialized global config in Redis with main_climate_entity_id={initial_config['main_climate_entity_id']}"
+        )
+    else:
+        _LOGGER.info(
+            f"Global config already exists in Redis (found {len(existing_config)} keys), skipping initialization"
+        )
+
+    # Initialize main climate state if it doesn't exist
+    existing_main_climate = await redis_client.get_main_climate_state()
+    if not existing_main_climate:
+        # Get initial state from main climate entity
+        main_climate_entity_id = entry.data.get("main_climate_entity", "")
+        main_climate_state_obj = hass.states.get(main_climate_entity_id) if main_climate_entity_id else None
+        
+        # Retry once if entity is not available (entity might be initializing)
+        if not main_climate_state_obj and main_climate_entity_id:
+            _LOGGER.info(
+                f"Main climate entity {main_climate_entity_id} not available, waiting 1 second and retrying..."
+            )
+            await asyncio.sleep(1)
+            main_climate_state_obj = hass.states.get(main_climate_entity_id)
+        
+        # Initialize with actual data from HA entity if available
+        if main_climate_state_obj:
+            attrs = main_climate_state_obj.attributes
+            
+            # Create initial main climate state with actual data from HA entity
+            initial_main_climate = {
+                "entity_id": main_climate_entity_id,
+                "current_temperature": attrs.get("current_temperature", 0.0),
+                "target_temperature": attrs.get("temperature", 22.0),
+                "outdoor_temperature": 0.0,  # Will be populated from sensor below if available
+                "hvac_mode": main_climate_state_obj.state,
+                "hvac_action": attrs.get("hvac_action", "idle"),
+            }
+            
+            # Get outdoor temperature from sensor if provided
+            outdoor_sensor = entry.data.get("outdoor_temperature_sensor")
+            if outdoor_sensor:
+                outdoor_state = hass.states.get(outdoor_sensor)
+                if outdoor_state:
+                    try:
+                        initial_main_climate["outdoor_temperature"] = float(outdoor_state.state)
+                    except (ValueError, TypeError):
+                        _LOGGER.warning(f"Could not parse outdoor temperature from {outdoor_sensor}, using 0.0")
+            
+            await redis_client.set_main_climate_state(initial_main_climate)
+            _LOGGER.info(
+                f"Initialized main climate state in Redis for {main_climate_entity_id} with actual data from HA"
+            )
+        else:
+            # Entity still not available after retry - use defaults for initialization
+            _LOGGER.warning(
+                f"Cannot fetch data from main climate entity {main_climate_entity_id} after retry. "
+                f"Initializing with default values."
+            )
+            
+            # Create initial main climate state with default values
+            initial_main_climate = {
+                "entity_id": main_climate_entity_id,
+                "current_temperature": 0.0,
+                "target_temperature": 22.0,
+                "outdoor_temperature": 0.0,
+                "hvac_mode": "unknown",
+                "hvac_action": "idle",
+            }
+            
+            await redis_client.set_main_climate_state(initial_main_climate)
+            _LOGGER.info(
+                f"Initialized main climate state in Redis for {main_climate_entity_id} with default values"
+            )
+    else:
+        _LOGGER.info(
+            f"Main climate state already exists in Redis (found {len(existing_main_climate)} keys), skipping initialization"
+        )
 
     # Check if this is initial setup with zone data in entry.data
     # Only create initial zone if Redis is empty (prevents duplicates on restart)
