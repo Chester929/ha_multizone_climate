@@ -5,7 +5,8 @@
         "title": "Configure Main Climate",
         "description": "Select the main climate entity that controls your HVAC system. At least one fallback zone is required for the system to function properly.",
         "data": {
-          "main_climate_entity": "Main Climate Entity"
+          "main_climate_entity": "Main Climate Entity",
+          "outdoor_temperature_sensor": "Outdoor Temperature Sensor (Optional)"
         }
       },
       "zone_initial": {
@@ -45,7 +46,8 @@
         "title": "Edit Main Climate Entity",
         "description": "Update the main climate entity that controls your HVAC system.",
         "data": {
-          "main_climate_entity": "Main Climate Entity"
+          "main_climate_entity": "Main Climate Entity",
+          "outdoor_temperature_sensor": "Outdoor Temperature Sensor (Optional)"
         }
       },
       "add_zone": {

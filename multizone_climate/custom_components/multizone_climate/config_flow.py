@@ -25,6 +25,12 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required("main_climate_entity"): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=CLIMATE_DOMAIN),
         ),
+        vol.Optional("outdoor_temperature_sensor"): selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=SENSOR_DOMAIN,
+                device_class="temperature",
+            ),
+        ),
     }
 )
 
@@ -57,7 +63,13 @@ class MultizoneClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Validate the main climate entity exists
                 if not self.hass.states.get(user_input["main_climate_entity"]):
                     errors["main_climate_entity"] = "entity_not_found"
-                else:
+                
+                # Validate outdoor temperature sensor if provided
+                outdoor_sensor = user_input.get("outdoor_temperature_sensor")
+                if outdoor_sensor and not self.hass.states.get(outdoor_sensor):
+                    errors["outdoor_temperature_sensor"] = "entity_not_found"
+                
+                if not errors:
                     # Store main climate entity and proceed to zone setup
                     self.data = user_input
                     return await self.async_step_zone_initial()
@@ -226,12 +238,22 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.FlowResult:
         """Edit main climate entity configuration."""
         if user_input is not None:
+            errors: dict[str, str] = {}
+            
             # Validate the main climate entity exists
             if not self.hass.states.get(user_input["main_climate_entity"]):
+                errors["main_climate_entity"] = "entity_not_found"
+            
+            # Validate outdoor temperature sensor if provided
+            outdoor_sensor = user_input.get("outdoor_temperature_sensor")
+            if outdoor_sensor and not self.hass.states.get(outdoor_sensor):
+                errors["outdoor_temperature_sensor"] = "entity_not_found"
+            
+            if errors:
                 return self.async_show_form(  # type: ignore[return-value]
                     step_id="edit_main",
                     data_schema=self._get_edit_main_schema(),
-                    errors={"main_climate_entity": "entity_not_found"},
+                    errors=errors,
                 )
 
             # Update the config entry data - merge with existing to preserve zone fields
@@ -258,6 +280,15 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     default=self._config_entry.data.get("main_climate_entity"),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=CLIMATE_DOMAIN),
+                ),
+                vol.Optional(
+                    "outdoor_temperature_sensor",
+                    default=self._config_entry.data.get("outdoor_temperature_sensor"),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=SENSOR_DOMAIN,
+                        device_class="temperature",
+                    ),
                 ),
             }
         )
