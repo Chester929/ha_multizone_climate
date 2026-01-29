@@ -71,7 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "main_max_temp": 30.0,
             "main_change_threshold": 0.5,
             "valve_actuation_delay": 120,
-            "coordinator_interval": int(os.environ.get("COORDINATOR_INTERVAL", "15")),
+            "coordinator_interval": int(os.environ.get("COORDINATOR_INTERVAL", "30")),
             "satisfaction_eps": 0.0,
             "multizone_enabled": False,
         }

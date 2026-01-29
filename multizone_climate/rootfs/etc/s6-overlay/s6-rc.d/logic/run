@@ -8,6 +8,10 @@ REDIS_MODE=$(bashio::config 'redis.mode')
 REDIS_PASSWORD=$(bashio::config 'redis.password')
 LOG_LEVEL=$(bashio::config 'logic.log_level')
 BACKEND_PORT=$(bashio::config 'integration.backend_port')
+COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
+
+# Use default coordinator interval if not specified
+COORDINATOR_INTERVAL=${COORDINATOR_INTERVAL:-30}
 
 # Redis connection settings
 if [ "${REDIS_MODE}" = "external" ]; then
@@ -31,6 +35,7 @@ bashio::log.info "Starting logic service..."
 bashio::log.info "Redis: ${REDIS_HOST}:${REDIS_PORT}"
 bashio::log.info "Log level: ${LOG_LEVEL}"
 bashio::log.info "Backend port: ${BACKEND_PORT}"
+bashio::log.info "Coordinator interval: ${COORDINATOR_INTERVAL}s"
 
 # Wait for Redis to be ready
 if [ "${REDIS_MODE}" = "bundled" ]; then
@@ -59,6 +64,8 @@ export REDIS_PORT="${REDIS_PORT}"
 export REDIS_PASSWORD="${REDIS_PASSWORD}"
 export LOG_LEVEL="${LOG_LEVEL}"
 export HTTP_PORT="${BACKEND_PORT}"
+export BACKEND_PORT="${BACKEND_PORT}"
+export COORDINATOR_INTERVAL="${COORDINATOR_INTERVAL}"
 
 # Run the logic service
 exec multizone-logic
