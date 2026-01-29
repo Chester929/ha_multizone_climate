@@ -173,12 +173,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             zone_id = str(uuid.uuid4())
 
             # Prepare zone data for Redis
+            valve_switch_entity_id = entry.data.get("valve_switch")
             zone_data = {
                 "id": zone_id,
                 "name": entry.data.get("zone_name", "Fallback Zone"),
                 "enabled": "true",
                 "temperature_sensor_entity_id": entry.data.get("temperature_sensor"),
-                "valve_switch_entity_id": entry.data.get("valve_switch"),
+                "valve_switch_entity_id": valve_switch_entity_id,
+                "valve_id": valve_switch_entity_id,  # Alias for compatibility with valve controller
                 "target_temperature": entry.data.get("target_temperature", 20.0),
                 "priority": entry.data.get("priority", 50),
                 "opening_offset": entry.data.get("opening_offset", 0.3),
@@ -288,6 +290,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start job worker to process background jobs
     await coordinator.start_job_worker()
 
+    # Set up valve state change automation
+    from .automations import ValveStateChangeAutomation
+    valve_state_automation = ValveStateChangeAutomation(hass, redis_client)
+    await valve_state_automation.setup()
+    
+    # Store automation in hass.data for cleanup on unload
+    hass.data[DOMAIN][entry.entry_id]["valve_state_automation"] = valve_state_automation
+
     # Register update listener for options flow changes
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
@@ -308,6 +318,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     if unload_ok:
+        # Stop valve state automation
+        valve_state_automation = hass.data[DOMAIN][entry.entry_id].get("valve_state_automation")
+        if valve_state_automation:
+            await valve_state_automation.stop()
+
         # Stop job worker first
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         await coordinator.stop_job_worker()
