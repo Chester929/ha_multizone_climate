@@ -8,10 +8,18 @@ REDIS_MODE=$(bashio::config 'redis.mode')
 REDIS_PASSWORD=$(bashio::config 'redis.password')
 LOG_LEVEL=$(bashio::config 'logic.log_level')
 BACKEND_PORT=$(bashio::config 'integration.backend_port')
-COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
-
-# Use default coordinator interval if not specified
-COORDINATOR_INTERVAL=${COORDINATOR_INTERVAL:-30}
+# Coordinator interval: handle optional/null values safely and validate numeric
+if bashio::config.has_value 'integration.coordinator_interval'; then
+    COORDINATOR_INTERVAL=$(bashio::config 'integration.coordinator_interval')
+    # Ensure the value is a non-empty integer; fall back to default if invalid
+    if ! [[ "${COORDINATOR_INTERVAL}" =~ ^[0-9]+$ ]]; then
+        bashio::log.warning "Invalid coordinator interval '${COORDINATOR_INTERVAL}', using default 30s"
+        COORDINATOR_INTERVAL=30
+    fi
+else
+    # Use default coordinator interval if not specified
+    COORDINATOR_INTERVAL=30
+fi
 
 # Redis connection settings
 if [ "${REDIS_MODE}" = "external" ]; then

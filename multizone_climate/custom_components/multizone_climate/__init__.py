@@ -28,6 +28,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get backend port from environment variable (set by addon)
     backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
     backend_url = f"http://localhost:{backend_port}"
+    
+    # Get coordinator interval from environment variable (set by addon)
+    raw_coordinator_interval = os.environ.get("COORDINATOR_INTERVAL", "30")
+    try:
+        coordinator_interval = int(raw_coordinator_interval)
+    except ValueError:
+        _LOGGER.warning(
+            "Invalid COORDINATOR_INTERVAL value '%s'; falling back to default 30 seconds",
+            raw_coordinator_interval
+        )
+        coordinator_interval = 30
 
     # Get Redis configuration from environment variables
     # NOTE: Redis client is used by platform code but should be replaced
@@ -71,7 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "main_max_temp": 30.0,
             "main_change_threshold": 0.5,
             "valve_actuation_delay": 120,
-            "coordinator_interval": int(os.environ.get("COORDINATOR_INTERVAL", "30")),
+            "coordinator_interval": coordinator_interval,
             "satisfaction_eps": 0.0,
             "multizone_enabled": False,
         }
