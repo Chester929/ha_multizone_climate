@@ -390,3 +390,47 @@ class TestRedisInitialization:
         # Verify coordinator_interval defaults to 30 when null
         config_call_args = mock_redis_client.set_config.call_args[0][0]
         assert config_call_args["coordinator_interval"] == 30
+
+    @pytest.mark.asyncio
+    async def test_handles_zero_coordinator_interval(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
+    ):
+        """Test that zero COORDINATOR_INTERVAL value is handled gracefully."""
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("homeassistant.helpers.device_registry.async_get"):
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "0"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
+
+        # Should return True for successful setup
+        assert result is True
+
+        # Should call set_config once
+        mock_redis_client.set_config.assert_called_once()
+
+        # Verify coordinator_interval defaults to 30 when zero
+        config_call_args = mock_redis_client.set_config.call_args[0][0]
+        assert config_call_args["coordinator_interval"] == 30
+
+    @pytest.mark.asyncio
+    async def test_handles_negative_coordinator_interval(
+        self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_aiohttp_session
+    ):
+        """Test that negative COORDINATOR_INTERVAL value is handled gracefully."""
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch("custom_components.multizone_climate.MultizoneClimateCoordinator", return_value=mock_coordinator):
+                with patch("homeassistant.helpers.device_registry.async_get"):
+                    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
+                        with patch.dict("os.environ", {"BACKEND_PORT": "8080", "COORDINATOR_INTERVAL": "-5"}):
+                            result = await async_setup_entry(mock_hass, mock_config_entry)
+
+        # Should return True for successful setup
+        assert result is True
+
+        # Should call set_config once
+        mock_redis_client.set_config.assert_called_once()
+
+        # Verify coordinator_interval defaults to 30 when negative
+        config_call_args = mock_redis_client.set_config.call_args[0][0]
+        assert config_call_args["coordinator_interval"] == 30

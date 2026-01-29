@@ -33,6 +33,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     raw_coordinator_interval = os.environ.get("COORDINATOR_INTERVAL", "30")
     try:
         coordinator_interval = int(raw_coordinator_interval)
+        # Ensure the value is positive
+        if coordinator_interval <= 0:
+            raise ValueError("Coordinator interval must be positive")
     except ValueError:
         _LOGGER.warning(
             "Invalid COORDINATOR_INTERVAL value '%s'; falling back to default 30 seconds",
