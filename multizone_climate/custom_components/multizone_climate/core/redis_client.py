@@ -279,6 +279,7 @@ class RedisClient:
                 _LOGGER.warning("Attempted to set empty zone state for %s", zone_id)
         except Exception as err:
             _LOGGER.error("Failed to set zone state for %s: %s", zone_id, err)
+            raise
 
     async def add_zone(self, zone_id: str, zone_data: dict[str, Any]) -> None:
         """
@@ -312,13 +313,26 @@ class RedisClient:
             # Use LPOS to check if zone exists in list (more efficient than LRANGE)
             # LPOS returns position or None if not found
             position = await self._redis.lpos(zones_key, zone_id)  # type: ignore[misc]
+            zone_was_added_to_list = False
             if position is None:
                 await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]
+                zone_was_added_to_list = True
                 _LOGGER.debug("Added zone %s to zones list", zone_id)
 
             # Create zone state
-            await self.set_zone_state(zone_id, zone_data)
-            _LOGGER.info("Added zone %s", zone_id)
+            try:
+                await self.set_zone_state(zone_id, zone_data)
+                _LOGGER.info("Added zone %s", zone_id)
+            except Exception as state_err:
+                # If setting zone state fails and we added the zone to the list,
+                # remove it from the list to maintain consistency
+                if zone_was_added_to_list:
+                    try:
+                        await self._redis.lrem(zones_key, 1, zone_id)  # type: ignore[misc]
+                        _LOGGER.debug("Removed zone %s from zones list due to state save failure", zone_id)
+                    except Exception as cleanup_err:
+                        _LOGGER.error("Failed to cleanup zone %s from list after state save failure: %s", zone_id, cleanup_err)
+                raise state_err
         except ValueError:
             # Re-raise ValueError for explicit zone existence errors
             raise
