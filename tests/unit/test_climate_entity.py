@@ -402,18 +402,18 @@ class TestZoneClimateEntity:
             config_entry=mock_config_entry,
             hass=mock_hass,
         )
-        
+
         # Mock valve switch entity state as 'on'
         valve_state_obj = MagicMock()
         valve_state_obj.state = "on"
         mock_hass.states.get = MagicMock(return_value=valve_state_obj)
-        
+
         # Call sync method
         await entity._sync_valve_state_from_ha()
-        
+
         # Verify valve state was updated to 'opened'
         assert entity._valve_state == "opened"
-        
+
         # Verify Redis was updated
         mock_redis_client.set_zone_state.assert_called_once()
         zone_state = mock_redis_client.set_zone_state.call_args[0][1]
@@ -437,18 +437,18 @@ class TestZoneClimateEntity:
             config_entry=mock_config_entry,
             hass=mock_hass,
         )
-        
+
         # Mock valve switch entity state as 'off'
         valve_state_obj = MagicMock()
         valve_state_obj.state = "off"
         mock_hass.states.get = MagicMock(return_value=valve_state_obj)
-        
+
         # Call sync method
         await entity._sync_valve_state_from_ha()
-        
+
         # Verify valve state was updated to 'closed'
         assert entity._valve_state == "closed"
-        
+
         # Verify Redis was updated
         mock_redis_client.set_zone_state.assert_called_once()
         zone_state = mock_redis_client.set_zone_state.call_args[0][1]
@@ -472,21 +472,21 @@ class TestZoneClimateEntity:
             config_entry=mock_config_entry,
             hass=mock_hass,
         )
-        
+
         # Mock valve switch entity state as 'unavailable'
         valve_state_obj = MagicMock()
         valve_state_obj.state = "unavailable"
         mock_hass.states.get = MagicMock(return_value=valve_state_obj)
-        
+
         # Store original valve state
         original_valve_state = entity._valve_state
-        
+
         # Call sync method
         await entity._sync_valve_state_from_ha()
-        
+
         # Verify valve state was NOT changed
         assert entity._valve_state == original_valve_state
-        
+
         # Verify Redis was NOT updated (no call or call count is 0)
         assert mock_redis_client.set_zone_state.call_count == 0
 
@@ -508,19 +508,19 @@ class TestZoneClimateEntity:
             config_entry=mock_config_entry,
             hass=mock_hass,
         )
-        
+
         # Mock valve switch entity as not found
         mock_hass.states.get = MagicMock(return_value=None)
-        
+
         # Store original valve state
         original_valve_state = entity._valve_state
-        
+
         # Call sync method
         await entity._sync_valve_state_from_ha()
-        
+
         # Verify valve state was NOT changed
         assert entity._valve_state == original_valve_state
-        
+
         # Verify Redis was NOT updated
         assert mock_redis_client.set_zone_state.call_count == 0
 
@@ -537,7 +537,7 @@ class TestZoneClimateEntity:
         # Modify zone config to not have valve_switch_entity_id
         zone_config_no_valve = zone_config.copy()
         zone_config_no_valve["valve_switch_entity_id"] = None
-        
+
         entity = ZoneClimateEntity(
             coordinator=mock_coordinator,
             redis_client=mock_redis_client,
@@ -546,13 +546,13 @@ class TestZoneClimateEntity:
             config_entry=mock_config_entry,
             hass=mock_hass,
         )
-        
+
         # Call sync method - should return early without errors
         await entity._sync_valve_state_from_ha()
-        
+
         # Verify states.get was NOT called
         mock_hass.states.get.assert_not_called()
-        
+
         # Verify Redis was NOT updated
         assert mock_redis_client.set_zone_state.call_count == 0
 

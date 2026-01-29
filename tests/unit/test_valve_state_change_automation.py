@@ -75,7 +75,7 @@ class TestValveStateChangeAutomation:
         """Test that valve state 'on' is mapped to 'opened' in Redis."""
         # Set up mapping
         automation._entity_to_zone = {"switch.bedroom_valve": "zone1"}
-        
+
         # Reset the mock to have a fresh state for this test
         mock_redis_client.get_zone_state = AsyncMock(
             return_value={
@@ -114,7 +114,7 @@ class TestValveStateChangeAutomation:
         """Test that valve state 'off' is mapped to 'closed' in Redis."""
         # Set up mapping
         automation._entity_to_zone = {"switch.bedroom_valve": "zone1"}
-        
+
         # Reset the mock to have a fresh state for this test
         mock_redis_client.get_zone_state = AsyncMock(
             return_value={

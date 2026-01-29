@@ -28,7 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get backend port from environment variable (set by addon)
     backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
     backend_url = f"http://localhost:{backend_port}"
-    
+
     # Get coordinator interval from environment variable (set by addon)
     raw_coordinator_interval = os.environ.get("COORDINATOR_INTERVAL", "30")
     try:
@@ -308,7 +308,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .automations import ValveStateChangeAutomation
     valve_state_automation = ValveStateChangeAutomation(hass, redis_client)
     await valve_state_automation.setup()
-    
+
     # Store automation in hass.data for cleanup on unload
     hass.data[DOMAIN][entry.entry_id]["valve_state_automation"] = valve_state_automation
 

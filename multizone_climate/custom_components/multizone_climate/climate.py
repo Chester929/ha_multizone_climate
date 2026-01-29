@@ -624,10 +624,10 @@ class ZoneClimateEntity(ClimateEntity):
     async def _sync_valve_state_from_ha(self) -> None:
         """
         Sync valve state from Home Assistant entity to Redis.
-        
+
         This is called on entity initialization to ensure Redis has the
         actual current state of the valve switch.
-        
+
         Tasks:
             - Read valve switch entity state from HA
             - Map HA state (on/off) to valve state (opened/closed)
@@ -635,7 +635,7 @@ class ZoneClimateEntity(ClimateEntity):
         """
         if not self._valve_switch_entity_id:
             return
-            
+
         valve_state_obj = self.hass.states.get(self._valve_switch_entity_id)
         if valve_state_obj:
             # Map HA state to valve state
@@ -653,14 +653,14 @@ class ZoneClimateEntity(ClimateEntity):
                     self._valve_state,
                 )
                 return
-            
+
             # Update internal state
             old_valve_state = self._valve_state
             self._valve_state = valve_state
-            
+
             # Update Redis
             await self._update_zone_state_in_redis()
-            
+
             _LOGGER.debug(
                 "Synced valve state for zone %s from HA entity %s: %s -> %s",
                 self.zone_id,
@@ -729,6 +729,6 @@ class ZoneClimateEntity(ClimateEntity):
 
         # Initial update from sensor
         await self._async_update_from_sensor()
-        
+
         # Sync valve state from HA entity to Redis
         await self._sync_valve_state_from_ha()
