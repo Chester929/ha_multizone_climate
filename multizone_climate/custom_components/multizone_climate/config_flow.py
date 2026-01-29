@@ -313,11 +313,18 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 data = self.hass.data[DOMAIN][self._config_entry.entry_id]
                 redis_client = data["redis_client"]
 
-                # Validate no duplicate sensors/valves across existing zones
+                # Validate no duplicate sensors/valves/names across existing zones
                 existing_zones = await redis_client.get_zone_ids()
                 for existing_id in existing_zones:
                     existing_zone = await redis_client.get_zone_state(existing_id)
                     if existing_zone:
+                        # Check for duplicate zone name
+                        if (
+                            existing_zone.get("name")
+                            == user_input.get("zone_name")
+                        ):
+                            errors["zone_name"] = "zone_name_already_used"
+                            break
                         # Check for duplicate temperature sensor
                         if (
                             existing_zone.get("temperature_sensor_entity_id")

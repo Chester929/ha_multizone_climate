@@ -114,6 +114,41 @@ class TestConfigFlowValidation:
         redis_client.add_zone.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_duplicate_zone_name_rejected(self, options_flow, mock_hass):
+        """Test that duplicate zone names are rejected."""
+        # Setup: existing zone with name
+        redis_client = mock_hass.data["multizone_climate"]["test_entry_id"][
+            "redis_client"
+        ]
+        redis_client.get_zone_ids = AsyncMock(return_value=["zone1"])
+        redis_client.get_zone_state = AsyncMock(
+            return_value={
+                "id": "zone1",
+                "name": "Bedroom",
+                "temperature_sensor_entity_id": "sensor.bedroom_temp",
+                "valve_switch_entity_id": "switch.bedroom_valve",
+            }
+        )
+        redis_client.add_zone = AsyncMock()
+
+        # Try to add new zone with same name
+        user_input = {
+            "zone_name": "Bedroom",  # Duplicate!
+            "temperature_sensor": "sensor.living_temp",
+            "valve_switch": "switch.living_valve",
+            "target_temperature": 21.0,
+        }
+
+        result = await options_flow.async_step_add_zone(user_input)
+
+        # Should show form with error
+        assert result["type"] == "form"
+        assert "errors" in result
+        assert result["errors"]["zone_name"] == "zone_name_already_used"
+        # Should NOT call add_zone
+        redis_client.add_zone.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_unique_sensors_and_valves_accepted(self, options_flow, mock_hass):
         """Test that unique sensors and valves are accepted."""
         # Setup: existing zone

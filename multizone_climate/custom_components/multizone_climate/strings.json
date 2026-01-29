@@ -71,6 +71,7 @@
       "redis_error": "Failed to add zone to Redis. Check logs for details.",
       "sensor_already_used": "This temperature sensor is already used by another zone",
       "valve_already_used": "This valve switch is already used by another zone",
+      "zone_name_already_used": "This zone name is already used by another zone. Please choose a different name.",
       "zone_id_collision": "Zone ID collision detected. Please try again."
     }
   }
