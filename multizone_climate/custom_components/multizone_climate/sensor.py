@@ -211,7 +211,7 @@ class MultizoneTextSensor(SensorEntity):
             return None
 
         if self.sensor_type == "open_valve_count":
-            # Return cached valve count from backend, fallback to calculation if not available
+            # Return backend-calculated valve count, fallback to local calculation if not available
             open_count = self.coordinator.data.get("open_valve_count")
             if open_count is not None:
                 return open_count
