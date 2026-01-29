@@ -1502,6 +1502,14 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 		calculateQueueSize, _ := client.LLen(ctx, "multizone:jobs:calculate_main_temp")
 		valveQueueSize, _ := client.LLen(ctx, "multizone:jobs:update_valves")
 
+		// Calculate open valve count from zones
+		openValveCount := 0
+		for _, zoneData := range zones {
+			if valveState, ok := zoneData["valve_state"].(string); ok && valveState == "open" {
+				openValveCount++
+			}
+		}
+
 		// Build response
 		response := map[string]interface{}{
 			"config":               config,
@@ -1509,6 +1517,7 @@ func IntegrationGetStateHandler(client *redis.Client) http.HandlerFunc {
 			"zones":                zones,
 			"calculate_queue_size": calculateQueueSize,
 			"valve_queue_size":     valveQueueSize,
+			"open_valve_count":     openValveCount,
 		}
 
 		json.NewEncoder(w).Encode(response)
