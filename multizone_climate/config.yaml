@@ -47,4 +47,6 @@ ports_description:
 map:
   - homeassistant_config:rw
 
+homeassistant_api: true
+
 ingress: false

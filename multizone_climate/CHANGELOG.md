@@ -157,6 +157,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configured proper service dependencies (init runs before logic and redis services)
   - Installation now executes reliably during add-on startup
 
+- **Notification Creation HTTP 401 Error** - Fixed "Failed to create notification (HTTP 401)" error
+  - Added `homeassistant_api: true` to config.yaml to enable Home Assistant Core API access
+  - This allows the add-on to authenticate when creating persistent notifications using SUPERVISOR_TOKEN
+  - The notification informs users when Home Assistant restart is required after custom component installation
+
 ### Planned Features
 
 - AppArmor security profile
