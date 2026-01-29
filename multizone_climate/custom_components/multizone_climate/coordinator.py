@@ -57,7 +57,7 @@ class MultizoneClimateCoordinator(DataUpdateCoordinator):
         """Fetch commands from backend and execute them."""
         # Initialize state_data to ensure consistent error handling
         state_data = {}
-        
+
         try:
             # Fetch system state first
             state_data = await self._fetch_system_state()
