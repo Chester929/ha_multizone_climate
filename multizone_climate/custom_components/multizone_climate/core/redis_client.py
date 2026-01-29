@@ -258,11 +258,16 @@ class RedisClient:
             zone_id: Zone identifier
             state: Zone state dictionary
 
+        Raises:
+            RuntimeError: If Redis client is not connected
+            ValueError: If attempting to set empty zone state
+            Exception: For other Redis operation failures
+
         Redis Key: {prefix}:zone:{zone_id}
         """
         if not self._redis:
             _LOGGER.error("Redis client not connected")
-            return
+            raise RuntimeError("Redis client not connected")
 
         try:
             zone_key = self._get_key(f"zone:{zone_id}")
@@ -276,7 +281,8 @@ class RedisClient:
                 await self._redis.hset(zone_key, mapping=serialized_state)  # type: ignore[misc]
                 _LOGGER.debug("Updated zone state for %s", zone_id)
             else:
-                _LOGGER.warning("Attempted to set empty zone state for %s", zone_id)
+                _LOGGER.error("Attempted to set empty zone state for %s", zone_id)
+                raise ValueError(f"Cannot set empty zone state for {zone_id}")
         except Exception as err:
             _LOGGER.error("Failed to set zone state for %s: %s", zone_id, err)
             raise
@@ -290,16 +296,19 @@ class RedisClient:
             zone_data: Zone configuration and state
 
         Raises:
+            RuntimeError: If Redis client is not connected
             ValueError: If zone_id already exists
+            Exception: For other Redis operation failures
 
         Tasks:
             - Verify zone doesn't already exist
             - Add zone_id to zones list
             - Create zone state hash
+            - On failure, cleanup zone_id from list (atomic behavior)
         """
         if not self._redis:
             _LOGGER.error("Redis client not connected")
-            return
+            raise RuntimeError("Redis client not connected")
 
         try:
             # Check if zone already exists (prevent silent overwrites)

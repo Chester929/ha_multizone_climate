@@ -114,3 +114,59 @@ class TestZonePersistence:
         # Verify no attempt was made to add to list or save state
         redis_client._redis.rpush.assert_not_called()
         redis_client._redis.hset.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_zone_redis_not_connected(self, redis_client):
+        """Test that add_zone raises RuntimeError if Redis is not connected."""
+        zone_id = "test-zone"
+        zone_data = {"name": "Test Zone"}
+
+        # Mock Redis not connected
+        redis_client._redis = None
+
+        # Attempt to add zone - should raise RuntimeError
+        with pytest.raises(RuntimeError, match="not connected"):
+            await redis_client.add_zone(zone_id, zone_data)
+
+    @pytest.mark.asyncio
+    async def test_set_zone_state_empty_data(self, redis_client):
+        """Test that set_zone_state raises ValueError for empty zone data."""
+        zone_id = "test-zone"
+        zone_data = {}  # Empty data
+
+        # Attempt to set empty zone state - should raise ValueError
+        with pytest.raises(ValueError, match="Cannot set empty zone state"):
+            await redis_client.set_zone_state(zone_id, zone_data)
+
+    @pytest.mark.asyncio
+    async def test_set_zone_state_redis_not_connected(self, redis_client):
+        """Test that set_zone_state raises RuntimeError if Redis is not connected."""
+        zone_id = "test-zone"
+        zone_data = {"name": "Test Zone"}
+
+        # Mock Redis not connected
+        redis_client._redis = None
+
+        # Attempt to set zone state - should raise RuntimeError
+        with pytest.raises(RuntimeError, match="not connected"):
+            await redis_client.set_zone_state(zone_id, zone_data)
+
+    @pytest.mark.asyncio
+    async def test_add_zone_cleanup_failure(self, redis_client):
+        """Test that errors are logged if cleanup fails during add_zone rollback."""
+        zone_id = "test-zone"
+        zone_data = {"name": "Test Zone"}
+
+        # Mock Redis operations
+        redis_client._redis.lpos.return_value = None  # Zone not in list
+        redis_client._redis.rpush.return_value = 1  # Successfully added to list
+        redis_client._redis.hgetall.return_value = {}  # Zone doesn't exist yet
+        redis_client._redis.hset.side_effect = Exception("State save failed")
+        redis_client._redis.lrem.side_effect = Exception("Cleanup failed")
+
+        # Attempt to add zone - should fail with original state save error
+        with pytest.raises(Exception, match="State save failed"):
+            await redis_client.add_zone(zone_id, zone_data)
+
+        # Verify cleanup was attempted even though it failed
+        redis_client._redis.lrem.assert_called_once()
