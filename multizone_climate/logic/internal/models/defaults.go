@@ -42,7 +42,7 @@ const (
 	DefaultValveActuationDelay = 120
 
 	// DefaultCoordinatorInterval is the default interval for coordinator runs in seconds
-	DefaultCoordinatorInterval = 15
+	DefaultCoordinatorInterval = 30
 
 	// DefaultSatisfactionEpsilon is the default epsilon for satisfaction calculations
 	DefaultSatisfactionEpsilon = 0.0
