@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -1140,7 +1141,7 @@ func TestIntegrationGetStateHandlerAllOpenValves(t *testing.T) {
 
 	// Add zones with all valves open
 	for i := 1; i <= 5; i++ {
-		zoneID := "zone" + string(rune('0'+i))
+		zoneID := fmt.Sprintf("zone%d", i)
 		err := client.HSet(ctx, "multizone:zone:"+zoneID, map[string]interface{}{
 			"id":          zoneID,
 			"valve_state": "open",
