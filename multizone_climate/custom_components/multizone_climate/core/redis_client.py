@@ -271,6 +271,7 @@ class RedisClient:
 
         try:
             zone_key = self._get_key(f"zone:{zone_id}")
+            _LOGGER.info(f"Setting zone state: zone_id={zone_id}, key={zone_key}, data_keys={list(state.keys())}")
 
             # Serialize values to JSON
             serialized_state = {
@@ -278,8 +279,13 @@ class RedisClient:
             }
 
             if serialized_state:
+                _LOGGER.info(f"Serialized state for {zone_id}: {len(serialized_state)} fields")
                 await self._redis.hset(zone_key, mapping=serialized_state)  # type: ignore[misc]
-                _LOGGER.debug("Updated zone state for %s", zone_id)
+                _LOGGER.info(f"Successfully wrote zone state to Redis: {zone_key}")
+                
+                # Verify the write by reading it back
+                verify_data = await self._redis.hgetall(zone_key)  # type: ignore[misc]
+                _LOGGER.info(f"Verified zone {zone_id} in Redis: {len(verify_data)} fields exist")
             else:
                 _LOGGER.error("Attempted to set empty zone state for %s", zone_id)
                 raise ValueError(f"Cannot set empty zone state for {zone_id}")
@@ -326,19 +332,26 @@ class RedisClient:
             if position is None:
                 await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]
                 zone_was_added_to_list = True
-                _LOGGER.debug("Added zone %s to zones list", zone_id)
+                _LOGGER.info(f"Added zone {zone_id} to zones list at key {zones_key}")
+                
+                # Verify the list
+                all_zones = await self._redis.lrange(zones_key, 0, -1)  # type: ignore[misc]
+                _LOGGER.info(f"Zones list now contains: {all_zones}")
+            else:
+                _LOGGER.warning(f"Zone {zone_id} already exists in zones list at position {position}")
 
             # Create zone state
             try:
                 await self.set_zone_state(zone_id, zone_data)
-                _LOGGER.info("Added zone %s", zone_id)
+                _LOGGER.info("Successfully added zone %s with all data", zone_id)
             except Exception as state_err:
                 # If setting zone state fails and we added the zone to the list,
                 # remove it from the list to maintain consistency
+                _LOGGER.error(f"Failed to set zone state for {zone_id}: {state_err}")
                 if zone_was_added_to_list:
                     try:
                         await self._redis.lrem(zones_key, 1, zone_id)  # type: ignore[misc]
-                        _LOGGER.debug("Removed zone %s from zones list due to state save failure", zone_id)
+                        _LOGGER.info(f"Cleaned up: Removed zone {zone_id} from zones list due to state save failure")
                     except Exception as cleanup_err:
                         _LOGGER.error("Failed to cleanup zone %s from list after state save failure: %s", zone_id, cleanup_err)
                 raise state_err
