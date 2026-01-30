@@ -15,6 +15,8 @@ class TestRedisClientValidation:
         redis.hgetall = AsyncMock()
         redis.rpush = AsyncMock()
         redis.lpos = AsyncMock()
+        redis.lrange = AsyncMock()
+        redis.lrem = AsyncMock()
         redis.hset = AsyncMock()
         return redis
 
@@ -52,9 +54,10 @@ class TestRedisClientValidation:
     @pytest.mark.asyncio
     async def test_add_zone_accepts_new_zone(self, redis_client, mock_redis):
         """Test that add_zone accepts new zones."""
-        # Setup: zone doesn't exist
-        mock_redis.hgetall.return_value = {}
+        # Setup: zone doesn't exist initially, then verify data exists after write
+        mock_redis.hgetall.side_effect = [{}, {"id": "zone2", "name": "Living Room"}]  # First call returns empty, second returns data
         mock_redis.lpos.return_value = None  # Not in list
+        mock_redis.lrange.return_value = ["zone2"]  # Verify list has the zone
 
         zone_data = {
             "id": "zone2",
