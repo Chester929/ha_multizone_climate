@@ -413,6 +413,19 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			return
 		}
 
+		// Add zone ID to zones list for discovery
+		// This ensures consistency with the Python Redis client expectations
+		zonesListKey := "multizone:zones"
+		if err := client.RPush(ctx, zonesListKey, zoneID).Err(); err != nil {
+			logger.Error("Failed to add zone %s to zones list: %v", zoneID, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to add zone to zones list",
+			})
+			return
+		}
+
 		logger.Info("Zone created successfully: %s (%s)", zoneID, name)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -681,6 +694,13 @@ func DeleteZoneHandler(client *redis.Client) http.HandlerFunc {
 				"error": "Failed to delete zone",
 			})
 			return
+		}
+
+		// Remove zone ID from zones list
+		zonesListKey := "multizone:zones"
+		if err := client.LRem(ctx, zonesListKey, 1, zoneID).Err(); err != nil {
+			logger.Error("Failed to remove zone %s from zones list: %v", zoneID, err)
+			// Continue anyway - zone data is already deleted
 		}
 
 		// Also delete zone history
