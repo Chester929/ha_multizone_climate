@@ -348,13 +348,16 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
             if not errors:
 
                 # Prepare zone data for Redis
+                valve_switch_entity_id = user_input.get("valve_switch")
                 zone_data = {
                     "id": zone_id,
                     "name": user_input.get("zone_name", "Zone"),
+                    "enabled": "true",
                     "temperature_sensor_entity_id": user_input.get(
                         "temperature_sensor"
                     ),
-                    "valve_switch_entity_id": user_input.get("valve_switch"),
+                    "valve_switch_entity_id": valve_switch_entity_id,
+                    "valve_id": valve_switch_entity_id,  # Alias for compatibility with valve controller
                     "target_temperature": user_input.get("target_temperature", 20.0),
                     "priority": user_input.get("priority", 50),
                     "opening_offset": user_input.get("opening_offset", 0.3),
@@ -382,6 +385,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     zone_config = {
                         "id": zone_id,  # Backend expects 'id', not 'zone_id'
                         "name": zone_data["name"],
+                        "enabled": "true",
                         "temperature_sensor_entity_id": zone_data[
                             "temperature_sensor_entity_id"
                         ],
