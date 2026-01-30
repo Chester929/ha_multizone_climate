@@ -402,7 +402,8 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			zoneData["current_temperature"] = currentTemp
 		}
 
-		// Save zone to Redis
+		// Save zone to Redis with atomic behavior
+		// First save the zone data
 		if err := client.HSet(ctx, key, zoneData); err != nil {
 			logger.Error("Failed to create zone: %v", err)
 			w.Header().Set("Content-Type", "application/json")
@@ -418,6 +419,10 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 		zonesListKey := "multizone:zones"
 		if err := client.RPush(ctx, zonesListKey, zoneID).Err(); err != nil {
 			logger.Error("Failed to add zone %s to zones list: %v", zoneID, err)
+			// Rollback: delete the zone data we just created
+			if delErr := client.Del(ctx, key).Err(); delErr != nil {
+				logger.Error("Failed to rollback zone creation for %s: %v", zoneID, delErr)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
