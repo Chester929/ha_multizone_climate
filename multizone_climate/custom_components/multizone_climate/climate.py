@@ -72,10 +72,12 @@ async def async_setup_entry(
 
     # Fetch zones from Redis
     zone_ids = await redis_client.get_zone_ids()
+    _LOGGER.info(f"Setting up climate platform with {len(zone_ids)} zones from Redis: {zone_ids}")
 
     # Create ZoneClimateEntity for each zone
     for zone_id in zone_ids:
         zone_config = await redis_client.get_zone_state(zone_id)
+        _LOGGER.info(f"Processing zone_id: {zone_id}, zone_config: {zone_config.get('name') if zone_config else 'None'}")
         if zone_config:
             zone_entity = ZoneClimateEntity(
                 coordinator=coordinator,
@@ -85,6 +87,7 @@ async def async_setup_entry(
                 config_entry=config_entry,
                 hass=hass,
             )
+            _LOGGER.info(f"Created entity for zone_id: {zone_id}, name: {zone_config.get('name')}")
             entities.append(zone_entity)
 
     # Add all entities

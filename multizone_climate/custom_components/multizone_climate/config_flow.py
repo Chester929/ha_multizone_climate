@@ -345,6 +345,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 import uuid
 
                 zone_id = str(uuid.uuid4())
+                _LOGGER.info(f"Generated new zone_id: {zone_id} for zone: {user_input.get('zone_name')}")
 
                 # Paranoid check: verify zone_id doesn't already exist (UUID collision)
                 # Reuse redis_client and existing_zones from above
@@ -379,8 +380,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
                 # Add zone to Redis
                 try:
+                    _LOGGER.info(f"Adding zone to Redis: zone_id={zone_id}, name={zone_data['name']}")
                     await redis_client.add_zone(zone_id, zone_data)
-                    _LOGGER.info(f"Added zone {zone_id} ({zone_data['name']}) to Redis")
+                    _LOGGER.info(f"Successfully added zone {zone_id} ({zone_data['name']}) to Redis")
 
                     # Also register zone with backend via API
                     backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
