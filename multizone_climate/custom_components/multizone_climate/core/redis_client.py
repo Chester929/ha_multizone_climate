@@ -271,7 +271,7 @@ class RedisClient:
 
         try:
             zone_key = self._get_key(f"zone:{zone_id}")
-            _LOGGER.info(f"Setting zone state: zone_id={zone_id}, key={zone_key}, data_keys={list(state.keys())}")
+            _LOGGER.debug(f"Setting zone state: zone_id={zone_id}, key={zone_key}, data_keys={list(state.keys())}")
 
             # Serialize values to JSON
             serialized_state = {
@@ -279,13 +279,13 @@ class RedisClient:
             }
 
             if serialized_state:
-                _LOGGER.info(f"Serialized state for {zone_id}: {len(serialized_state)} fields")
+                _LOGGER.debug(f"Serialized state for {zone_id}: {len(serialized_state)} fields")
                 await self._redis.hset(zone_key, mapping=serialized_state)  # type: ignore[misc]
-                _LOGGER.info(f"Successfully wrote zone state to Redis: {zone_key}")
+                _LOGGER.debug(f"Successfully wrote zone state to Redis: {zone_key}")
                 
                 # Verify the write by reading it back
                 verify_data = await self._redis.hgetall(zone_key)  # type: ignore[misc]
-                _LOGGER.info(f"Verified zone {zone_id} in Redis: {len(verify_data)} fields exist")
+                _LOGGER.debug(f"Verified zone {zone_id} in Redis: {len(verify_data)} fields exist")
             else:
                 _LOGGER.error("Attempted to set empty zone state for %s", zone_id)
                 raise ValueError(f"Cannot set empty zone state for {zone_id}")

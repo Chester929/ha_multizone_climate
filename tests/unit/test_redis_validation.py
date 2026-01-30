@@ -74,7 +74,7 @@ class TestRedisClientValidation:
 
     @pytest.mark.asyncio
     async def test_add_zone_with_disconnected_redis(self, mock_redis):
-        """Test that add_zone handles disconnected Redis gracefully."""
+        """Test that add_zone raises RuntimeError when Redis is disconnected."""
         client = RedisClient(host="localhost", port=6379)
         client._redis = None  # Not connected
 
@@ -83,9 +83,9 @@ class TestRedisClientValidation:
             "name": "Test Zone",
         }
 
-        # Should not raise, just log error
-        await client.add_zone("zone1", zone_data)
-        # No assertions on mock_redis since it's not connected
+        # Should raise RuntimeError
+        with pytest.raises(RuntimeError, match="Redis client not connected"):
+            await client.add_zone("zone1", zone_data)
 
     @pytest.mark.asyncio
     async def test_add_zone_reraises_value_error(self, redis_client, mock_redis):

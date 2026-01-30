@@ -973,3 +973,148 @@ func TestCreateZoneInvalidAdvancedParameters(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateZoneAddsToZonesList tests that creating a zone adds the zone ID to the zones list
+func TestCreateZoneAddsToZonesList(t *testing.T) {
+client, mr, cleanup := newTestRedisClient(t)
+defer cleanup()
+
+handler := CreateZoneHandler(client, nil)
+
+zoneID := "test-zone-list"
+payload := map[string]interface{}{
+"id":   zoneID,
+"name": "Test Zone for List",
+}
+body, _ := json.Marshal(payload)
+
+req := httptest.NewRequest("POST", "/api/zones", bytes.NewBuffer(body))
+w := httptest.NewRecorder()
+
+handler(w, req)
+
+if w.Code != http.StatusCreated {
+t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
+}
+
+// Verify zone was added to the zones list
+zonesListKey := "multizone:zones"
+// Use the Redis client to verify the zone was added to the list
+ctx := context.Background()
+rdb := redisv8.NewClient(&redisv8.Options{
+Addr: mr.Addr(),
+})
+defer rdb.Close()
+
+values, err := rdb.LRange(ctx, zonesListKey, 0, -1).Result()
+if err != nil {
+t.Fatalf("Failed to read zones list: %v", err)
+}
+
+found := false
+for _, id := range values {
+if id == zoneID {
+found = true
+break
+}
+}
+
+if !found {
+t.Errorf("Expected zone ID '%s' to be in zones list, but it was not found. List: %v", zoneID, values)
+}
+}
+
+// TestDeleteZoneRemovesFromZonesList tests that deleting a zone removes the zone ID from the zones list
+func TestDeleteZoneRemovesFromZonesList(t *testing.T) {
+client, mr, cleanup := newTestRedisClient(t)
+defer cleanup()
+
+// First create a zone
+zoneID := "test-zone-delete"
+zoneKey := "multizone:zone:" + zoneID
+zonesListKey := "multizone:zones"
+
+// Add zone data
+mr.HSet(zoneKey, "id", zoneID)
+mr.HSet(zoneKey, "name", "Test Zone")
+
+// Add zone ID to zones list
+mr.RPush(zonesListKey, zoneID)
+
+// Create a Redis client to verify the list
+ctx := context.Background()
+rdb := redisv8.NewClient(&redisv8.Options{
+Addr: mr.Addr(),
+})
+defer rdb.Close()
+
+// Verify zone is in the list
+values, err := rdb.LRange(ctx, zonesListKey, 0, -1).Result()
+if err != nil {
+t.Fatalf("Failed to read zones list: %v", err)
+}
+if len(values) == 0 || values[0] != zoneID {
+t.Fatalf("Setup failed: zone ID not in list. List: %v", values)
+}
+
+// Now delete the zone
+handler := DeleteZoneHandler(client)
+
+req := httptest.NewRequest("DELETE", "/api/zones/"+zoneID, nil)
+req = mux.SetURLVars(req, map[string]string{"id": zoneID})
+w := httptest.NewRecorder()
+
+handler(w, req)
+
+if w.Code != http.StatusOK {
+t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+}
+
+// Verify zone was removed from the zones list
+zonesListAfter, err := rdb.LRange(ctx, zonesListKey, 0, -1).Result()
+if err != nil {
+t.Fatalf("Failed to read zones list after delete: %v", err)
+}
+
+for _, id := range zonesListAfter {
+if id == zoneID {
+t.Errorf("Zone ID '%s' should have been removed from zones list, but it's still there", zoneID)
+}
+}
+}
+
+// TestDeleteZoneHandlesListRemovalFailure tests that delete continues even if list removal fails
+func TestDeleteZoneHandlesListRemovalFailure(t *testing.T) {
+client, mr, cleanup := newTestRedisClient(t)
+defer cleanup()
+
+// Create a zone
+zoneID := "test-zone-delete-fail"
+zoneKey := "multizone:zone:" + zoneID
+
+// Add zone data
+mr.HSet(zoneKey, "id", zoneID)
+mr.HSet(zoneKey, "name", "Test Zone")
+
+// Don't add to zones list - this simulates the list being inconsistent
+// The handler should still succeed in deleting the zone data
+
+// Delete the zone
+handler := DeleteZoneHandler(client)
+
+req := httptest.NewRequest("DELETE", "/api/zones/"+zoneID, nil)
+req = mux.SetURLVars(req, map[string]string{"id": zoneID})
+w := httptest.NewRecorder()
+
+handler(w, req)
+
+// Should still succeed even though the zone wasn't in the list
+if w.Code != http.StatusOK {
+t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+}
+
+// Verify zone data was deleted
+if mr.Exists(zoneKey) {
+t.Errorf("Zone data should have been deleted, but key still exists")
+}
+}
