@@ -211,7 +211,11 @@ class MultizoneTextSensor(SensorEntity):
             return None
 
         if self.sensor_type == "open_valve_count":
-            # Count open valves from zones
+            # Return backend-calculated valve count, fallback to local calculation if not available
+            open_count = self.coordinator.data.get("open_valve_count")
+            if open_count is not None:
+                return open_count
+            # Fallback: Count open valves from zones for backwards compatibility
             zones = self.coordinator.data.get("zones", {})
             return sum(
                 1 for zone in zones.values() if zone.get("valve_state") == "open"

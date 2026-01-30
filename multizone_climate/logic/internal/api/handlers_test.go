@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -971,5 +972,202 @@ func TestCreateZoneInvalidAdvancedParameters(t *testing.T) {
 				t.Errorf("Expected error '%s', got '%s'", tc.expectedError, errorMsg)
 			}
 		})
+	}
+}
+
+// TestIntegrationGetStateHandler tests the integration state endpoint
+func TestIntegrationGetStateHandler(t *testing.T) {
+	client, _, cleanup := newTestRedisClient(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Set up test data in Redis
+	// Add config
+	err := client.HSet(ctx, "multizone:config", map[string]interface{}{
+		"min_valves_open":       "2",
+		"valve_actuation_delay": "120",
+		"multizone_enabled":     "true",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	// Add zones with different valve states
+	err = client.HSet(ctx, "multizone:zone:zone1", map[string]interface{}{
+		"id":          "zone1",
+		"name":        "Living Room",
+		"valve_state": "open",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set zone1: %v", err)
+	}
+
+	err = client.HSet(ctx, "multizone:zone:zone2", map[string]interface{}{
+		"id":          "zone2",
+		"name":        "Bedroom",
+		"valve_state": "open",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set zone2: %v", err)
+	}
+
+	err = client.HSet(ctx, "multizone:zone:zone3", map[string]interface{}{
+		"id":          "zone3",
+		"name":        "Kitchen",
+		"valve_state": "closed",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set zone3: %v", err)
+	}
+
+	// Add main climate state
+	err = client.HSet(ctx, "multizone:main_climate", map[string]interface{}{
+		"entity_id":           "climate.main",
+		"current_temperature": "20.5",
+		"target_temperature":  "21.0",
+		"hvac_mode":           "heat",
+		"hvac_action":         "heating",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set main climate: %v", err)
+	}
+
+	// Create request
+	req := httptest.NewRequest("GET", "/api/integration/state", nil)
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler := IntegrationGetStateHandler(client)
+	handler(w, req)
+
+	// Check status code
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+
+	// Parse response
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Verify open_valve_count is present and correct
+	openValveCount, ok := response["open_valve_count"]
+	if !ok {
+		t.Fatal("Expected open_valve_count in response")
+	}
+
+	// Should be 2 (zone1 and zone2 are open, zone3 is closed)
+	count := int(openValveCount.(float64))
+	if count != 2 {
+		t.Errorf("Expected open_valve_count to be 2, got %d", count)
+	}
+
+	// Verify zones are present
+	zones, ok := response["zones"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected zones in response")
+	}
+
+	if len(zones) != 3 {
+		t.Errorf("Expected 3 zones, got %d", len(zones))
+	}
+
+	// Verify config is present
+	config, ok := response["config"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected config in response")
+	}
+
+	// Verify multizone_enabled is converted to bool
+	multizoneEnabled, ok := config["multizone_enabled"].(bool)
+	if !ok || !multizoneEnabled {
+		t.Errorf("Expected multizone_enabled to be true, got %v", config["multizone_enabled"])
+	}
+}
+
+// TestIntegrationGetStateHandlerNoOpenValves tests valve count when all valves are closed
+func TestIntegrationGetStateHandlerNoOpenValves(t *testing.T) {
+	client, _, cleanup := newTestRedisClient(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Add zones with all valves closed
+	err := client.HSet(ctx, "multizone:zone:zone1", map[string]interface{}{
+		"id":          "zone1",
+		"valve_state": "closed",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set zone1: %v", err)
+	}
+
+	err = client.HSet(ctx, "multizone:zone:zone2", map[string]interface{}{
+		"id":          "zone2",
+		"valve_state": "closed",
+	})
+	if err != nil {
+		t.Fatalf("Failed to set zone2: %v", err)
+	}
+
+	// Create request
+	req := httptest.NewRequest("GET", "/api/integration/state", nil)
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler := IntegrationGetStateHandler(client)
+	handler(w, req)
+
+	// Parse response
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Verify open_valve_count is 0
+	count := int(response["open_valve_count"].(float64))
+	if count != 0 {
+		t.Errorf("Expected open_valve_count to be 0, got %d", count)
+	}
+}
+
+// TestIntegrationGetStateHandlerAllOpenValves tests valve count when all valves are open
+func TestIntegrationGetStateHandlerAllOpenValves(t *testing.T) {
+	client, _, cleanup := newTestRedisClient(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Add zones with all valves open
+	for i := 1; i <= 5; i++ {
+		zoneID := fmt.Sprintf("zone%d", i)
+		err := client.HSet(ctx, "multizone:zone:"+zoneID, map[string]interface{}{
+			"id":          zoneID,
+			"valve_state": "open",
+		})
+		if err != nil {
+			t.Fatalf("Failed to set %s: %v", zoneID, err)
+		}
+	}
+
+	// Create request
+	req := httptest.NewRequest("GET", "/api/integration/state", nil)
+	w := httptest.NewRecorder()
+
+	// Call handler
+	handler := IntegrationGetStateHandler(client)
+	handler(w, req)
+
+	// Parse response
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Verify open_valve_count is 5
+	count := int(response["open_valve_count"].(float64))
+	if count != 5 {
+		t.Errorf("Expected open_valve_count to be 5, got %d", count)
 	}
 }
