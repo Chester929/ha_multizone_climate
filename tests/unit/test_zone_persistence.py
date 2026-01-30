@@ -1,7 +1,7 @@
 """Unit tests for zone persistence atomicity."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 from custom_components.multizone_climate.core.redis_client import RedisClient
 
 
@@ -14,7 +14,7 @@ class TestZonePersistence:
         client = RedisClient(host="localhost", port=6379)
         # Mock the actual Redis connection
         client._redis = AsyncMock()
-        client._key_prefix = "multizone"
+
         return client
 
     @pytest.mark.asyncio
