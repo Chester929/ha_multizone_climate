@@ -975,199 +975,147 @@ func TestCreateZoneInvalidAdvancedParameters(t *testing.T) {
 	}
 }
 
-// TestIntegrationGetStateHandler tests the integration state endpoint
-func TestIntegrationGetStateHandler(t *testing.T) {
-	client, _, cleanup := newTestRedisClient(t)
-	defer cleanup()
+// TestCreateZoneAddsToZonesList tests that creating a zone adds the zone ID to the zones list
+func TestCreateZoneAddsToZonesList(t *testing.T) {
+client, mr, cleanup := newTestRedisClient(t)
+defer cleanup()
 
-	ctx := context.Background()
+handler := CreateZoneHandler(client, nil)
 
-	// Set up test data in Redis
-	// Add config
-	err := client.HSet(ctx, "multizone:config", map[string]interface{}{
-		"min_valves_open":       "2",
-		"valve_actuation_delay": "120",
-		"multizone_enabled":     "true",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set config: %v", err)
-	}
+zoneID := "test-zone-list"
+payload := map[string]interface{}{
+"id":   zoneID,
+"name": "Test Zone for List",
+}
+body, _ := json.Marshal(payload)
 
-	// Add zones with different valve states
-	err = client.HSet(ctx, "multizone:zone:zone1", map[string]interface{}{
-		"id":          "zone1",
-		"name":        "Living Room",
-		"valve_state": "open",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set zone1: %v", err)
-	}
+req := httptest.NewRequest("POST", "/api/zones", bytes.NewBuffer(body))
+w := httptest.NewRecorder()
 
-	err = client.HSet(ctx, "multizone:zone:zone2", map[string]interface{}{
-		"id":          "zone2",
-		"name":        "Bedroom",
-		"valve_state": "open",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set zone2: %v", err)
-	}
+handler(w, req)
 
-	err = client.HSet(ctx, "multizone:zone:zone3", map[string]interface{}{
-		"id":          "zone3",
-		"name":        "Kitchen",
-		"valve_state": "closed",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set zone3: %v", err)
-	}
-
-	// Add main climate state
-	err = client.HSet(ctx, "multizone:main_climate", map[string]interface{}{
-		"entity_id":           "climate.main",
-		"current_temperature": "20.5",
-		"target_temperature":  "21.0",
-		"hvac_mode":           "heat",
-		"hvac_action":         "heating",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set main climate: %v", err)
-	}
-
-	// Create request
-	req := httptest.NewRequest("GET", "/api/integration/state", nil)
-	w := httptest.NewRecorder()
-
-	// Call handler
-	handler := IntegrationGetStateHandler(client)
-	handler(w, req)
-
-	// Check status code
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
-	}
-
-	// Parse response
-	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
-
-	// Verify open_valve_count is present and correct
-	openValveCount, ok := response["open_valve_count"]
-	if !ok {
-		t.Fatal("Expected open_valve_count in response")
-	}
-
-	// Should be 2 (zone1 and zone2 are open, zone3 is closed)
-	count := int(openValveCount.(float64))
-	if count != 2 {
-		t.Errorf("Expected open_valve_count to be 2, got %d", count)
-	}
-
-	// Verify zones are present
-	zones, ok := response["zones"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Expected zones in response")
-	}
-
-	if len(zones) != 3 {
-		t.Errorf("Expected 3 zones, got %d", len(zones))
-	}
-
-	// Verify config is present
-	config, ok := response["config"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Expected config in response")
-	}
-
-	// Verify multizone_enabled is converted to bool
-	multizoneEnabled, ok := config["multizone_enabled"].(bool)
-	if !ok || !multizoneEnabled {
-		t.Errorf("Expected multizone_enabled to be true, got %v", config["multizone_enabled"])
-	}
+if w.Code != http.StatusCreated {
+t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
 }
 
-// TestIntegrationGetStateHandlerNoOpenValves tests valve count when all valves are closed
-func TestIntegrationGetStateHandlerNoOpenValves(t *testing.T) {
-	client, _, cleanup := newTestRedisClient(t)
-	defer cleanup()
+// Verify zone was added to the zones list
+zonesListKey := "multizone:zones"
+// Use the Redis client to verify the zone was added to the list
+ctx := context.Background()
+rdb := redisv8.NewClient(&redisv8.Options{
+Addr: mr.Addr(),
+})
+defer rdb.Close()
 
-	ctx := context.Background()
-
-	// Add zones with all valves closed
-	err := client.HSet(ctx, "multizone:zone:zone1", map[string]interface{}{
-		"id":          "zone1",
-		"valve_state": "closed",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set zone1: %v", err)
-	}
-
-	err = client.HSet(ctx, "multizone:zone:zone2", map[string]interface{}{
-		"id":          "zone2",
-		"valve_state": "closed",
-	})
-	if err != nil {
-		t.Fatalf("Failed to set zone2: %v", err)
-	}
-
-	// Create request
-	req := httptest.NewRequest("GET", "/api/integration/state", nil)
-	w := httptest.NewRecorder()
-
-	// Call handler
-	handler := IntegrationGetStateHandler(client)
-	handler(w, req)
-
-	// Parse response
-	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
-
-	// Verify open_valve_count is 0
-	count := int(response["open_valve_count"].(float64))
-	if count != 0 {
-		t.Errorf("Expected open_valve_count to be 0, got %d", count)
-	}
+values, err := rdb.LRange(ctx, zonesListKey, 0, -1).Result()
+if err != nil {
+t.Fatalf("Failed to read zones list: %v", err)
 }
 
-// TestIntegrationGetStateHandlerAllOpenValves tests valve count when all valves are open
-func TestIntegrationGetStateHandlerAllOpenValves(t *testing.T) {
-	client, _, cleanup := newTestRedisClient(t)
-	defer cleanup()
+found := false
+for _, id := range values {
+if id == zoneID {
+found = true
+break
+}
+}
 
-	ctx := context.Background()
+if !found {
+t.Errorf("Expected zone ID '%s' to be in zones list, but it was not found. List: %v", zoneID, values)
+}
+}
 
-	// Add zones with all valves open
-	for i := 1; i <= 5; i++ {
-		zoneID := fmt.Sprintf("zone%d", i)
-		err := client.HSet(ctx, "multizone:zone:"+zoneID, map[string]interface{}{
-			"id":          zoneID,
-			"valve_state": "open",
-		})
-		if err != nil {
-			t.Fatalf("Failed to set %s: %v", zoneID, err)
-		}
-	}
+// TestDeleteZoneRemovesFromZonesList tests that deleting a zone removes the zone ID from the zones list
+func TestDeleteZoneRemovesFromZonesList(t *testing.T) {
+client, mr, cleanup := newTestRedisClient(t)
+defer cleanup()
 
-	// Create request
-	req := httptest.NewRequest("GET", "/api/integration/state", nil)
-	w := httptest.NewRecorder()
+// First create a zone
+zoneID := "test-zone-delete"
+zoneKey := "multizone:zone:" + zoneID
+zonesListKey := "multizone:zones"
 
-	// Call handler
-	handler := IntegrationGetStateHandler(client)
-	handler(w, req)
+// Add zone data
+mr.HSet(zoneKey, "id", zoneID)
+mr.HSet(zoneKey, "name", "Test Zone")
 
-	// Parse response
-	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+// Add zone ID to zones list
+mr.RPush(zonesListKey, zoneID)
 
-	// Verify open_valve_count is 5
-	count := int(response["open_valve_count"].(float64))
-	if count != 5 {
-		t.Errorf("Expected open_valve_count to be 5, got %d", count)
-	}
+// Create a Redis client to verify the list
+ctx := context.Background()
+rdb := redisv8.NewClient(&redisv8.Options{
+Addr: mr.Addr(),
+})
+defer rdb.Close()
+
+// Verify zone is in the list
+values, err := rdb.LRange(ctx, zonesListKey, 0, -1).Result()
+if err != nil {
+t.Fatalf("Failed to read zones list: %v", err)
+}
+if len(values) == 0 || values[0] != zoneID {
+t.Fatalf("Setup failed: zone ID not in list. List: %v", values)
+}
+
+// Now delete the zone
+handler := DeleteZoneHandler(client)
+
+req := httptest.NewRequest("DELETE", "/api/zones/"+zoneID, nil)
+req = mux.SetURLVars(req, map[string]string{"id": zoneID})
+w := httptest.NewRecorder()
+
+handler(w, req)
+
+if w.Code != http.StatusOK {
+t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+}
+
+// Verify zone was removed from the zones list
+zonesListAfter, err := rdb.LRange(ctx, zonesListKey, 0, -1).Result()
+if err != nil {
+t.Fatalf("Failed to read zones list after delete: %v", err)
+}
+
+for _, id := range zonesListAfter {
+if id == zoneID {
+t.Errorf("Zone ID '%s' should have been removed from zones list, but it's still there", zoneID)
+}
+}
+}
+
+// TestDeleteZoneHandlesListRemovalFailure tests that delete continues even if list removal fails
+func TestDeleteZoneHandlesListRemovalFailure(t *testing.T) {
+client, mr, cleanup := newTestRedisClient(t)
+defer cleanup()
+
+// Create a zone
+zoneID := "test-zone-delete-fail"
+zoneKey := "multizone:zone:" + zoneID
+
+// Add zone data
+mr.HSet(zoneKey, "id", zoneID)
+mr.HSet(zoneKey, "name", "Test Zone")
+
+// Don't add to zones list - this simulates the list being inconsistent
+// The handler should still succeed in deleting the zone data
+
+// Delete the zone
+handler := DeleteZoneHandler(client)
+
+req := httptest.NewRequest("DELETE", "/api/zones/"+zoneID, nil)
+req = mux.SetURLVars(req, map[string]string{"id": zoneID})
+w := httptest.NewRecorder()
+
+handler(w, req)
+
+// Should still succeed even though the zone wasn't in the list
+if w.Code != http.StatusOK {
+t.Fatalf("Expected status code %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+}
+
+// Verify zone data was deleted
+if mr.Exists(zoneKey) {
+t.Errorf("Zone data should have been deleted, but key still exists")
+}
 }

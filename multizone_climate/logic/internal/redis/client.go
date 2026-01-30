@@ -62,6 +62,16 @@ func (c *Client) LPush(ctx context.Context, key string, values ...interface{}) e
 	return c.rdb.LPush(ctx, key, values...).Err()
 }
 
+// RPush pushes an element to the right of a list
+func (c *Client) RPush(ctx context.Context, key string, values ...interface{}) error {
+	return c.rdb.RPush(ctx, key, values...).Err()
+}
+
+// LRem removes elements from a list
+func (c *Client) LRem(ctx context.Context, key string, count int64, value interface{}) error {
+	return c.rdb.LRem(ctx, key, count, value).Err()
+}
+
 // RPop pops an element from the right of a list
 func (c *Client) RPop(ctx context.Context, key string) (string, error) {
 	return c.rdb.RPop(ctx, key).Result()

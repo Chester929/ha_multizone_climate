@@ -402,13 +402,31 @@ func CreateZoneHandler(client *redis.Client, integration interface{}) http.Handl
 			zoneData["current_temperature"] = currentTemp
 		}
 
-		// Save zone to Redis
+		// Save zone to Redis with atomic behavior
+		// First save the zone data
 		if err := client.HSet(ctx, key, zoneData); err != nil {
 			logger.Error("Failed to create zone: %v", err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"error": "Failed to create zone",
+			})
+			return
+		}
+
+		// Add zone ID to zones list for discovery
+		// This ensures consistency with the Python Redis client expectations
+		zonesListKey := "multizone:zones"
+		if err := client.RPush(ctx, zonesListKey, zoneID); err != nil {
+			logger.Error("Failed to add zone %s to zones list: %v", zoneID, err)
+			// Rollback: delete the zone data we just created
+			if delErr := client.Del(ctx, key); delErr != nil {
+				logger.Error("Failed to rollback zone creation for %s: %v", zoneID, delErr)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Failed to add zone to zones list",
 			})
 			return
 		}
@@ -681,6 +699,13 @@ func DeleteZoneHandler(client *redis.Client) http.HandlerFunc {
 				"error": "Failed to delete zone",
 			})
 			return
+		}
+
+		// Remove zone ID from zones list
+		zonesListKey := "multizone:zones"
+		if err := client.LRem(ctx, zonesListKey, 1, zoneID); err != nil {
+			logger.Error("Failed to remove zone %s from zones list: %v", zoneID, err)
+			// Continue anyway - zone data is already deleted
 		}
 
 		// Also delete zone history

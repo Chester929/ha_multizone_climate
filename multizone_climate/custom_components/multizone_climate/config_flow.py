@@ -313,11 +313,18 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 data = self.hass.data[DOMAIN][self._config_entry.entry_id]
                 redis_client = data["redis_client"]
 
-                # Validate no duplicate sensors/valves across existing zones
+                # Validate no duplicate sensors/valves/names across existing zones
                 existing_zones = await redis_client.get_zone_ids()
                 for existing_id in existing_zones:
                     existing_zone = await redis_client.get_zone_state(existing_id)
                     if existing_zone:
+                        # Check for duplicate zone name
+                        if (
+                            existing_zone.get("name")
+                            == user_input.get("zone_name")
+                        ):
+                            errors["zone_name"] = "zone_name_already_used"
+                            break
                         # Check for duplicate temperature sensor
                         if (
                             existing_zone.get("temperature_sensor_entity_id")
@@ -338,6 +345,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 import uuid
 
                 zone_id = str(uuid.uuid4())
+                _LOGGER.info(f"Generated new zone_id: {zone_id} for zone: {user_input.get('zone_name')}")
 
                 # Paranoid check: verify zone_id doesn't already exist (UUID collision)
                 # Reuse redis_client and existing_zones from above
@@ -372,8 +380,9 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
                 # Add zone to Redis
                 try:
+                    _LOGGER.info(f"Adding zone to Redis: zone_id={zone_id}, name={zone_data['name']}")
                     await redis_client.add_zone(zone_id, zone_data)
-                    _LOGGER.info(f"Added zone {zone_id} ({zone_data['name']}) to Redis")
+                    _LOGGER.info(f"Successfully added zone {zone_id} ({zone_data['name']}) to Redis")
 
                     # Also register zone with backend via API
                     backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
