@@ -282,7 +282,7 @@ class RedisClient:
                 _LOGGER.debug(f"Serialized state for {zone_id}: {len(serialized_state)} fields")
                 await self._redis.hset(zone_key, mapping=serialized_state)  # type: ignore[misc]
                 _LOGGER.debug(f"Successfully wrote zone state to Redis: {zone_key}")
-                
+
                 # Verify the write by reading it back
                 verify_data = await self._redis.hgetall(zone_key)  # type: ignore[misc]
                 _LOGGER.debug(f"Verified zone {zone_id} in Redis: {len(verify_data)} fields exist")
@@ -333,7 +333,7 @@ class RedisClient:
                 await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]
                 zone_was_added_to_list = True
                 _LOGGER.info(f"Added zone {zone_id} to zones list at key {zones_key}")
-                
+
                 # Verify the list
                 all_zones = await self._redis.lrange(zones_key, 0, -1)  # type: ignore[misc]
                 _LOGGER.info(f"Zones list now contains: {all_zones}")

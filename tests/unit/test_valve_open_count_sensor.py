@@ -54,7 +54,7 @@ def mock_coordinator_empty():
 def test_valve_count_uses_backend_value(mock_coordinator_with_backend_count):
     """Test that valve count sensor uses backend-provided value when available."""
     sensor = MultizoneTextSensor(mock_coordinator_with_backend_count, "open_valve_count")
-    
+
     # Should use the backend value (3), not calculate from zones (which also happens to be 3)
     assert sensor.native_value == 3
 
@@ -62,7 +62,7 @@ def test_valve_count_uses_backend_value(mock_coordinator_with_backend_count):
 def test_valve_count_fallback_calculation(mock_coordinator_without_backend_count):
     """Test that valve count sensor falls back to calculation when backend value not available."""
     sensor = MultizoneTextSensor(mock_coordinator_without_backend_count, "open_valve_count")
-    
+
     # Should calculate from zones: 2 open valves
     assert sensor.native_value == 2
 
@@ -70,7 +70,7 @@ def test_valve_count_fallback_calculation(mock_coordinator_without_backend_count
 def test_valve_count_no_data(mock_coordinator_empty):
     """Test that valve count sensor returns None when coordinator has no data."""
     sensor = MultizoneTextSensor(mock_coordinator_empty, "open_valve_count")
-    
+
     assert sensor.native_value is None
 
 
@@ -84,7 +84,7 @@ def test_valve_count_backend_zero():
             "zone2": {"valve_state": "closed"},
         },
     }
-    
+
     sensor = MultizoneTextSensor(coordinator, "open_valve_count")
     assert sensor.native_value == 0
 
@@ -98,6 +98,6 @@ def test_valve_count_all_valves_open():
             f"zone{i}": {"valve_state": "open"} for i in range(1, 6)
         },
     }
-    
+
     sensor = MultizoneTextSensor(coordinator, "open_valve_count")
     assert sensor.native_value == 5
