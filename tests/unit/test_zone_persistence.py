@@ -99,19 +99,66 @@ class TestZonePersistence:
             await redis_client.set_zone_state(zone_id, zone_data)
 
     @pytest.mark.asyncio
+    async def test_set_zone_state_forces_id_match(self, redis_client):
+        """Test that set_zone_state forces 'id' field to match zone_id parameter."""
+        zone_id = "correct-zone-id"
+        zone_data = {
+            "id": "wrong-zone-id",  # Intentionally wrong ID
+            "name": "Test Zone",
+            "temperature_sensor_entity_id": "sensor.test",
+        }
+
+        # Mock Redis operations
+        redis_client._redis.hset.return_value = None
+        redis_client._redis.hgetall.return_value = {}
+
+        # Set zone state
+        await redis_client.set_zone_state(zone_id, zone_data)
+
+        # Verify hset was called
+        redis_client._redis.hset.assert_called_once()
+        
+        # Get the actual data that was written
+        call_args = redis_client._redis.hset.call_args
+        written_data = call_args[1]['mapping']
+        
+        # Verify the 'id' field was forced to match zone_id parameter
+        import json
+        assert json.loads(written_data['id']) == zone_id, "ID field should be forced to match zone_id parameter"
+
+    @pytest.mark.asyncio
     async def test_add_zone_already_exists(self, redis_client):
-        """Test that add_zone raises ValueError if zone already exists."""
+        """Test that add_zone raises ValueError if zone already exists in hash."""
         zone_id = "existing-zone"
         zone_data = {"name": "Existing Zone"}
 
-        # Mock zone already exists
+        # Mock zone already exists (hash exists)
         redis_client._redis.hgetall.return_value = {"name": "Existing Zone"}
 
         # Attempt to add existing zone - should raise ValueError
         with pytest.raises(ValueError, match="already exists"):
             await redis_client.add_zone(zone_id, zone_data)
 
-        # Verify no attempt was made to add to list or save state
+        # Verify no attempt was made to check list, add to list, or save state
+        redis_client._redis.lpos.assert_not_called()
+        redis_client._redis.rpush.assert_not_called()
+        redis_client._redis.hset.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_zone_id_already_in_list(self, redis_client):
+        """Test that add_zone raises ValueError if zone_id already in zones list."""
+        zone_id = "test-zone-in-list"
+        zone_data = {"name": "Test Zone"}
+
+        # Mock zone not in hash but already in list (orphaned list entry)
+        redis_client._redis.hgetall.return_value = {}  # Zone doesn't exist in hash
+        redis_client._redis.lpos.return_value = 0  # Zone exists in list at position 0
+
+        # Attempt to add zone - should raise ValueError
+        with pytest.raises(ValueError, match="already exists in zones list"):
+            await redis_client.add_zone(zone_id, zone_data)
+
+        # Verify we didn't try to add to list or save state
         redis_client._redis.rpush.assert_not_called()
         redis_client._redis.hset.assert_not_called()
 
