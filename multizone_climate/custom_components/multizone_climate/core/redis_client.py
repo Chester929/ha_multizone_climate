@@ -278,6 +278,10 @@ class RedisClient:
                 key: self._serialize_value(value) for key, value in state.items()
             }
 
+            # Ensure "id" field matches zone_id parameter to prevent inconsistencies
+            # This prevents bugs where zone_data["id"] might not match the zone_id parameter
+            serialized_state["id"] = self._serialize_value(zone_id)
+
             if serialized_state:
                 _LOGGER.debug(f"Serialized state for {zone_id}: {len(serialized_state)} fields")
                 await self._redis.hset(zone_key, mapping=serialized_state)  # type: ignore[misc]
