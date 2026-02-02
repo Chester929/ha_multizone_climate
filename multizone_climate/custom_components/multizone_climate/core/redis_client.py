@@ -332,17 +332,20 @@ class RedisClient:
             # Use LPOS to check if zone exists in list (more efficient than LRANGE)
             # LPOS returns position or None if not found
             position = await self._redis.lpos(zones_key, zone_id)  # type: ignore[misc]
+            if position is not None:
+                # Zone ID already in list - this should not happen for a new zone
+                _LOGGER.error(f"Zone {zone_id} already exists in zones list at position {position}")
+                raise ValueError(f"Zone {zone_id} already exists in zones list")
+            
+            # Add new zone to list
             zone_was_added_to_list = False
-            if position is None:
-                await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]
-                zone_was_added_to_list = True
-                _LOGGER.info(f"Added zone {zone_id} to zones list at key {zones_key}")
+            await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]
+            zone_was_added_to_list = True
+            _LOGGER.info(f"Added zone {zone_id} to zones list at key {zones_key}")
 
-                # Verify the list
-                all_zones = await self._redis.lrange(zones_key, 0, -1)  # type: ignore[misc]
-                _LOGGER.info(f"Zones list now contains: {all_zones}")
-            else:
-                _LOGGER.warning(f"Zone {zone_id} already exists in zones list at position {position}")
+            # Verify the list
+            all_zones = await self._redis.lrange(zones_key, 0, -1)  # type: ignore[misc]
+            _LOGGER.info(f"Zones list now contains: {all_zones}")
 
             # Create zone state
             try:
