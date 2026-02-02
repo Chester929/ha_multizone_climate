@@ -289,3 +289,44 @@ class TestConfigFlowValidation:
         assert result["type"] == "form"
         assert "errors" in result
         assert result["errors"]["base"] == "zone_id_collision"
+
+    @pytest.mark.asyncio
+    async def test_backend_409_status_handled_gracefully(
+        self, options_flow, mock_hass
+    ):
+        """Test that 409 status from backend is handled gracefully (zone already exists)."""
+        # Setup: no existing zones in Redis
+        redis_client = mock_hass.data["multizone_climate"]["test_entry_id"][
+            "redis_client"
+        ]
+        redis_client.get_zone_ids = AsyncMock(return_value=[])
+        redis_client.add_zone = AsyncMock()
+
+        # Mock config_entries for reload
+        mock_hass.config_entries = MagicMock()
+        mock_hass.config_entries.async_reload = AsyncMock()
+
+        user_input = {
+            "zone_name": "Test Zone",
+            "temperature_sensor": "sensor.test_temp",
+            "valve_switch": "switch.test_valve",
+            "target_temperature": 21.0,
+        }
+
+        # Mock backend returning 409 (zone already exists in backend)
+        with patch("uuid.uuid4", return_value="existing_zone_id"):
+            with patch("os.environ.get", return_value="8080"):
+                with patch("aiohttp.ClientSession") as mock_session:
+                    mock_response = MagicMock()
+                    mock_response.status = 409  # Conflict - zone already exists
+                    mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = (
+                        mock_response
+                    )
+
+                    result = await options_flow.async_step_add_zone(user_input)
+
+        # Should succeed despite 409 from backend (zone was added to Redis successfully)
+        assert result["type"] == "create_entry"
+        redis_client.add_zone.assert_called_once()
+        # Integration reload should still be called to pick up new zone
+        mock_hass.config_entries.async_reload.assert_called_once()

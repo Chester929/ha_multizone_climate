@@ -414,9 +414,18 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                                 f"{backend_url}/api/zones",
                                 json=zone_config,
                             ) as response:
-                                if response.status not in (200, 201):
+                                # 409 Conflict means zone already exists in backend, which is acceptable
+                                if response.status not in (200, 201, 409):
                                     _LOGGER.warning(
                                         f"Failed to register zone {zone_id} with backend: status {response.status}"
+                                    )
+                                elif response.status == 409:
+                                    _LOGGER.info(
+                                        f"Zone {zone_id} already exists in backend (status 409), skipping registration"
+                                    )
+                                else:
+                                    _LOGGER.info(
+                                        f"Successfully registered zone {zone_id} with backend"
                                     )
                     except Exception as err:
                         _LOGGER.error(
