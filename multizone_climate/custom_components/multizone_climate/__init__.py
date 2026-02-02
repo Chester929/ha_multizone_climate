@@ -358,8 +358,17 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove a config entry - clear all Redis data."""
     # Get Redis configuration from environment variables
     redis_host = os.environ.get("REDIS_HOST", "localhost")
-    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    redis_port_str = os.environ.get("REDIS_PORT", "6379")
     redis_password = os.environ.get("REDIS_PASSWORD")
+
+    # Parse port with error handling
+    try:
+        redis_port = int(redis_port_str)
+    except (ValueError, TypeError):
+        _LOGGER.warning(
+            f"Invalid REDIS_PORT value '{redis_port_str}', using default 6379"
+        )
+        redis_port = 6379
 
     # Create temporary Redis client to clear data
     redis_client = RedisClient(
@@ -368,7 +377,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         password=redis_password,
     )
     await redis_client.connect()
-    
+
     _LOGGER.debug("Clearing Redis data for integration removal")
     await redis_client.clear_all_data()
     await redis_client.disconnect()

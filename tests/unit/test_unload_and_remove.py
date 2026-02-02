@@ -47,7 +47,7 @@ class TestUnloadAndRemove:
         return automation
 
     @pytest.mark.asyncio
-    async def test_unload_does_not_clear_redis_data(
+    async def test_unload_preserves_redis_data_for_reload(
         self, mock_hass, mock_config_entry, mock_redis_client, mock_coordinator, mock_valve_state_automation
     ):
         """Test that async_unload_entry does not clear Redis data (preserves data for reload)."""
