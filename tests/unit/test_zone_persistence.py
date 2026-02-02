@@ -1,5 +1,6 @@
 """Unit tests for zone persistence atomicity."""
 
+import json
 import pytest
 from unittest.mock import AsyncMock
 from custom_components.multizone_climate.core.redis_client import RedisClient
@@ -123,7 +124,6 @@ class TestZonePersistence:
         written_data = call_args[1]['mapping']
         
         # Verify the 'id' field was forced to match zone_id parameter
-        import json
         assert json.loads(written_data['id']) == zone_id, "ID field should be forced to match zone_id parameter"
 
     @pytest.mark.asyncio

@@ -334,7 +334,6 @@ class RedisClient:
             position = await self._redis.lpos(zones_key, zone_id)  # type: ignore[misc]
             if position is not None:
                 # Zone ID already in list - this should not happen for a new zone
-                _LOGGER.error(f"Zone {zone_id} already exists in zones list at position {position}")
                 raise ValueError(f"Zone {zone_id} already exists in zones list")
             
             # Add new zone to list
