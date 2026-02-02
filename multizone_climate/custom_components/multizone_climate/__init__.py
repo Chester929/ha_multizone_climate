@@ -344,13 +344,32 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Cleanup coordinator
         await coordinator.async_shutdown()
 
-        # Cleanup redis client - clear all data before disconnecting
+        # Disconnect from Redis but don't clear data (preserve for reload)
         redis_client = hass.data[DOMAIN][entry.entry_id]["redis_client"]
-        _LOGGER.debug("Clearing Redis data for integration removal")
-        await redis_client.clear_all_data()
         await redis_client.disconnect()
 
         # Remove data
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove a config entry - clear all Redis data."""
+    # Get Redis configuration from environment variables
+    redis_host = os.environ.get("REDIS_HOST", "localhost")
+    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    redis_password = os.environ.get("REDIS_PASSWORD")
+
+    # Create temporary Redis client to clear data
+    redis_client = RedisClient(
+        host=redis_host,
+        port=redis_port,
+        password=redis_password,
+    )
+    await redis_client.connect()
+    
+    _LOGGER.debug("Clearing Redis data for integration removal")
+    await redis_client.clear_all_data()
+    await redis_client.disconnect()
+    _LOGGER.info("Cleared all Redis data for removed integration")
