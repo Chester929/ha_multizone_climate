@@ -120,11 +120,10 @@
         }
       },
       "delete_zone": {
-        "title": "Delete Climate Zone",
-        "description": "Select a zone to delete and confirm deletion. Zone: {zone_name}",
+        "title": "Delete Zone",
+        "description": "Select a zone to delete. Note: You cannot delete the last fallback zone.",
         "data": {
-          "zone_id": "Select Zone",
-          "confirm": "Confirm Deletion"
+          "zone_to_delete": "Zone to Delete"
         }
       }
     },
@@ -140,7 +139,15 @@
       "delete_zone_failed": "Failed to delete zone",
       "invalid_temp_range": "Minimum temperature must be less than maximum temperature",
       "invalid_min_valves": "Minimum valves open must be at least 1",
-      "invalid_slider_value": "Slider value must be between 0 and 1"
+      "invalid_slider_value": "Slider value must be between 0 and 1",
+      "entity_not_found": "The selected entity was not found in Home Assistant",
+      "redis_error": "Failed to add zone to Redis. Check logs for details.",
+      "sensor_already_used": "This temperature sensor is already used by another zone",
+      "valve_already_used": "This valve switch is already used by another zone",
+      "zone_name_already_used": "This zone name is already used by another zone. Please choose a different name.",
+      "zone_id_collision": "Zone ID collision detected. Please try again.",
+      "no_zones_to_delete": "There are no zones to delete.",
+      "cannot_delete_last_fallback": "Cannot delete the last fallback zone. At least one fallback zone is required."
     },
     "abort": {
       "no_zones": "No zones available",

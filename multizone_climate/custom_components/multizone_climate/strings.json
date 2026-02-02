@@ -64,6 +64,13 @@
           "target_change_threshold": "Target Change Threshold (°C)",
           "is_fallback_valve": "Is Fallback Valve"
         }
+      },
+      "delete_zone": {
+        "title": "Delete Zone",
+        "description": "Select a zone to delete. Note: You cannot delete the last fallback zone.",
+        "data": {
+          "zone_to_delete": "Zone to Delete"
+        }
       }
     },
     "error": {
@@ -72,7 +79,9 @@
       "sensor_already_used": "This temperature sensor is already used by another zone",
       "valve_already_used": "This valve switch is already used by another zone",
       "zone_name_already_used": "This zone name is already used by another zone. Please choose a different name.",
-      "zone_id_collision": "Zone ID collision detected. Please try again."
+      "zone_id_collision": "Zone ID collision detected. Please try again.",
+      "no_zones_to_delete": "There are no zones to delete.",
+      "cannot_delete_last_fallback": "Cannot delete the last fallback zone. At least one fallback zone is required."
     }
   }
 }
