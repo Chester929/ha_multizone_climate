@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 import logging
 
-from homeassistant.core import Event, callback, EventStateChangedData
+from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class ValveStateChangeAutomation:
             )
 
     @callback
-    def _handle_valve_state_change(self, event: Event[EventStateChangedData]) -> None:
+    def _handle_valve_state_change(self, event: Event) -> None:
         """
         Handle valve switch state change.
 

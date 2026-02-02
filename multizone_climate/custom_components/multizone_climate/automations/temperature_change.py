@@ -6,7 +6,7 @@ from typing import Any
 import logging
 import asyncio
 
-from homeassistant.core import Event, callback, EventStateChangedData
+from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import JOB_TYPE_CALCULATE_MAIN_TEMP, JOB_TYPE_UPDATE_VALVES
@@ -71,7 +71,7 @@ class TemperatureChangeAutomation:
             )
 
     @callback
-    def _handle_temperature_change(self, event: Event[EventStateChangedData]) -> None:
+    def _handle_temperature_change(self, event: Event) -> None:
         """
         Handle temperature sensor state change.
 
