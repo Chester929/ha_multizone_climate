@@ -588,7 +588,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                     try:
                         # Delete zone from Redis
                         await redis_client.remove_zone(zone_id_to_delete)
-                        _LOGGER.info(f"Deleted zone {zone_id_to_delete} from Redis")
+                        _LOGGER.info("Deleted zone %s from Redis", zone_id_to_delete)
 
                         # Also delete from backend via API
                         backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
@@ -604,15 +604,21 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                                     if response.status in (200, 204, 404):
                                         # 404 is acceptable - zone already doesn't exist in backend
                                         _LOGGER.info(
-                                            f"Zone {zone_id_to_delete} deleted from backend (status {response.status})"
+                                            "Zone %s deleted from backend (status %s)",
+                                            zone_id_to_delete,
+                                            response.status,
                                         )
                                     else:
                                         _LOGGER.warning(
-                                            f"Failed to delete zone {zone_id_to_delete} from backend: status {response.status}"
+                                            "Failed to delete zone %s from backend: status %s",
+                                            zone_id_to_delete,
+                                            response.status,
                                         )
                         except Exception as err:
                             _LOGGER.error(
-                                f"Error deleting zone {zone_id_to_delete} from backend: {err}"
+                                "Error deleting zone %s from backend: %s",
+                                zone_id_to_delete,
+                                err,
                             )
 
                         # Reload the integration to remove the climate entity
@@ -621,7 +627,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         return self.async_create_entry(title="", data={})  # type: ignore[return-value]
 
                     except Exception as err:
-                        _LOGGER.error(f"Failed to delete zone from Redis: {err}")
+                        _LOGGER.error("Failed to delete zone from Redis: %s", err)
                         errors["base"] = "redis_error"
 
         # Build the schema
