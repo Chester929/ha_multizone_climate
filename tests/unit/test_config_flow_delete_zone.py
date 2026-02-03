@@ -294,6 +294,6 @@ class TestDeleteZone:
 
                 result = await options_flow.async_step_delete_zone(user_input)
 
-        # Should fetch zone state exactly once per zone (3 zones = 3 calls)
-        # Not 3 calls for building options + 1 for selected zone + 3 for counting fallbacks = 7
+        # With caching: 3 calls (once per zone).
+        # Without caching: 7 calls (3 for options + 1 for selected zone + 3 for fallback count).
         assert redis_client.get_zone_state.call_count == 3
