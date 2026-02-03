@@ -47,8 +47,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # NOTE: Redis client is used by platform code but should be replaced
     # with backend API calls in future refactoring
     redis_host = os.environ.get("REDIS_HOST", "localhost")
-    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    redis_port_str = os.environ.get("REDIS_PORT", "6379")
     redis_password = os.environ.get("REDIS_PASSWORD")
+    
+    # Parse Redis port with error handling
+    try:
+        redis_port = int(redis_port_str)
+    except (ValueError, TypeError):
+        _LOGGER.warning(
+            "Invalid REDIS_PORT value '%s'; falling back to default 6379",
+            redis_port_str,
+        )
+        redis_port = 6379
 
     # Create and connect Redis client
     redis_client = RedisClient(
@@ -366,19 +376,35 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         redis_port = int(redis_port_str)
     except (ValueError, TypeError):
         _LOGGER.warning(
-            f"Invalid REDIS_PORT value '{redis_port_str}', using default 6379"
+            "Invalid REDIS_PORT value '%s'; falling back to default 6379",
+            redis_port_str,
         )
         redis_port = 6379
 
-    # Create temporary Redis client to clear data
-    redis_client = RedisClient(
-        host=redis_host,
-        port=redis_port,
-        password=redis_password,
-    )
-    await redis_client.connect()
+    redis_client: RedisClient | None = None
+    try:
+        # Create temporary Redis client to clear data
+        redis_client = RedisClient(
+            host=redis_host,
+            port=redis_port,
+            password=redis_password,
+        )
+        await redis_client.connect()
 
-    _LOGGER.debug("Clearing Redis data for integration removal")
-    await redis_client.clear_all_data()
-    await redis_client.disconnect()
-    _LOGGER.info("Cleared all Redis data for removed integration")
+        _LOGGER.debug("Clearing Redis data for integration removal")
+        await redis_client.clear_all_data()
+        _LOGGER.info("Cleared all Redis data for removed integration")
+    except Exception as err:  # Best-effort cleanup; do not block removal
+        _LOGGER.error(
+            "Failed to clear Redis data during integration removal: %s",
+            err,
+        )
+    finally:
+        if redis_client is not None:
+            try:
+                await redis_client.disconnect()
+            except Exception as err:
+                _LOGGER.debug(
+                    "Error while disconnecting from Redis during integration removal: %s",
+                    err,
+                )

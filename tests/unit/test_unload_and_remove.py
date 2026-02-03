@@ -167,3 +167,72 @@ class TestUnloadAndRemove:
             port=6379,
             password=None,
         )
+
+    @pytest.mark.asyncio
+    async def test_remove_handles_redis_connection_failure(self, mock_hass, mock_config_entry):
+        """Test that async_remove_entry handles Redis connection failures gracefully."""
+        mock_redis_client = MagicMock()
+        mock_redis_client.connect = AsyncMock(side_effect=Exception("Connection failed"))
+        mock_redis_client.disconnect = AsyncMock()
+
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch.dict("os.environ", {"REDIS_HOST": "localhost", "REDIS_PORT": "6379"}):
+                # Should not raise exception - best-effort cleanup
+                await async_remove_entry(mock_hass, mock_config_entry)
+
+        # Should attempt to connect
+        mock_redis_client.connect.assert_called_once()
+        # Should attempt to disconnect in finally block
+        mock_redis_client.disconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remove_handles_clear_data_failure(self, mock_hass, mock_config_entry):
+        """Test that async_remove_entry handles clear_all_data failures gracefully."""
+        mock_redis_client = MagicMock()
+        mock_redis_client.connect = AsyncMock()
+        mock_redis_client.clear_all_data = AsyncMock(side_effect=Exception("Clear failed"))
+        mock_redis_client.disconnect = AsyncMock()
+
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch.dict("os.environ", {"REDIS_HOST": "localhost", "REDIS_PORT": "6379"}):
+                # Should not raise exception - best-effort cleanup
+                await async_remove_entry(mock_hass, mock_config_entry)
+
+        # Should connect and attempt to clear
+        mock_redis_client.connect.assert_called_once()
+        mock_redis_client.clear_all_data.assert_called_once()
+        # Should disconnect even after failure
+        mock_redis_client.disconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remove_handles_disconnect_failure(self, mock_hass, mock_config_entry):
+        """Test that async_remove_entry handles disconnect failures gracefully."""
+        mock_redis_client = MagicMock()
+        mock_redis_client.connect = AsyncMock()
+        mock_redis_client.clear_all_data = AsyncMock()
+        mock_redis_client.disconnect = AsyncMock(side_effect=Exception("Disconnect failed"))
+
+        with patch("custom_components.multizone_climate.RedisClient", return_value=mock_redis_client):
+            with patch.dict("os.environ", {"REDIS_HOST": "localhost", "REDIS_PORT": "6379"}):
+                # Should not raise exception - best-effort cleanup
+                await async_remove_entry(mock_hass, mock_config_entry)
+
+        # Should complete the cleanup attempt
+        mock_redis_client.connect.assert_called_once()
+        mock_redis_client.clear_all_data.assert_called_once()
+        mock_redis_client.disconnect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remove_handles_invalid_redis_port(self, mock_hass, mock_config_entry, mock_redis_client):
+        """Test that async_remove_entry handles invalid REDIS_PORT values."""
+        with patch("custom_components.multizone_climate.RedisClient") as mock_redis_class:
+            mock_redis_class.return_value = mock_redis_client
+            with patch.dict("os.environ", {"REDIS_PORT": "invalid_port"}):
+                await async_remove_entry(mock_hass, mock_config_entry)
+
+        # Should fall back to default port 6379
+        mock_redis_class.assert_called_once_with(
+            host="localhost",
+            port=6379,
+            password=None,
+        )
