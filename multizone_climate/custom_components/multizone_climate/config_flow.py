@@ -16,6 +16,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 import homeassistant.helpers.config_validation as cv
 
+from . import _parse_int_env
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -595,15 +596,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         _LOGGER.info("Deleted zone %s from Redis", zone_id_to_delete)
 
                         # Also delete from backend via API
-                        backend_port_str = os.environ.get("BACKEND_PORT", "8080")
-                        try:
-                            backend_port = int(backend_port_str)
-                        except ValueError:
-                            _LOGGER.warning(
-                                "Invalid BACKEND_PORT value '%s'; falling back to default 8080",
-                                backend_port_str,
-                            )
-                            backend_port = 8080
+                        backend_port = _parse_int_env("BACKEND_PORT", 8080)
                         backend_url = f"http://localhost:{backend_port}"
 
                         try:

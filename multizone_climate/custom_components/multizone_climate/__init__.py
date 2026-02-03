@@ -23,10 +23,33 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 
 
+def _parse_int_env(var_name: str, default_value: int) -> int:
+    """Parse an integer environment variable with fallback to default.
+    
+    Args:
+        var_name: Name of the environment variable
+        default_value: Default value to use if parsing fails
+        
+    Returns:
+        Parsed integer value or default
+    """
+    value_str = os.environ.get(var_name, str(default_value))
+    try:
+        return int(value_str)
+    except (ValueError, TypeError):
+        _LOGGER.warning(
+            "Invalid %s value '%s'; falling back to default %s",
+            var_name,
+            value_str,
+            default_value,
+        )
+        return default_value
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Multizone Climate from a config entry."""
     # Get backend port from environment variable (set by addon)
-    backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+    backend_port = _parse_int_env("BACKEND_PORT", 8080)
     backend_url = f"http://localhost:{backend_port}"
 
     # Get coordinator interval from environment variable (set by addon)
@@ -47,18 +70,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # NOTE: Redis client is used by platform code but should be replaced
     # with backend API calls in future refactoring
     redis_host = os.environ.get("REDIS_HOST", "localhost")
-    redis_port_str = os.environ.get("REDIS_PORT", "6379")
+    redis_port = _parse_int_env("REDIS_PORT", 6379)
     redis_password = os.environ.get("REDIS_PASSWORD")
-    
-    # Parse Redis port with error handling
-    try:
-        redis_port = int(redis_port_str)
-    except (ValueError, TypeError):
-        _LOGGER.warning(
-            "Invalid REDIS_PORT value '%s'; falling back to default 6379",
-            redis_port_str,
-        )
-        redis_port = 6379
 
     # Create and connect Redis client
     redis_client = RedisClient(
@@ -368,18 +381,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove a config entry - clear all Redis data."""
     # Get Redis configuration from environment variables
     redis_host = os.environ.get("REDIS_HOST", "localhost")
-    redis_port_str = os.environ.get("REDIS_PORT", "6379")
+    redis_port = _parse_int_env("REDIS_PORT", 6379)
     redis_password = os.environ.get("REDIS_PASSWORD")
-
-    # Parse port with error handling
-    try:
-        redis_port = int(redis_port_str)
-    except (ValueError, TypeError):
-        _LOGGER.warning(
-            "Invalid REDIS_PORT value '%s'; falling back to default 6379",
-            redis_port_str,
-        )
-        redis_port = 6379
 
     redis_client: RedisClient | None = None
     try:
