@@ -212,6 +212,8 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_add_zone()
             if action == "edit_main":
                 return await self.async_step_edit_main()
+            if action == "delete_zone":
+                return await self.async_step_delete_zone()
 
         # Show menu with options
         menu_schema = vol.Schema(
@@ -221,6 +223,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         options=[  # type: ignore[typeddict-item]
                             {"value": "add_zone", "label": "Add New Zone"},
                             {"value": "edit_main", "label": "Edit Main Climate Entity"},
+                            {"value": "delete_zone", "label": "Delete Zone"},
                         ],
                         mode=selector.SelectSelectorMode.LIST,
                     ),
@@ -525,4 +528,125 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional("is_fallback_valve", default=False): cv.boolean,
             }
+        )
+
+    async def async_step_delete_zone(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Delete a zone."""
+        errors: dict[str, str] = {}
+
+        # Get Redis client from hass.data
+        data = self.hass.data[DOMAIN][self._config_entry.entry_id]
+        redis_client = data["redis_client"]
+
+        # Get all zones to populate the selection list
+        zone_ids = await redis_client.get_zone_ids()
+        
+        if not zone_ids:
+            # No zones to delete
+            errors["base"] = "no_zones_to_delete"
+            return self.async_show_form(  # type: ignore[return-value]
+                step_id="delete_zone",
+                data_schema=vol.Schema({}),
+                errors=errors,
+                description_placeholders={
+                    "description": "There are no zones to delete."
+                },
+            )
+
+        # Build zone options for selector
+        zone_options = []
+        for zone_id in zone_ids:
+            zone_state = await redis_client.get_zone_state(zone_id)
+            if zone_state:
+                zone_name = zone_state.get("name", zone_id)
+                is_fallback = zone_state.get("is_fallback_valve", False)
+                # Show fallback status in the label
+                label = f"{zone_name}" + (" (Fallback)" if is_fallback else "")
+                zone_options.append({"value": zone_id, "label": label})
+
+        if user_input is not None:
+            zone_id_to_delete = user_input.get("zone_to_delete")
+            
+            if zone_id_to_delete:
+                # Check if this is a fallback zone
+                zone_state = await redis_client.get_zone_state(zone_id_to_delete)
+                is_fallback = zone_state.get("is_fallback_valve", False) if zone_state else False
+                
+                # Count how many fallback zones exist
+                fallback_count = 0
+                for zid in zone_ids:
+                    zstate = await redis_client.get_zone_state(zid)
+                    if zstate and zstate.get("is_fallback_valve", False):
+                        fallback_count += 1
+                
+                # Prevent deletion of the last fallback zone
+                if is_fallback and fallback_count <= 1:
+                    errors["zone_to_delete"] = "cannot_delete_last_fallback"
+                else:
+                    try:
+                        # Delete zone from Redis
+                        await redis_client.remove_zone(zone_id_to_delete)
+                        _LOGGER.info("Deleted zone %s from Redis", zone_id_to_delete)
+
+                        # Also delete from backend via API
+                        backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+                        backend_url = f"http://localhost:{backend_port}"
+
+                        try:
+                            import aiohttp
+
+                            async with aiohttp.ClientSession() as session:
+                                async with session.delete(
+                                    f"{backend_url}/api/zones/{zone_id_to_delete}",
+                                ) as response:
+                                    if response.status in (200, 204, 404):
+                                        # 404 is acceptable - zone already doesn't exist in backend
+                                        _LOGGER.info(
+                                            "Zone %s deleted from backend (status %s)",
+                                            zone_id_to_delete,
+                                            response.status,
+                                        )
+                                    else:
+                                        _LOGGER.warning(
+                                            "Failed to delete zone %s from backend: status %s",
+                                            zone_id_to_delete,
+                                            response.status,
+                                        )
+                        except Exception as err:
+                            _LOGGER.error(
+                                "Error deleting zone %s from backend: %s",
+                                zone_id_to_delete,
+                                err,
+                            )
+
+                        # Reload the integration to remove the climate entity
+                        await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+
+                        return self.async_create_entry(title="", data={})  # type: ignore[return-value]
+
+                    except Exception as err:
+                        _LOGGER.error("Failed to delete zone from Redis: %s", err)
+                        errors["base"] = "redis_error"
+
+        # Build the schema
+        delete_schema = vol.Schema(
+            {
+                vol.Required("zone_to_delete"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=zone_options,  # type: ignore[typeddict-item]
+                        mode=selector.SelectSelectorMode.LIST,
+                    ),
+                ),
+            }
+        )
+
+        return self.async_show_form(  # type: ignore[return-value]
+            step_id="delete_zone",
+            data_schema=delete_schema,
+            errors=errors,
+            description_placeholders={
+                "description": "Select a zone to delete. Note: You cannot delete the last fallback zone."
+            },
         )
