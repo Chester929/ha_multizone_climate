@@ -335,7 +335,7 @@ class RedisClient:
             if position is not None:
                 # Zone ID already in list - this should not happen for a new zone
                 raise ValueError(f"Zone {zone_id} already exists in zones list")
-            
+
             # Add new zone to list
             zone_was_added_to_list = False
             await self._redis.rpush(zones_key, zone_id)  # type: ignore[misc]

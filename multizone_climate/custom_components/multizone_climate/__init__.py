@@ -25,11 +25,11 @@ PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_
 
 def _parse_int_env(var_name: str, default_value: int) -> int:
     """Parse an integer environment variable with fallback to default.
-    
+
     Args:
         var_name: Name of the environment variable
         default_value: Default value to use if parsing fails
-        
+
     Returns:
         Parsed integer value or default
     """

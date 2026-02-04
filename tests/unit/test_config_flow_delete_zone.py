@@ -54,7 +54,7 @@ class TestDeleteZone:
     async def test_delete_zone_success(self, options_flow, mock_hass):
         """Test successful zone deletion."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup: Two zones, one fallback and one regular
         redis_client.get_zone_ids.return_value = ["zone1", "zone2"]
         redis_client.get_zone_state.side_effect = [
@@ -64,14 +64,14 @@ class TestDeleteZone:
 
         # Delete the non-fallback zone
         user_input = {"zone_to_delete": "zone2"}
-        
+
         with patch.dict("os.environ", {"BACKEND_PORT": "8080"}):
             with patch("aiohttp.ClientSession") as mock_session:
                 mock_response = MagicMock()
                 mock_response.status = 200
                 mock_response.__aenter__ = AsyncMock(return_value=mock_response)
                 mock_response.__aexit__ = AsyncMock()
-                
+
                 mock_session_instance = MagicMock()
                 mock_session_instance.delete.return_value = mock_response
                 mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
@@ -88,7 +88,7 @@ class TestDeleteZone:
     async def test_delete_last_fallback_zone_prevented(self, options_flow, mock_hass):
         """Test that deleting the last fallback zone is prevented."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup: Only one zone which is a fallback
         redis_client.get_zone_ids.return_value = ["zone1"]
         redis_client.get_zone_state.return_value = {
@@ -98,7 +98,7 @@ class TestDeleteZone:
 
         # Try to delete the only fallback zone
         user_input = {"zone_to_delete": "zone1"}
-        
+
         result = await options_flow.async_step_delete_zone(user_input)
 
         # Should show form with error, not delete
@@ -110,7 +110,7 @@ class TestDeleteZone:
     async def test_delete_one_of_multiple_fallback_zones(self, options_flow, mock_hass):
         """Test deleting one fallback zone when multiple fallback zones exist."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup: Two fallback zones
         redis_client.get_zone_ids.return_value = ["zone1", "zone2"]
         redis_client.get_zone_state.side_effect = [
@@ -120,14 +120,14 @@ class TestDeleteZone:
 
         # Delete one fallback zone (should be allowed)
         user_input = {"zone_to_delete": "zone1"}
-        
+
         with patch.dict("os.environ", {"BACKEND_PORT": "8080"}):
             with patch("aiohttp.ClientSession") as mock_session:
                 mock_response = MagicMock()
                 mock_response.status = 200
                 mock_response.__aenter__ = AsyncMock(return_value=mock_response)
                 mock_response.__aexit__ = AsyncMock()
-                
+
                 mock_session_instance = MagicMock()
                 mock_session_instance.delete.return_value = mock_response
                 mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
@@ -154,14 +154,14 @@ class TestDeleteZone:
     async def test_delete_zone_redis_failure(self, options_flow, mock_hass):
         """Test error handling when Redis deletion fails."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup zones
         redis_client.get_zone_ids.return_value = ["zone1", "zone2"]
         redis_client.get_zone_state.side_effect = [
             {"name": "Zone 1", "is_fallback_valve": True},
             {"name": "Zone 2", "is_fallback_valve": False},
         ]
-        
+
         # Make remove_zone fail
         redis_client.remove_zone.side_effect = Exception("Redis error")
 
@@ -176,7 +176,7 @@ class TestDeleteZone:
     async def test_delete_zone_backend_api_failure(self, options_flow, mock_hass):
         """Test that backend API deletion failures are logged but don't block deletion."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup zones
         redis_client.get_zone_ids.return_value = ["zone1", "zone2"]
         redis_client.get_zone_state.side_effect = [
@@ -185,14 +185,14 @@ class TestDeleteZone:
         ]
 
         user_input = {"zone_to_delete": "zone2"}
-        
+
         with patch.dict("os.environ", {"BACKEND_PORT": "8080"}):
             with patch("aiohttp.ClientSession") as mock_session:
                 mock_response = MagicMock()
                 mock_response.status = 500  # Server error
                 mock_response.__aenter__ = AsyncMock(return_value=mock_response)
                 mock_response.__aexit__ = AsyncMock()
-                
+
                 mock_session_instance = MagicMock()
                 mock_session_instance.delete.return_value = mock_response
                 mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
@@ -209,7 +209,7 @@ class TestDeleteZone:
     async def test_delete_zone_invalid_backend_port(self, options_flow, mock_hass):
         """Test that invalid BACKEND_PORT is handled gracefully."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup zones
         redis_client.get_zone_ids.return_value = ["zone1", "zone2"]
         redis_client.get_zone_state.side_effect = [
@@ -218,7 +218,7 @@ class TestDeleteZone:
         ]
 
         user_input = {"zone_to_delete": "zone2"}
-        
+
         # Use invalid port value
         with patch.dict("os.environ", {"BACKEND_PORT": "invalid_port"}):
             with patch("aiohttp.ClientSession") as mock_session:
@@ -226,7 +226,7 @@ class TestDeleteZone:
                 mock_response.status = 200
                 mock_response.__aenter__ = AsyncMock(return_value=mock_response)
                 mock_response.__aexit__ = AsyncMock()
-                
+
                 mock_session_instance = MagicMock()
                 mock_session_instance.delete.return_value = mock_response
                 mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
@@ -245,7 +245,7 @@ class TestDeleteZone:
     async def test_delete_zone_shows_zone_list(self, options_flow, mock_hass):
         """Test that zone list is displayed correctly."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup zones
         redis_client.get_zone_ids.return_value = ["zone1", "zone2"]
         redis_client.get_zone_state.side_effect = [
@@ -259,7 +259,7 @@ class TestDeleteZone:
         assert result["type"] == "form"
         data_schema = result["data_schema"].schema
         zone_selector = data_schema["zone_to_delete"]
-        
+
         # Verify zone options are created (structure may vary)
         # Just ensure form is displayed successfully without errors when no user_input
         assert "errors" not in result or not result["errors"]
@@ -268,7 +268,7 @@ class TestDeleteZone:
     async def test_delete_zone_caches_zone_states(self, options_flow, mock_hass):
         """Test that zone states are cached to avoid redundant Redis calls."""
         redis_client = mock_hass.data[DOMAIN]["test_entry_id"]["redis_client"]
-        
+
         # Setup zones
         redis_client.get_zone_ids.return_value = ["zone1", "zone2", "zone3"]
         redis_client.get_zone_state.side_effect = [
@@ -278,14 +278,14 @@ class TestDeleteZone:
         ]
 
         user_input = {"zone_to_delete": "zone2"}
-        
+
         with patch.dict("os.environ", {"BACKEND_PORT": "8080"}):
             with patch("aiohttp.ClientSession") as mock_session:
                 mock_response = MagicMock()
                 mock_response.status = 200
                 mock_response.__aenter__ = AsyncMock(return_value=mock_response)
                 mock_response.__aexit__ = AsyncMock()
-                
+
                 mock_session_instance = MagicMock()
                 mock_session_instance.delete.return_value = mock_response
                 mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
