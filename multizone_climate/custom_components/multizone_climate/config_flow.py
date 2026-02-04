@@ -16,6 +16,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 import homeassistant.helpers.config_validation as cv
 
+from . import _parse_int_env
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -555,31 +556,35 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                 },
             )
 
-        # Build zone options for selector
-        zone_options = []
+        # Cache zone states to avoid redundant Redis calls
+        zone_states = {}
         for zone_id in zone_ids:
             zone_state = await redis_client.get_zone_state(zone_id)
             if zone_state:
-                zone_name = zone_state.get("name", zone_id)
-                is_fallback = zone_state.get("is_fallback_valve", False)
-                # Show fallback status in the label
-                label = f"{zone_name}" + (" (Fallback)" if is_fallback else "")
-                zone_options.append({"value": zone_id, "label": label})
+                zone_states[zone_id] = zone_state
+
+        # Build zone options for selector
+        zone_options = []
+        for zone_id, zone_state in zone_states.items():
+            zone_name = zone_state.get("name", zone_id)
+            is_fallback = zone_state.get("is_fallback_valve", False)
+            # Show fallback status in the label
+            label = f"{zone_name}" + (" (Fallback)" if is_fallback else "")
+            zone_options.append({"value": zone_id, "label": label})
 
         if user_input is not None:
             zone_id_to_delete = user_input.get("zone_to_delete")
             
             if zone_id_to_delete:
-                # Check if this is a fallback zone
-                zone_state = await redis_client.get_zone_state(zone_id_to_delete)
+                # Check if this is a fallback zone using cached state
+                zone_state = zone_states.get(zone_id_to_delete)
                 is_fallback = zone_state.get("is_fallback_valve", False) if zone_state else False
                 
-                # Count how many fallback zones exist
-                fallback_count = 0
-                for zid in zone_ids:
-                    zstate = await redis_client.get_zone_state(zid)
-                    if zstate and zstate.get("is_fallback_valve", False):
-                        fallback_count += 1
+                # Count how many fallback zones exist using cached states
+                fallback_count = sum(
+                    1 for zstate in zone_states.values()
+                    if zstate.get("is_fallback_valve", False)
+                )
                 
                 # Prevent deletion of the last fallback zone
                 if is_fallback and fallback_count <= 1:
@@ -591,7 +596,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
                         _LOGGER.info("Deleted zone %s from Redis", zone_id_to_delete)
 
                         # Also delete from backend via API
-                        backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+                        backend_port = _parse_int_env("BACKEND_PORT", 8080)
                         backend_url = f"http://localhost:{backend_port}"
 
                         try:

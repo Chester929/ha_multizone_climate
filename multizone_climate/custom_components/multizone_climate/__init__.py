@@ -23,10 +23,33 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 
 
+def _parse_int_env(var_name: str, default_value: int) -> int:
+    """Parse an integer environment variable with fallback to default.
+    
+    Args:
+        var_name: Name of the environment variable
+        default_value: Default value to use if parsing fails
+        
+    Returns:
+        Parsed integer value or default
+    """
+    value_str = os.environ.get(var_name, str(default_value))
+    try:
+        return int(value_str)
+    except (ValueError, TypeError):
+        _LOGGER.warning(
+            "Invalid %s value '%s'; falling back to default %s",
+            var_name,
+            value_str,
+            default_value,
+        )
+        return default_value
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Multizone Climate from a config entry."""
     # Get backend port from environment variable (set by addon)
-    backend_port = int(os.environ.get("BACKEND_PORT", "8080"))
+    backend_port = _parse_int_env("BACKEND_PORT", 8080)
     backend_url = f"http://localhost:{backend_port}"
 
     # Get coordinator interval from environment variable (set by addon)
@@ -47,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # NOTE: Redis client is used by platform code but should be replaced
     # with backend API calls in future refactoring
     redis_host = os.environ.get("REDIS_HOST", "localhost")
-    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    redis_port = _parse_int_env("REDIS_PORT", 6379)
     redis_password = os.environ.get("REDIS_PASSWORD")
 
     # Create and connect Redis client
@@ -358,27 +381,33 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove a config entry - clear all Redis data."""
     # Get Redis configuration from environment variables
     redis_host = os.environ.get("REDIS_HOST", "localhost")
-    redis_port_str = os.environ.get("REDIS_PORT", "6379")
+    redis_port = _parse_int_env("REDIS_PORT", 6379)
     redis_password = os.environ.get("REDIS_PASSWORD")
 
-    # Parse port with error handling
+    redis_client: RedisClient | None = None
     try:
-        redis_port = int(redis_port_str)
-    except (ValueError, TypeError):
-        _LOGGER.warning(
-            f"Invalid REDIS_PORT value '{redis_port_str}', using default 6379"
+        # Create temporary Redis client to clear data
+        redis_client = RedisClient(
+            host=redis_host,
+            port=redis_port,
+            password=redis_password,
         )
-        redis_port = 6379
+        await redis_client.connect()
 
-    # Create temporary Redis client to clear data
-    redis_client = RedisClient(
-        host=redis_host,
-        port=redis_port,
-        password=redis_password,
-    )
-    await redis_client.connect()
-
-    _LOGGER.debug("Clearing Redis data for integration removal")
-    await redis_client.clear_all_data()
-    await redis_client.disconnect()
-    _LOGGER.info("Cleared all Redis data for removed integration")
+        _LOGGER.debug("Clearing Redis data for integration removal")
+        await redis_client.clear_all_data()
+        _LOGGER.info("Cleared all Redis data for removed integration")
+    except Exception as err:  # Best-effort cleanup; do not block removal
+        _LOGGER.error(
+            "Failed to clear Redis data during integration removal: %s",
+            err,
+        )
+    finally:
+        if redis_client is not None:
+            try:
+                await redis_client.disconnect()
+            except Exception as err:
+                _LOGGER.debug(
+                    "Error while disconnecting from Redis during integration removal: %s",
+                    err,
+                )
