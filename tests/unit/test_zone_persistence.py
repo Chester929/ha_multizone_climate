@@ -118,11 +118,11 @@ class TestZonePersistence:
 
         # Verify hset was called
         redis_client._redis.hset.assert_called_once()
-        
+
         # Get the actual data that was written
         call_args = redis_client._redis.hset.call_args
         written_data = call_args[1]['mapping']
-        
+
         # Verify the 'id' field was forced to match zone_id parameter
         assert json.loads(written_data['id']) == zone_id, "ID field should be forced to match zone_id parameter"
 

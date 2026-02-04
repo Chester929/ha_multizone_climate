@@ -543,7 +543,7 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
         # Get all zones to populate the selection list
         zone_ids = await redis_client.get_zone_ids()
-        
+
         if not zone_ids:
             # No zones to delete
             errors["base"] = "no_zones_to_delete"
@@ -574,18 +574,18 @@ class MultizoneClimateOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             zone_id_to_delete = user_input.get("zone_to_delete")
-            
+
             if zone_id_to_delete:
                 # Check if this is a fallback zone using cached state
                 zone_state = zone_states.get(zone_id_to_delete)
                 is_fallback = zone_state.get("is_fallback_valve", False) if zone_state else False
-                
+
                 # Count how many fallback zones exist using cached states
                 fallback_count = sum(
                     1 for zstate in zone_states.values()
                     if zstate.get("is_fallback_valve", False)
                 )
-                
+
                 # Prevent deletion of the last fallback zone
                 if is_fallback and fallback_count <= 1:
                     errors["zone_to_delete"] = "cannot_delete_last_fallback"
