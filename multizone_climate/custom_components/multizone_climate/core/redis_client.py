@@ -269,6 +269,9 @@ class RedisClient:
             _LOGGER.error("Redis client not connected")
             raise RuntimeError("Redis client not connected")
 
+        if not state:
+            raise ValueError(f"Cannot set empty zone state for {zone_id}")
+
         try:
             zone_key = self._get_key(f"zone:{zone_id}")
             _LOGGER.debug(f"Setting zone state: zone_id={zone_id}, key={zone_key}, data_keys={list(state.keys())}")

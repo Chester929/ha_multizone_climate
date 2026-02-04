@@ -124,7 +124,7 @@ class TestZonePersistence:
         written_data = call_args[1]['mapping']
 
         # Verify the 'id' field was forced to match zone_id parameter
-        assert json.loads(written_data['id']) == zone_id, "ID field should be forced to match zone_id parameter"
+        assert written_data['id'] == zone_id, "ID field should be forced to match zone_id parameter"
 
     @pytest.mark.asyncio
     async def test_add_zone_already_exists(self, redis_client):
