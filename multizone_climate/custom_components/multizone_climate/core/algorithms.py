@@ -45,17 +45,15 @@ def calculate_main_target_temperature(
     Algorithm Operating Modes:
 
         HEATING MODE (any zone underheated):
-            - Calculate base target from SATISFIED zones only (using slider/average)
-            - Overheated zones excluded (valves closed)
             - Calculate maximum zone deficit: max(target - current) for underheated zones
-            - Calculate main climate capability: base_target - main_current_temp
-            - Required boost = max_zone_deficit - main_capability
-            - New main target = base_target + required_boost
+            - New main target = main_current_temp + max_zone_deficit
+            - Satisfied zones regulate themselves via valve control (using offsets)
+            - Overheated zones ignored (valves closed)
             - Clamp to configured limits
 
         MAINTENANCE MODE (all zones satisfied):
             - Use slider/average logic between zone targets
-            - No boost applied
+            - No underheated zones, system in steady state
 
         IDLE MODE (all zones overheated):
             - Reduce main target to minimum of overheated zone targets
@@ -64,11 +62,10 @@ def calculate_main_target_temperature(
 
     Example (Heating Mode):
         Zones: A(22.0/22.0 satisfied), B(24.0/22.0 underheated)
-        Base target from satisfied zones only (slider 50%): 22.0
         Zone B deficit: 24.0 - 22.0 = 2.0°C
-        Main: current=23.0°C, base=22.0°C → capability = 0.0°C (max(0, 22-23))
-        Required boost = 2.0 - 0.0 = 2.0°C
-        New main target = 22.0 + 2.0 = 24.0°C ✅
+        Main current: 23.0°C
+        New main target = 23.0 + 2.0 = 25.0°C ✅
+        (Zone A regulates its valve using offsets to maintain 22.0°C)
     """
     if not zones:
         return None
@@ -85,41 +82,8 @@ def calculate_main_target_temperature(
 
     # Determine operating mode
     if underheated_zones:
-        # HEATING MODE: Calculate base target from satisfied zones only
-        # (overheated zones excluded - valves closed, underheated zones contribute via boost)
-        if satisfied_zones:
-            zone_targets = [z.get("target_temperature") for z in satisfied_zones if z.get("target_temperature") is not None]
-            if zone_targets:
-                min_target = min(zone_targets)
-                max_target = max(zone_targets)
-                
-                if config.get("use_average_mode", False):
-                    base_target = sum(zone_targets) / len(zone_targets)
-                else:
-                    slider = config.get("main_target_all_zones_satisfied", 0.5)
-                    if min_target == max_target:
-                        base_target = min_target
-                    else:
-                        base_target = min_target + slider * (max_target - min_target)
-            else:
-                # No temperature data from satisfied zones, use current_main_target
-                base_target = current_main_target
-        else:
-            # Only underheated zones exist, use their targets for base
-            zone_targets = [z.get("target_temperature") for z in underheated_zones if z.get("target_temperature") is not None]
-            if not zone_targets:
-                return None
-            min_target = min(zone_targets)
-            max_target = max(zone_targets)
-            
-            if config.get("use_average_mode", False):
-                base_target = sum(zone_targets) / len(zone_targets)
-            else:
-                slider = config.get("main_target_all_zones_satisfied", 0.5)
-                if min_target == max_target:
-                    base_target = min_target
-                else:
-                    base_target = min_target + slider * (max_target - min_target)
+        # HEATING MODE: Main target based on underheated zones only
+        # Satisfied zones regulate via valve control (offsets), overheated zones ignored (valves closed)
         # HEATING MODE: At least one zone needs heating
         _LOGGER.debug(
             "HEATING MODE: %d underheated, %d satisfied, %d overheated zones",
@@ -161,34 +125,24 @@ def calculate_main_target_temperature(
                     ", ".join(map(str, zones_without_temps)),
                 )
 
-        # Calculate main climate capability (how much it can heat now)
-        # Use base_target instead of current_main_target to ensure target adjusts with zone changes
-        main_capability = 0.0
+        # Calculate new main target: current + deficit
+        # Satisfied zones regulate themselves via valve control
         if main_current_temp is not None:
-            # Safety: capability can be negative if main is cooling down, clamp to 0
-            main_capability = max(0.0, base_target - main_current_temp)
+            main_target_raw = main_current_temp + max_zone_deficit
             _LOGGER.debug(
-                "Main climate capability: %.1f°C (base %.1f - current %.1f)",
-                main_capability,
-                base_target,
+                "Main target calculation: current %.1f + deficit %.1f = %.1f",
                 main_current_temp,
+                max_zone_deficit,
+                main_target_raw,
             )
         else:
-            _LOGGER.debug("Main current temp not available, assuming capability = 0")
-
-        # Calculate required boost (already safe: both inputs are >= 0)
-        required_boost = max(0.0, max_zone_deficit - main_capability)
-
-        # Calculate new main target with boost on top of base_target
-        # This ensures the target adjusts when zone targets change
-        main_target_raw = base_target + required_boost
+            # Fallback if main current temp not available
+            _LOGGER.warning("Main current temp not available, using current_main_target as fallback")
+            main_target_raw = current_main_target + max_zone_deficit
 
         _LOGGER.info(
-            "HEATING MODE: base=%.1f, max_deficit=%.1f, capability=%.1f, boost=%.1f, new_target_raw=%.1f",
-            base_target,
+            "HEATING MODE: deficit=%.1f, new_target_raw=%.1f",
             max_zone_deficit,
-            main_capability,
-            required_boost,
             main_target_raw,
         )
 

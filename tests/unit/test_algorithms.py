@@ -12,13 +12,12 @@ class TestCalculateMainTargetTemperature:
 
     def test_slider_mode_basic(self):
         """
-        Test slider-based calculation in heating mode.
+        Test HEATING MODE calculation.
 
         Scenario:
             - 2 zones: one underheated, one satisfied
-            - Heating mode: should boost for underheated zone
-            - Base calculated from satisfied zone only
-            - Expected: base + boost
+            - Heating mode: main target = main_current + deficit
+            - Satisfied zone regulates via valve control
         """
         zones = [
             {
@@ -43,12 +42,10 @@ class TestCalculateMainTargetTemperature:
             "main_max_temp": 30.0,
             "main_change_threshold": 0.5,
         }
-        # Base from satisfied zone = 22.0
-        # Deficit = 1.0, capability = max(0, 22.0 - 20.0) = 2.0
-        # Boost = max(0, 1.0 - 2.0) = 0.0
-        # New target = 22.0 + 0.0 = 22.0
+        # Deficit = 20.0 - 19.0 = 1.0
+        # New target = 20.0 + 1.0 = 21.0
         result = calculate_main_target_temperature(zones, config, 20.0, main_current_temp=20.0)
-        assert result == 22.0
+        assert result == 21.0
 
     def test_average_mode_basic(self):
         """
@@ -422,12 +419,10 @@ class TestDynamicHeatingBoost:
         Test dynamic boost with single underheated zone.
 
         Scenario:
-            - Zone A: 22.0/22.0 satisfied
+            - Zone A: 22.0/22.0 satisfied (regulates via valve)
             - Zone B: current=22.0°C, target=24.0°C → deficit = 2.0°C
-            - Base from satisfied zone = 22.0
-            - Main: current=23.0°C, base=22.0°C → capability = 0.0°C
-            - Required boost = 2.0 - 0.0 = 2.0°C
-            - New main target = 22.0 + 2.0 = 24.0°C
+            - Main: current=23.0°C
+            - New main target = 23.0 + 2.0 = 25.0°C
         """
         zones = [
             {
@@ -455,12 +450,8 @@ class TestDynamicHeatingBoost:
         result = calculate_main_target_temperature(
             zones, config, current_main_target=23.7, main_current_temp=23.0
         )
-        # Note: result is None because |24.0 - 23.7| = 0.3 < 0.5 threshold
-        # Change main_current_temp to make capability different
-        result2 = calculate_main_target_temperature(
-            zones, config, current_main_target=20.0, main_current_temp=20.0
-        )
-        assert result2 == 24.0  # 22.0 base + 2.0 boost = 24.0
+        # Deficit = 2.0, new_target = 23.0 + 2.0 = 25.0
+        assert result == 25.0
 
     def test_heating_mode_multiple_underheated_zones_uses_max_deficit(self):
         """
@@ -469,8 +460,8 @@ class TestDynamicHeatingBoost:
         Scenario:
             - Zone A: current=20.0°C, target=21.0°C → deficit = 1.0°C
             - Zone B: current=19.0°C, target=22.0°C → deficit = 3.0°C (max)
-            - Main: current=20.0°C, target=21.0°C → capability = 1.0°C
-            - Required boost = 3.0 - 1.0 = 2.0°C
+            - Main: current=20.0°C
+            - New main target = 20.0 + 3.0 = 23.0°C
             - New main target = 21.0 + 2.0 = 23.0°C
         """
         zones = [
@@ -740,16 +731,14 @@ class TestDynamicHeatingBoost:
         Test that overheated zones are excluded from base target calculation in HEATING MODE.
         
         Scenario:
-            - Zone 1: 22.0/22.0 satisfied
-            - Zone 2: 20.0/21.0 overheated (valve closed, excluded from base)
+            - Zone 1: 22.0/22.0 satisfied (regulates via valve)
+            - Zone 2: 20.0/21.0 overheated (valve closed, ignored)
             - Zone 3: 24.0/22.0 underheated (deficit = 2.0)
         
         Expected calculation:
-            - Base from satisfied zones only: 22.0 (excludes overheated 20.0)
             - Deficit: 2.0
-            - Capability: max(0, 22.0 - 21.0) = 1.0
-            - Boost: max(0, 2.0 - 1.0) = 1.0
-            - Target: 22.0 + 1.0 = 23.0
+            - Main current: 21.0
+            - New target = 21.0 + 2.0 = 23.0
         """
         zones = [
             {
@@ -764,7 +753,7 @@ class TestDynamicHeatingBoost:
                 "enabled": "true",
                 "target_temperature": 20.0,
                 "current_temperature": 21.0,
-                "satisfaction": "overheated",  # Should be EXCLUDED from base
+                "satisfaction": "overheated",  # Ignored in HEATING MODE
             },
             {
                 "id": "zone_3",
@@ -789,6 +778,5 @@ class TestDynamicHeatingBoost:
             main_current_temp=21.0
         )
         
-        # Base = 22.0 (only satisfied zone, overheated excluded)
-        # NOT 21.0 (if overheated was included: 20.0 + 0.5 * (22.0 - 20.0))
+        # Deficit = 2.0, new_target = 21.0 + 2.0 = 23.0
         assert result == 23.0
