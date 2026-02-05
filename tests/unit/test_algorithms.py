@@ -17,8 +17,8 @@ class TestCalculateMainTargetTemperature:
         Scenario:
             - 2 zones: one underheated, one satisfied
             - Heating mode: should boost for underheated zone
-            - Satisfied zone does not contribute to boost calculation (no deficit)
-            - Expected: boost based on deficit
+            - Base calculated from satisfied zone only
+            - Expected: base + boost
         """
         zones = [
             {
@@ -43,10 +43,12 @@ class TestCalculateMainTargetTemperature:
             "main_max_temp": 30.0,
             "main_change_threshold": 0.5,
         }
-        # Zone deficit = 1.0, capability = 0.0, boost = 1.0
-        # New target = 20.0 + 1.0 = 21.0
+        # Base from satisfied zone = 22.0
+        # Deficit = 1.0, capability = max(0, 22.0 - 20.0) = 2.0
+        # Boost = max(0, 1.0 - 2.0) = 0.0
+        # New target = 22.0 + 0.0 = 22.0
         result = calculate_main_target_temperature(zones, config, 20.0, main_current_temp=20.0)
-        assert result == 21.0
+        assert result == 22.0
 
     def test_average_mode_basic(self):
         """
@@ -420,10 +422,12 @@ class TestDynamicHeatingBoost:
         Test dynamic boost with single underheated zone.
 
         Scenario:
+            - Zone A: 22.0/22.0 satisfied
             - Zone B: current=22.0°C, target=24.0°C → deficit = 2.0°C
-            - Main: current=23.0°C, target=23.7°C → capability = 0.7°C
-            - Required boost = 2.0 - 0.7 = 1.3°C
-            - New main target = 23.7 + 1.3 = 25.0°C
+            - Base from satisfied zone = 22.0
+            - Main: current=23.0°C, base=22.0°C → capability = 0.0°C
+            - Required boost = 2.0 - 0.0 = 2.0°C
+            - New main target = 22.0 + 2.0 = 24.0°C
         """
         zones = [
             {
@@ -451,7 +455,12 @@ class TestDynamicHeatingBoost:
         result = calculate_main_target_temperature(
             zones, config, current_main_target=23.7, main_current_temp=23.0
         )
-        assert result == 25.0  # 23.7 + 1.3 = 25.0
+        # Note: result is None because |24.0 - 23.7| = 0.3 < 0.5 threshold
+        # Change main_current_temp to make capability different
+        result2 = calculate_main_target_temperature(
+            zones, config, current_main_target=20.0, main_current_temp=20.0
+        )
+        assert result2 == 24.0  # 22.0 base + 2.0 boost = 24.0
 
     def test_heating_mode_multiple_underheated_zones_uses_max_deficit(self):
         """
@@ -659,3 +668,69 @@ class TestDynamicHeatingBoost:
             zones, config, current_main_target=25.0, main_current_temp=25.0
         )
         assert result == 22.0  # minimum of overheated zones
+
+    def test_reported_issue_main_target_stuck_at_29(self):
+        """
+        Test the exact scenario from the reported GitHub issue.
+        
+        Problem: With zones having targets of 24.5, 24.0, and 20.3 (one underheated),
+        the main target was stuck at 29.0 instead of adjusting to ~24°C.
+        
+        Root cause: Algorithm was additive (current_main_target + boost), so it never
+        properly adjusted when zone targets changed.
+        
+        Fix: Calculate base target from satisfied/overheated zones, then add boost.
+        
+        Scenario:
+            - Zone 1: 24.5/24.4 satisfied
+            - Zone 2: 24.0/24.2 satisfied
+            - Zone 3: 20.3/18.99 underheated (deficit = 1.31)
+            - Main current: 23.0°C
+            - Old target: 29.0°C (incorrect)
+        
+        Expected calculation:
+            - Base from satisfied zones: 24.0 + 0.5 * (24.5 - 24.0) = 24.25
+            - Deficit: 1.31
+            - Capability: max(0, 24.25 - 23.0) = 1.25
+            - Boost: max(0, 1.31 - 1.25) = 0.06
+            - Target: 24.25 + 0.06 = 24.31, rounded to 24.5
+        """
+        zones = [
+            {
+                "id": "zone_1_fallback",
+                "enabled": "true",
+                "target_temperature": 24.5,
+                "current_temperature": 24.4,
+                "satisfaction": "satisfied",
+            },
+            {
+                "id": "zone_2",
+                "enabled": "true",
+                "target_temperature": 24.0,
+                "current_temperature": 24.2,
+                "satisfaction": "satisfied",
+            },
+            {
+                "id": "zone_3",
+                "enabled": "true",
+                "target_temperature": 20.3,
+                "current_temperature": 18.99,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        
+        result = calculate_main_target_temperature(
+            zones, 
+            config, 
+            current_main_target=29.0,  # Previously incorrect value - should be ignored
+            main_current_temp=23.0
+        )
+        
+        assert result == 24.5  # Should be ~24°C, NOT 29-30°C
