@@ -39,6 +39,7 @@ class TemperatureChangeAutomation:
         self.hass = hass
         self.redis_client = redis_client
         self._debounce_task: asyncio.Task | None = None
+        self._update_main_climate_task: asyncio.Task | None = None
         self._cancel_listeners: list = []
 
     async def setup(self) -> None:
@@ -118,12 +119,20 @@ class TemperatureChangeAutomation:
             - Enqueue calculate_main_temp job
             - Enqueue update_valves job
         """
+        # Cancel previous update task if still running
+        if self._update_main_climate_task and not self._update_main_climate_task.done():
+            self._update_main_climate_task.cancel()
+
         # Create async task to update Redis
         # Wrap in try-except to catch any task creation errors
         try:
-            task = asyncio.create_task(self._update_main_climate_state(event))
+            self._update_main_climate_task = asyncio.create_task(
+                self._update_main_climate_state(event)
+            )
             # Add done callback to log exceptions
-            task.add_done_callback(self._handle_update_main_climate_exception)
+            self._update_main_climate_task.add_done_callback(
+                self._handle_update_main_climate_exception
+            )
         except Exception as err:
             _LOGGER.error("Failed to create task for main climate state update: %s", err)
 
@@ -238,6 +247,16 @@ class TemperatureChangeAutomation:
             cancel()
         self._cancel_listeners.clear()
 
+        # Cancel update main climate task if running
+        if self._update_main_climate_task and not self._update_main_climate_task.done():
+            self._update_main_climate_task.cancel()
+            try:
+                await self._update_main_climate_task
+            except asyncio.CancelledError:
+                # Task cancellation is expected during cleanup
+                pass
+
+        # Cancel debounce task if running
         if self._debounce_task and not self._debounce_task.done():
             self._debounce_task.cancel()
             try:
