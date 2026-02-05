@@ -193,11 +193,11 @@ class TestValveController:
     @pytest.mark.asyncio
     async def test_satisfied_zones_keep_valves_open(self, valve_controller):
         """
-        Test that satisfied zones keep valves open.
+        Test that satisfied zones have their valves open.
 
         Scenario:
             - Zone is satisfied
-            - Expected: valve stays open
+            - Expected: valve should be open to maintain temperature
         """
         zones = [
             {
@@ -223,8 +223,43 @@ class TestValveController:
         open_actions = [a for a in actions if a["action"] == "open"]
         close_actions = [a for a in actions if a["action"] == "close"]
 
-        # Should keep open or open again
-        assert len(open_actions) >= 1 or len(close_actions) == 0
+        # Should not close satisfied zones
+        assert len(close_actions) == 0
+
+    @pytest.mark.asyncio
+    async def test_satisfied_zones_open_closed_valves(self, valve_controller):
+        """
+        Test that satisfied zones with closed valves get opened.
+
+        Scenario:
+            - Zone is satisfied but valve is closed
+            - Expected: valve opens to maintain temperature
+        """
+        zones = [
+            {
+                "id": "bedroom",
+                "enabled": "true",
+                "valve_id": "switch.bedroom_valve",
+                "current_temperature": 21.0,
+                "target_temperature": 21.0,
+                "satisfaction": "satisfied",
+                "priority": 0,
+                "is_fallback_valve": True,
+                "valve_state": "closed",
+            },
+        ]
+
+        actions = await valve_controller.update_valves(
+            zones=zones,
+            main_climate_state="HEATING",
+            multizone_enabled=True,
+        )
+
+        # Satisfied zone with closed valve should open
+        assert len(actions) >= 1
+        open_actions = [a for a in actions if a["action"] == "open"]
+        assert len(open_actions) >= 1
+        assert open_actions[0]["valve_id"] == "switch.bedroom_valve"
 
     @pytest.mark.asyncio
     async def test_cooling_mode_undercooled_opens_valve(self, valve_controller):
