@@ -47,6 +47,7 @@ class TemperatureChangeAutomation:
 
         Tasks:
             - Register state change listeners for all zone sensors
+            - Register state change listener for main climate entity
             - Register target temperature change listeners
             - Set up debouncing (5 seconds)
         """
@@ -66,9 +67,23 @@ class TemperatureChangeAutomation:
             )
             self._cancel_listeners.append(cancel)
             _LOGGER.info(
-                "Temperature change automation listening to %d sensors",
+                "Temperature change automation listening to %d zone sensors",
                 len(sensor_entity_ids),
             )
+
+        # Set up listener for main climate entity
+        config = await self.redis_client.get_config()
+        if config:
+            main_climate_entity_id = config.get("main_climate_entity_id")
+            if main_climate_entity_id:
+                cancel = async_track_state_change_event(
+                    self.hass, [main_climate_entity_id], self._handle_main_climate_change
+                )
+                self._cancel_listeners.append(cancel)
+                _LOGGER.info(
+                    "Temperature change automation listening to main climate entity: %s",
+                    main_climate_entity_id,
+                )
 
     @callback
     def _handle_temperature_change(self, event: Event) -> None:
@@ -87,6 +102,75 @@ class TemperatureChangeAutomation:
             self._debounce_task.cancel()
 
         self._debounce_task = asyncio.create_task(self._debounced_enqueue())
+
+    @callback
+    def _handle_main_climate_change(self, event: Event) -> None:
+        """
+        Handle main climate entity state change.
+
+        Args:
+            event: State change event
+
+        Tasks:
+            - Update main climate current_temperature in Redis
+            - Update hvac_mode and hvac_action in Redis
+            - Debounce event (5 seconds)
+            - Enqueue calculate_main_temp job
+            - Enqueue update_valves job
+        """
+        # Create async task to update Redis
+        asyncio.create_task(self._update_main_climate_state(event))
+
+        # Debounce job enqueuing
+        if self._debounce_task and not self._debounce_task.done():
+            self._debounce_task.cancel()
+
+        self._debounce_task = asyncio.create_task(self._debounced_enqueue())
+
+    async def _update_main_climate_state(self, event: Event) -> None:
+        """
+        Update main climate state in Redis from state change event.
+
+        Args:
+            event: State change event
+        """
+        new_state = event.data.get("new_state")
+        if not new_state:
+            return
+
+        # Get current main climate state from Redis
+        main_climate_state = await self.redis_client.get_main_climate_state()
+        if not main_climate_state:
+            _LOGGER.warning("Main climate state not found in Redis")
+            return
+
+        # Update current_temperature if available in attributes
+        attrs = new_state.attributes
+        current_temp = attrs.get("current_temperature")
+        if current_temp is not None:
+            try:
+                main_climate_state["current_temperature"] = float(current_temp)
+                _LOGGER.debug(
+                    "Updated main climate current_temperature in Redis: %.1f°C",
+                    main_climate_state["current_temperature"],
+                )
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Invalid current_temperature value from main climate: %s",
+                    current_temp,
+                )
+
+        # Update hvac_mode from state
+        if new_state.state:
+            main_climate_state["hvac_mode"] = new_state.state
+
+        # Update hvac_action if available
+        hvac_action = attrs.get("hvac_action")
+        if hvac_action:
+            main_climate_state["hvac_action"] = hvac_action
+
+        # Write updated state to Redis
+        await self.redis_client.set_main_climate_state(main_climate_state)
 
     async def _debounced_enqueue(self) -> None:
         """Debounce wrapper that waits 5 seconds before enqueuing."""
