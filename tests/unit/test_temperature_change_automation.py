@@ -1,5 +1,6 @@
 """Unit tests for temperature change automation."""
 
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
 from homeassistant.core import Event
@@ -229,7 +230,6 @@ class TestTemperatureChangeAutomation:
         async def dummy_task():
             pass
         
-        import asyncio
         task = asyncio.create_task(dummy_task())
         automation._debounce_task = task
 

@@ -119,13 +119,35 @@ class TemperatureChangeAutomation:
             - Enqueue update_valves job
         """
         # Create async task to update Redis
-        asyncio.create_task(self._update_main_climate_state(event))
+        # Wrap in try-except to catch any task creation errors
+        try:
+            task = asyncio.create_task(self._update_main_climate_state(event))
+            # Add done callback to log exceptions
+            task.add_done_callback(self._handle_update_main_climate_exception)
+        except Exception as err:
+            _LOGGER.error("Failed to create task for main climate state update: %s", err)
 
         # Debounce job enqueuing
         if self._debounce_task and not self._debounce_task.done():
             self._debounce_task.cancel()
 
         self._debounce_task = asyncio.create_task(self._debounced_enqueue())
+
+    def _handle_update_main_climate_exception(self, task: asyncio.Task) -> None:
+        """
+        Handle exceptions from _update_main_climate_state task.
+
+        Args:
+            task: The completed task
+        """
+        try:
+            # This will raise if the task had an exception
+            task.result()
+        except asyncio.CancelledError:
+            # Task cancellation is expected during shutdown
+            pass
+        except Exception as err:
+            _LOGGER.error("Error updating main climate state in Redis: %s", err, exc_info=True)
 
     async def _update_main_climate_state(self, event: Event) -> None:
         """
