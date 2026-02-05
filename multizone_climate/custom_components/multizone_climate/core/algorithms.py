@@ -45,7 +45,8 @@ def calculate_main_target_temperature(
     Algorithm Operating Modes:
 
         HEATING MODE (any zone underheated):
-            - Calculate base target from all zone targets (using slider/average)
+            - Calculate base target from SATISFIED zones only (using slider/average)
+            - Overheated zones excluded (valves closed)
             - Calculate maximum zone deficit: max(target - current) for underheated zones
             - Calculate main climate capability: base_target - main_current_temp
             - Required boost = max_zone_deficit - main_capability
@@ -63,11 +64,11 @@ def calculate_main_target_temperature(
 
     Example (Heating Mode):
         Zones: A(22.0/22.0 satisfied), B(24.0/22.0 underheated)
-        Base target (slider 50%): 22.0 + 0.5 * (24.0 - 22.0) = 23.0°C
+        Base target from satisfied zones only (slider 50%): 22.0
         Zone B deficit: 24.0 - 22.0 = 2.0°C
-        Main: current=23.0°C, base=23.0°C → capability = 0.0°C
+        Main: current=23.0°C, base=22.0°C → capability = 0.0°C (max(0, 22-23))
         Required boost = 2.0 - 0.0 = 2.0°C
-        New main target = 23.0 + 2.0 = 25.0°C ✅
+        New main target = 22.0 + 2.0 = 24.0°C ✅
     """
     if not zones:
         return None
@@ -84,11 +85,10 @@ def calculate_main_target_temperature(
 
     # Determine operating mode
     if underheated_zones:
-        # HEATING MODE: Calculate base target from satisfied + overheated zones only
-        # (underheated zones contribute via boost, not base)
-        base_zones = satisfied_zones + overheated_zones
-        if base_zones:
-            zone_targets = [z.get("target_temperature") for z in base_zones if z.get("target_temperature") is not None]
+        # HEATING MODE: Calculate base target from satisfied zones only
+        # (overheated zones excluded - valves closed, underheated zones contribute via boost)
+        if satisfied_zones:
+            zone_targets = [z.get("target_temperature") for z in satisfied_zones if z.get("target_temperature") is not None]
             if zone_targets:
                 min_target = min(zone_targets)
                 max_target = max(zone_targets)
@@ -102,7 +102,7 @@ def calculate_main_target_temperature(
                     else:
                         base_target = min_target + slider * (max_target - min_target)
             else:
-                # No temperature data from satisfied/overheated zones, use current_main_target
+                # No temperature data from satisfied zones, use current_main_target
                 base_target = current_main_target
         else:
             # Only underheated zones exist, use their targets for base

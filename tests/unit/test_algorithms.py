@@ -734,3 +734,61 @@ class TestDynamicHeatingBoost:
         )
         
         assert result == 24.5  # Should be ~24°C, NOT 29-30°C
+
+    def test_overheated_zones_excluded_from_base_in_heating_mode(self):
+        """
+        Test that overheated zones are excluded from base target calculation in HEATING MODE.
+        
+        Scenario:
+            - Zone 1: 22.0/22.0 satisfied
+            - Zone 2: 20.0/21.0 overheated (valve closed, excluded from base)
+            - Zone 3: 24.0/22.0 underheated (deficit = 2.0)
+        
+        Expected calculation:
+            - Base from satisfied zones only: 22.0 (excludes overheated 20.0)
+            - Deficit: 2.0
+            - Capability: max(0, 22.0 - 21.0) = 1.0
+            - Boost: max(0, 2.0 - 1.0) = 1.0
+            - Target: 22.0 + 1.0 = 23.0
+        """
+        zones = [
+            {
+                "id": "zone_1",
+                "enabled": "true",
+                "target_temperature": 22.0,
+                "current_temperature": 22.0,
+                "satisfaction": "satisfied",
+            },
+            {
+                "id": "zone_2",
+                "enabled": "true",
+                "target_temperature": 20.0,
+                "current_temperature": 21.0,
+                "satisfaction": "overheated",  # Should be EXCLUDED from base
+            },
+            {
+                "id": "zone_3",
+                "enabled": "true",
+                "target_temperature": 24.0,
+                "current_temperature": 22.0,
+                "satisfaction": "underheated",
+            },
+        ]
+        config = {
+            "use_average_mode": False,
+            "main_target_all_zones_satisfied": 0.5,
+            "main_min_temp": 18.0,
+            "main_max_temp": 30.0,
+            "main_change_threshold": 0.5,
+        }
+        
+        result = calculate_main_target_temperature(
+            zones, 
+            config, 
+            current_main_target=25.0,
+            main_current_temp=21.0
+        )
+        
+        # Base = 22.0 (only satisfied zone, overheated excluded)
+        # NOT 21.0 (if overheated was included: 20.0 + 0.5 * (22.0 - 20.0))
+        assert result == 23.0
