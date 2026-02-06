@@ -327,12 +327,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start job worker to process background jobs
     await coordinator.start_job_worker()
 
+    # Set up temperature change automation
+    from .automations import TemperatureChangeAutomation
+    temperature_change_automation = TemperatureChangeAutomation(hass, redis_client)
+    await temperature_change_automation.setup()
+
     # Set up valve state change automation
     from .automations import ValveStateChangeAutomation
     valve_state_automation = ValveStateChangeAutomation(hass, redis_client)
     await valve_state_automation.setup()
 
-    # Store automation in hass.data for cleanup on unload
+    # Store automations in hass.data for cleanup on unload
+    hass.data[DOMAIN][entry.entry_id]["temperature_change_automation"] = temperature_change_automation
     hass.data[DOMAIN][entry.entry_id]["valve_state_automation"] = valve_state_automation
 
     # Register update listener for options flow changes
@@ -355,6 +361,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     if unload_ok:
+        # Stop temperature change automation
+        temperature_change_automation = hass.data[DOMAIN][entry.entry_id].get("temperature_change_automation")
+        if temperature_change_automation:
+            await temperature_change_automation.stop()
+
         # Stop valve state automation
         valve_state_automation = hass.data[DOMAIN][entry.entry_id].get("valve_state_automation")
         if valve_state_automation:
