@@ -1,6 +1,0 @@
-# Test results
-results/
-
-# Test temporary files
-*.log
-*.tmp
