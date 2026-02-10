@@ -1,5 +1,28 @@
 # Fully Autonomous Zones with Hybrid Valve Control - Complete Solution Design
 
+## ⚠️ **IMPORTANT: Code Examples Disclaimer**
+
+**All Python code in this document is provided as EXAMPLES ONLY for illustrative purposes.**
+
+The implementation agent should:
+- ✅ **Use these examples for inspiration and understanding the logic**
+- ✅ **Follow Python best practices and Home Assistant standards**
+- ✅ **Write production-quality code with proper error handling**
+- ✅ **Apply modern Python idioms and type hints**
+- ❌ **NOT copy-paste code directly from this document**
+- ❌ **NOT use these examples as-is in production**
+
+The examples show the **intent and flow**, but production code requires:
+- Complete error handling
+- Type annotations
+- Proper async/await patterns
+- HA-specific best practices
+- Full test coverage
+- Documentation strings
+- Security considerations
+
+---
+
 ## Executive Summary
 
 This document describes a **complete from-scratch implementation** of an intelligent multi-zone HVAC climate control system for Home Assistant. The solution combines two sophisticated approaches:

@@ -1,5 +1,11 @@
 # Quick Reference - Fully Autonomous Zones with Hybrid Valve Control
 
+## ⚠️ **Code Examples Disclaimer**
+
+All code snippets are **EXAMPLES ONLY** - do not copy-paste. Implement using Python best practices.
+
+---
+
 ## At a Glance
 
 **What**: Multi-zone HVAC climate control for Home Assistant  

@@ -2,6 +2,12 @@
 
 Complete design documentation for building an intelligent multi-zone HVAC climate control system for Home Assistant **from scratch**.
 
+## ⚠️ **Important: Code Examples Notice**
+
+All Python code in documentation is **EXAMPLES ONLY** for illustration. Implementation agents must write production-quality code following Python and Home Assistant best practices, not copy-paste from docs.
+
+---
+
 ## 🎯 What This Is
 
 A from-ground-up implementation combining:
@@ -39,15 +45,22 @@ A from-ground-up implementation combining:
    - Debugging guide
    - **Follow this to implement**
 
+4. **[EVENT_LISTENERS.md](EVENT_LISTENERS.md)** (35KB) ⭐ **NEW**
+   - Complete event listeners table
+   - Detailed event flow diagrams
+   - What happens when each trigger fires
+   - Event interaction matrix
+   - **Critical for understanding event-driven architecture**
+
 ### For Understanding Hybrid Valve Logic
 
-4. **[OPTION3_HYBRID_VALVE_CONTROL.md](OPTION3_HYBRID_VALVE_CONTROL.md)** (30KB)
+5. **[OPTION3_HYBRID_VALVE_CONTROL.md](OPTION3_HYBRID_VALVE_CONTROL.md)** (30KB)
    - Two-tier decision algorithm
    - Comprehensive scenarios
    - Comparison with alternatives
    - **Deep dive on valve logic**
 
-5. **[OPTION3_BUSINESS_LOGIC.md](OPTION3_BUSINESS_LOGIC.md)** (15KB)
+6. **[OPTION3_BUSINESS_LOGIC.md](OPTION3_BUSINESS_LOGIC.md)** (15KB)
    - 13 detailed scenarios
    - State transition diagrams
    - Decision trees
@@ -55,7 +68,7 @@ A from-ground-up implementation combining:
 
 ### For Architecture Details
 
-6. **[OPTION3_ARCHITECTURE.md](OPTION3_ARCHITECTURE.md)** (34KB)
+7. **[OPTION3_ARCHITECTURE.md](OPTION3_ARCHITECTURE.md)** (34KB)
    - System architecture diagrams
    - Data flow sequences
    - Redis schema
@@ -64,13 +77,13 @@ A from-ground-up implementation combining:
 
 ### For Project Planning
 
-7. **[OPTION3_IMPLEMENTATION_PLAN.md](OPTION3_IMPLEMENTATION_PLAN.md)** (12KB)
+8. **[OPTION3_IMPLEMENTATION_PLAN.md](OPTION3_IMPLEMENTATION_PLAN.md)** (12KB)
    - 5-week timeline
    - Resource requirements
    - Risk management
    - **Project management view**
 
-8. **[OPTION3_README.md](OPTION3_README.md)** (11KB)
+9. **[OPTION3_README.md](OPTION3_README.md)** (11KB)
    - Navigation guide
    - Decision rationale
    - Q&A section
@@ -234,6 +247,7 @@ if max_deficit > deficit_threshold:
 | Document | Size | Lines | Purpose |
 |----------|------|-------|---------|
 | COMPLETE_SOLUTION_DESIGN | 43KB | 1283 | Full specification |
+| EVENT_LISTENERS | 35KB | 1049 | Event triggers & flows ⭐ NEW |
 | IMPLEMENTATION_GUIDE | 17KB | 569 | Step-by-step instructions |
 | OPTION3_ARCHITECTURE | 34KB | 780 | System architecture |
 | OPTION3_HYBRID_VALVE_CONTROL | 30KB | 845 | Valve logic details |
@@ -241,7 +255,7 @@ if max_deficit > deficit_threshold:
 | OPTION3_IMPLEMENTATION_PLAN | 12KB | 513 | Project plan |
 | OPTION3_README | 11KB | 412 | Navigation |
 | QUICK_REFERENCE | 9KB | 362 | Quick overview |
-| **Total** | **171KB** | **5395 lines** | **Complete specs** |
+| **Total** | **206KB** | **6444 lines** | **Complete specs** |
 
 ---
 

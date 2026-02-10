@@ -1,5 +1,21 @@
 # Implementation Guide - Fully Autonomous Zones with Hybrid Valve Control
 
+## ⚠️ **CODE EXAMPLES NOTICE**
+
+**All code examples in this guide are for ILLUSTRATION ONLY.**
+
+Implementation agents must:
+- ✅ Understand the logic and intent from examples
+- ✅ Write production-quality code following Python/HA standards
+- ✅ Implement proper error handling, type hints, and documentation
+- ✅ Apply Home Assistant best practices
+- ❌ Do NOT copy-paste code from this document
+- ❌ Do NOT use examples as production code
+
+Examples show **what to do**, production code shows **how to do it properly**.
+
+---
+
 ## Overview
 
 This guide provides step-by-step instructions for implementing the Fully Autonomous Zones with Hybrid Valve Control system from scratch.
