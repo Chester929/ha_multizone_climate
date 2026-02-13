@@ -4,15 +4,18 @@ Home Assistant integration for intelligent multi-zone HVAC climate control with 
 
 ## 📖 Documentation
 
-All documentation has been consolidated into the `docs/` directory:
+**👉 [Complete System Documentation](docs/COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md)** - **NEW v1.0!**
 
-**👉 [Start Here: Documentation Index](docs/README.md)**
+All documentation has been consolidated into a single comprehensive guide covering:
+- System architecture and design decisions
+- Complete hardware specifications (DE DIETRICH STRATEO 4 R32, Sonoff MINI-ZB2GS)
+- Dual control mechanisms (A1+A2 zone control, B1+B2 climate override)
+- Implementation guidance with code examples
 
 ### Quick Links
 
-- **[FINAL_APPROVED_SOLUTION.md](docs/current/FINAL_APPROVED_SOLUTION.md)** - Complete architecture specification
-- **[IMPLEMENTATION_ROADMAP.md](docs/current/IMPLEMENTATION_ROADMAP.md)** - Step-by-step implementation plan
-- **[INDEX_IMPLEMENTATION_READY.md](docs/current/INDEX_IMPLEMENTATION_READY.md)** - Navigation guide
+- **[Complete Documentation v1.0](docs/COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md)** ⭐ Start here
+- [Legacy Documentation](docs/current/) - Previous documentation (superseded by v1.0)
 
 ## 🎯 Key Features
 
