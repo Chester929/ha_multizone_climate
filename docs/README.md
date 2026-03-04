@@ -4,13 +4,13 @@ Welcome to the Multizone Climate Control documentation.
 
 ## 📖 Primary Documentation — Single Source of Truth
 
-**⭐ [COMPLETE SYSTEM DOCUMENTATION v1.2](COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md)**
+**⭐ [COMPLETE SYSTEM DOCUMENTATION v1.3](COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md)**
 
 This is the **single authoritative source of truth** for the multizone climate system.
 All architecture decisions, code examples, and implementation specifications live here.
 When any other document contradicts this one, **this document takes precedence**.
 
-### What's in v1.2?
+### What's in v1.3?
 - **Executive Summary** - Strategic overview, all 6 key decisions, quick start
 - **HVAC System Overview** - Hardware introduction (partial; remaining subsections planned)
 - **System Architecture** - Component design, data flows, state management
@@ -18,8 +18,15 @@ When any other document contradicts this one, **this document takes precedence**
   - **Dual Zone Control (A1+A2)** - Complete implementation guide
   - **Dual Climate Override (B1+B2)** - Complete implementation guide
 
-### v1.2 Bug-Fix Highlights
-v1.2 corrects critical and medium logic errors found in earlier versions:
+### v1.3 Correction Highlights
+v1.3 reverts an incorrect fix from v1.2:
+- ✅ **Temperature semantics corrected** — `climate.main_thermostat` is a room-temperature
+  thermostat; constraints restored to room-temperature range (15–30 °C, configurable via
+  `min_target_temp` / `max_target_temp`).  The v1.2 water-temperature ranges were wrong.
+- ✅ **Overtargeting concept documented** — main thermostat is set to the highest zone
+  target so the heat pump keeps running until the most-demanding zone is satisfied.
+
+### v1.2 Bug-Fix Highlights (still in effect)
 - ✅ B1 threshold standardised to **2 s** throughout (was inconsistently 1 s in places)
 - ✅ `get_available_fallback()` preference logic **fixed** (now prefers already-opening fallbacks)
 - ✅ `IndexError` guard added to `get_available_fallback()`
@@ -27,7 +34,6 @@ v1.2 corrects critical and medium logic errors found in earlier versions:
 - ✅ `valve_state_changed_at` timestamp responsibility clarified
 - ✅ A2 feedback-loop risk documented with `_system_valve_change` guard pattern
 - ✅ **Cooling mode algorithm added** to `_calculate_main_target()`
-- ✅ Temperature constraints fixed for heat-pump water temperatures (was wrong 15–30 °C)
 - ✅ Startup race condition fixed in `_is_manual_change()`
 - ✅ Edge Case 2 in §4.2.7 corrected (second rapid change is ignored, not re-detected)
 
@@ -35,14 +41,15 @@ v1.2 corrects critical and medium logic errors found in earlier versions:
 
 | Version | Date | Lines | Content |
 |---------|------|-------|---------|
-| **v1.2** | 2026-03-04 | ~3000 | ✅ Bug-fix release — critical and medium errors corrected |
+| **v1.3** | 2026-03-04 | ~3000 | ✅ Correction — v1.2 fix #8 reverted; room-temp semantics restored |
+| v1.2 | 2026-03-04 | ~3000 | Bug-fix release — critical and medium errors corrected |
 | v1.1 | 2026-02-19 | 2894 | B1+B2 dual override added |
 | v1.0 | 2026-02-19 | 2323 | Initial consolidation |
 
 ## 📚 Legacy Documentation (Superseded)
 
 The following documents are preserved for historical reference only.
-They have been superseded by the v1.2 comprehensive documentation.
+They have been superseded by the v1.3 comprehensive documentation.
 **Do not use these as implementation references** — use the primary document above.
 
 - **[current/](current/)** - Previous version 3.0 documentation (4 files)
@@ -57,7 +64,7 @@ They have been superseded by the v1.2 comprehensive documentation.
 
 ⚠️ **Note**: `current/INDEX_IMPLEMENTATION_READY.md` still refers to
 `FINAL_APPROVED_SOLUTION.md` as "⭐ MAIN DOCUMENT". This is outdated — the
-primary document is `COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md` v1.2.
+primary document is `COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md` v1.3.
 
 ## 🚀 Quick Start
 
@@ -75,8 +82,8 @@ primary document is `COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md` v1.2.
 
 ## 📋 Future Enhancements
 
-v1.2 provides complete dual mechanism technical specifications. Future versions will add:
-- **v1.3**: Additional Section IV sections (Configuration Schema, Entity Specifications)
+v1.3 provides complete dual mechanism technical specifications. Future versions will add:
+- **v1.4**: Additional Section IV sections (Configuration Schema, Entity Specifications)
 - **Business Logic**: 8 detailed scenarios (Section V)
 - **Implementation Plan**: Complete 5-phase roadmap (Section VI)
 - **Testing Strategy**: Unit and integration testing (Section VII)
@@ -85,6 +92,6 @@ v1.2 provides complete dual mechanism technical specifications. Future versions 
 
 ---
 
-**Current Version**: 1.2  
-**Status**: Sections I–IV.2 complete; critical and medium bugs corrected ✅  
+**Current Version**: 1.3  
+**Status**: Sections I–IV.2 complete; critical/medium bugs corrected; temperature semantics corrected ✅  
 **Last Updated**: 2026-03-04

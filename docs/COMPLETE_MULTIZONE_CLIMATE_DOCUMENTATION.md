@@ -1,10 +1,10 @@
 # Complete Multizone Climate Control System Documentation
 # Home Assistant Integration for DE DIETRICH Heat Pump System
 
-**Version**: 1.2 (Cleanup Release — critical and medium bugs corrected)  
+**Version**: 1.3 (Correction Release — incorrect fix #8 from v1.2 reverted)  
 **Date**: 2026-03-04  
 **Status**: ✅ Complete Foundation - Implementation Ready  
-**Document Type**: Comprehensive Technical Documentation (v1.2 - Complete Foundation with Dual Mechanisms A1+A2, B1+B2, bug fixes applied)  
+**Document Type**: Comprehensive Technical Documentation (v1.3 - Complete Foundation with Dual Mechanisms A1+A2, B1+B2, bug fixes applied)  
 **Current Lines**: ~3000 (Complete foundation with technical specifications)  
 **Future Expansion**: Business logic, implementation plan, testing sections planned
 
@@ -2598,100 +2598,111 @@ class MainClimateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Coordinator update failed: {e}")
     
     async def _calculate_main_target(self) -> float:
-        """Calculate main climate target (water temperature) from active zones.
-        
+        """Calculate the room-temperature setpoint for the main climate entity.
+
+        Overview — "Overtargeting"
+        ──────────────────────────
+        `climate.main_thermostat` is a **room-temperature thermostat** (not a
+        water-temperature controller).  Setting its target to, say, 24 °C tells
+        the heat pump to keep producing heat until its reference room reaches 24 °C.
+        Individual zone valves then regulate each room independently.
+
+        By setting the main thermostat to the **highest target temperature** across
+        all enabled zones the system "overtargets" — it ensures the heat pump keeps
+        running until the most-demanding zone is satisfied, while other zones that
+        reach their targets earlier just close their valves.
+
         Temperature semantics
         ─────────────────────
-        • `main_current_temp`           — heat pump water return temperature (°C),
-                                          read from climate.main_thermostat's
-                                          `current_temperature` attribute.
-        • `zone.current_temperature`    — zone room temperature (°C).
-        • `zone.target_temperature`     — desired room temperature for that zone (°C).
-        • `max_deficit`                 — maximum room-temperature shortfall across all
-                                          enabled zones (room degrees).
-        • `calculated_target`           — new water temperature setpoint (°C).
-        
-        The formula `water_target = water_current + max_room_deficit` is an intentional
-        approximation: increasing the water temperature by the same amount as the largest
-        room deficit drives the zone with the greatest need toward its target while the
-        others are managed by valve control.
-        
-        Temperature constraints use the DE DIETRICH STRATEO 4 R32 safe operating ranges
-        and should be made configurable via min_water_temp / max_water_temp in the
-        integration config for other heat-pump models.
-        
+        • `main_current_temp`        — current temperature reading of the main
+                                       thermostat (°C), i.e. the room temperature
+                                       at the thermostat's sensor location.
+        • `zone.current_temperature` — room temperature in each zone (°C).
+        • `zone.target_temperature`  — desired room temperature for that zone (°C).
+        • `max_deficit`              — largest room-temperature shortfall across all
+                                       enabled zones (°C).
+        • `calculated_target`        — new room-temperature **setpoint** for the
+                                       main climate entity (°C).  Always in the
+                                       typical room-temperature range (15–30 °C by
+                                       default, configurable via `min_target_temp` /
+                                       `max_target_temp`).
+
         Algorithm:
-        1. Get all enabled zones
-        2. Find max room-temperature deficit (heating) or surplus (cooling)
-        3. Calculate: water_target = water_current ± max_zone_deficit
-        4. Apply HVAC-mode-specific water-temperature constraints
-        
+        1. Get all enabled zones.
+        2. HEATING: find the zone with the largest temperature deficit
+           (target − current).  Add that deficit to the main thermostat's
+           current reading to get the overtargeted setpoint.
+        3. COOLING: find the zone with the largest temperature surplus
+           (current − target).  Subtract that surplus from the main
+           thermostat's current reading.
+        4. Apply configurable room-temperature constraints.
+
         Returns:
-            Calculated water temperature setpoint for main climate entity.
+            Calculated room-temperature setpoint for the main climate entity.
         """
-        # Get main climate current water temperature
+        # Get main climate current measured room temperature
         main_state = self.hass.states.get(self.main_climate_entity)
         if not main_state:
             raise UpdateFailed("Main climate entity not available")
-        
+
         main_current_temp = main_state.attributes.get("current_temperature")
         if main_current_temp is None:
             raise UpdateFailed("Main climate current temperature not available")
-        
+
         hvac_mode = main_state.state  # "heat", "cool", or "off"
-        
+
         # Get all enabled zones
         enabled_zones = [z for z in self.zones if z.enabled]
-        
+
         if not enabled_zones:
             _LOGGER.warning("No enabled zones, using fallback target")
             # Return safe default or last known value
             return self.last_target_value or 20.0
-        
+
+        # Configurable room-temperature constraints (default: typical room range)
+        min_rt = self.config.get("min_target_temp", 15.0)  # below any normal room setting
+        max_rt = self.config.get("max_target_temp", 30.0)  # above any normal room setting
+
         if hvac_mode == "heat":
-            # HEATING MODE: find zone with the largest temperature deficit
-            # (zone needs the most heat → drives the water temperature up)
+            # HEATING MODE: overtarget by the largest zone deficit.
+            # The most-demanding zone drives the setpoint; others close their
+            # valves when they reach their individual targets.
             max_deficit = 0
             for zone in enabled_zones:
                 zone_deficit = zone.target_temperature - zone.current_temperature
                 if zone_deficit > max_deficit:
                     max_deficit = zone_deficit
-            
+
             calculated_target = main_current_temp + max_deficit
-            
-            # Apply DE DIETRICH STRATEO 4 R32 heating constraints
-            # (configurable via min_water_temp / max_water_temp in config)
-            min_wt = self.config.get("min_water_temp", 20.0)   # heat pump minimum
-            max_wt = self.config.get("max_water_temp", 65.0)   # heat pump maximum
-            calculated_target = max(min_wt, min(max_wt, calculated_target))
-            
+
+            # Clamp to room-temperature range
+            calculated_target = max(min_rt, min(max_rt, calculated_target))
+
         elif hvac_mode == "cool":
-            # COOLING MODE: find zone with the largest temperature surplus
-            # (zone is hottest → drives the water temperature down)
+            # COOLING MODE: overtarget by the largest zone surplus (i.e. set a
+            # lower target so the heat pump keeps cooling until the hottest zone
+            # reaches its target).
             max_surplus = 0
             for zone in enabled_zones:
                 zone_surplus = zone.current_temperature - zone.target_temperature
                 if zone_surplus > max_surplus:
                     max_surplus = zone_surplus
-            
-            # Lower water temp by the surplus to provide more cooling
+
             calculated_target = main_current_temp - max_surplus
-            
-            # Apply DE DIETRICH STRATEO 4 R32 cooling constraints
-            min_wt = self.config.get("min_water_temp", 7.0)    # freeze protection
-            max_wt = self.config.get("max_water_temp", 25.0)   # cooling upper limit
-            calculated_target = max(min_wt, min(max_wt, calculated_target))
-            
+
+            # Clamp to room-temperature range
+            calculated_target = max(min_rt, min(max_rt, calculated_target))
+
         else:
             # HVAC off or unknown mode — use last known value as safe default
             _LOGGER.warning(f"Unexpected hvac_mode '{hvac_mode}', keeping last target")
             return self.last_target_value or 20.0
-        
+
         _LOGGER.debug(
             f"Calculated main target: {calculated_target}°C "
-            f"(water_current: {main_current_temp}°C, hvac_mode: {hvac_mode})"
+            f"(current_room: {main_current_temp}°C, hvac_mode: {hvac_mode})"
         )
-        
+
         return round(calculated_target, 1)
 ```
 
@@ -2991,9 +3002,58 @@ No new sections were added; existing specifications were corrected.
 | 5 | 🟠 Medium | **`valve_state_changed_at` contract clarified** — `open_valve()` is responsible for setting the timestamp; `_calculate_remaining_delay()` only reads it |
 | 6 | 🟠 Medium | **A2 feedback-loop risk documented** — added `_system_valve_change` guard pattern to prevent the coordinator's own switch calls from triggering zone auto-disable |
 | 7 | 🟠 Medium | **Cooling mode algorithm added** to `_calculate_main_target()` |
-| 8 | 🟠 Medium | **Temperature constraint fixed** — replaced hard-coded `max(15, min(30, …))` (wrong for heat-pump water temperatures) with HVAC-mode-specific constraints matching DE DIETRICH STRATEO 4 R32 specs; made configurable via `min_water_temp` / `max_water_temp` |
+| 8 | 🟠 Medium | **Temperature constraint** — the original `max(15, min(30, …))` room-temperature range was left as-is (v1.3 corrects the mistaken v1.2 change — see below) |
 | 9 | 🟠 Medium | **Startup race condition fixed** in `_is_manual_change()` — before first coordinator cycle (`last_coordinator_update is None`) B1 now stays dormant instead of treating state-restore events as manual overrides |
 | 10 | 🟡 Low | **Edge Case 2 corrected** in §4.2.7 — documented that the second rapid manual change (within 2 s) is *ignored* by B1 (not re-detected as manual); B2 corrects on the next cycle |
+
+### What Changed in v1.3 (this release)
+
+This is a **correction release** that reverts an incorrect fix introduced in v1.2.
+
+#### Fix Applied
+
+| # | Severity | Description |
+|---|----------|-------------|
+| 11 | 🔴 Critical | **v1.2 fix #8 reverted — temperature semantics corrected** — `climate.main_thermostat` is a **room-temperature thermostat**, not a water-temperature controller.  The original `max(15, min(30, …))` room-temperature range was correct.  The v1.2 change to heat-pump water-temperature ranges (20–65 °C for heating, 7–25 °C for cooling) was wrong and has been removed.  Full details below. |
+
+#### Temperature Semantics — Authoritative Explanation
+
+`climate.main_thermostat` exposes a **room-temperature setpoint** (typical range
+15–30 °C).  When the integration calls `climate.set_temperature` with a value of
+24 °C, it is telling the heat pump to target a 24 °C **room** temperature.  The heat
+pump's internal controls then manage its own water temperature autonomously.
+
+The integration never directly controls water temperature.  The constraints on the
+calculated setpoint must therefore use the **room-temperature range**, not the
+heat-pump water-temperature range.
+
+**"Overtargeting"** (design intent): the main thermostat is deliberately set to the
+*highest* target temperature across all enabled zones.  This ensures the heat pump
+keeps running until the most-demanding zone reaches its target.  Zones that reach
+their individual targets earlier simply close their valves; the remaining open zones
+continue receiving heat.
+
+Example:
+```
+Zone targets:  Bedroom 22 °C  |  Kitchen 24 °C  |  Living Room 21 °C
+Zones enabled: all three
+
+main thermostat setpoint = 24 °C  (max zone target — overtargeted)
+
+Result:
+  • Heat pump runs until main thermostat room reads 24 °C.
+  • Living room valve closes once 21 °C is reached.
+  • Bedroom valve closes once 22 °C is reached.
+  • Kitchen valve stays open until 24 °C is reached.
+  • Heat pump then idles.
+```
+
+Constraints are now configurable via `min_target_temp` / `max_target_temp`
+(default 15 °C / 30 °C) to cover any room-temperature scenario without
+hard-coding DE DIETRICH–specific water-temperature limits.
+
+---
+
 
 ### Source Documentation
 This document consolidates content from:
@@ -3004,19 +3064,19 @@ This document consolidates content from:
 - Hardware research for DE DIETRICH STRATEO 4 R32 and Sonoff MINI-ZB2GS
 
 ### Planned for Future Versions
-- **v1.3**: Complete Section IV (4.3 Configuration Schema, 4.4 Entity Specifications)
-- **v1.4**: Section V (8 Business Logic Scenarios with diagrams)
-- **v1.5**: Section VI (5-Phase Implementation Plan)
-- **v1.6**: Section VII-VIII (Testing Strategy, Security & Safety)
-- **v1.7**: Section IX-X (Developer Guide, Appendices)
+- **v1.4**: Complete Section IV (4.3 Configuration Schema, 4.4 Entity Specifications)
+- **v1.5**: Section V (8 Business Logic Scenarios with diagrams)
+- **v1.6**: Section VI (5-Phase Implementation Plan)
+- **v1.7**: Section VII-VIII (Testing Strategy, Security & Safety)
+- **v1.8**: Section IX-X (Developer Guide, Appendices)
 
 ---
 
-**Document Version**: 1.2  
-**Status**: Sections I–IV.2 complete; critical and medium bugs corrected  
+**Document Version**: 1.3  
+**Status**: Sections I–IV.2 complete; critical and medium bugs corrected; v1.2 fix #8 reverted  
 **Implementation Ready**: Yes  
 **Next Steps**: Begin implementation of dual mechanisms (A1+A2, B1+B2) following Section IV technical specifications
 
 ---
-**END OF DOCUMENT v1.2**
+**END OF DOCUMENT v1.3**
 

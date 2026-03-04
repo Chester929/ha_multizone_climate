@@ -2,7 +2,7 @@
 
 > ⚠️ **SUPERSEDED** — This document has been superseded by
 > [`docs/COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md`](../COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md)
-> (v1.2), which is the **single source of truth** for all architecture decisions, code
+> (v1.3), which is the **single source of truth** for all architecture decisions, code
 > examples, and implementation specifications.  This file is preserved for historical
 > reference only.
 >
@@ -11,6 +11,11 @@
 > - `_delayed_disable()` uses `asyncio.create_task()` (must be `hass.async_create_task()`)
 > - `_get_available_fallback()` preference is inverted (see primary doc for correct logic)
 > - `_get_available_fallback()` lacks an `IndexError` guard
+> - `_calculate_main_target()`: `climate.main_thermostat` is a room-temperature
+>   thermostat; the correct constraint range is 15–30 °C (room temperature), not
+>   heat-pump water-temperature ranges.  Config keys are `min_target_temp` /
+>   `max_target_temp`.  See §4.2.3 in the primary document for the authoritative
+>   "overtargeting" explanation.
 
 ---
 
