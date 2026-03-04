@@ -1,5 +1,24 @@
 # FINAL APPROVED SOLUTION - Implementation Ready
 
+> ⚠️ **SUPERSEDED** — This document has been superseded by
+> [`docs/COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md`](../COMPLETE_MULTIZONE_CLIMATE_DOCUMENTATION.md)
+> (v1.3), which is the **single source of truth** for all architecture decisions, code
+> examples, and implementation specifications.  This file is preserved for historical
+> reference only.
+>
+> Known bugs in this file that are corrected in the primary document:
+> - B1 threshold uses `> 1s` (correct value is `> 2s`)
+> - `_delayed_disable()` uses `asyncio.create_task()` (must be `hass.async_create_task()`)
+> - `_get_available_fallback()` preference is inverted (see primary doc for correct logic)
+> - `_get_available_fallback()` lacks an `IndexError` guard
+> - `_calculate_main_target()`: `climate.main_thermostat` is a room-temperature
+>   thermostat; the correct constraint range is 15–30 °C (room temperature), not
+>   heat-pump water-temperature ranges.  Config keys are `min_target_temp` /
+>   `max_target_temp`.  See §4.2.3 in the primary document for the authoritative
+>   "overtargeting" explanation.
+
+---
+
 ## 🎉 Solution Approved
 
 **Date**: 2026-02-11  
@@ -230,8 +249,9 @@ async def _main_climate_target_changed(self, event):
     # Check if this is an external/manual change
     time_diff = (change_time - self.last_coordinator_update).total_seconds()
     
-    # If change occurred > 1s after last coordinator update, it's manual
-    if time_diff > 1 and new_target != self.last_target_value:
+    # If change occurred > 2s after last coordinator update, it's manual
+    # (2s threshold accounts for event-processing delays; see primary doc §4.2.4)
+    if time_diff > 2 and new_target != self.last_target_value:
         _LOGGER.warning(
             f"Manual main climate change detected: {new_target}°C. "
             f"Overriding to calculated value..."
@@ -520,8 +540,8 @@ async def _delayed_disable(self):
         f"{self.name} will be disabled in {delay}s after {fallback_zone.name} valve opens"
     )
     
-    # Create timer
-    self.pending_disable_timer = asyncio.create_task(
+    # Create timer — MUST use hass.async_create_task() in HA callback context
+    self.pending_disable_timer = self.hass.async_create_task(
         self._execute_delayed_disable(delay)
     )
 
@@ -635,22 +655,43 @@ async def _update_valve_status(self, new_status):
 
 ```python
 def _get_available_fallback(self):
-    """Get an available fallback zone to open."""
+    """Get an available fallback zone to open.
+    
+    Selection priority (see primary doc §3.2 for full rationale):
+    1. Fallback already opening → benefits from remaining-time calculation.
+    2. Fallback already fully open → already safe, no extra delay.
+    3. Any other enabled fallback.
+    4. If none enabled, enable the first configured fallback.
+    
+    Raises:
+        RuntimeError: Raised immediately at function entry if no fallback zones
+            are configured (i.e. `is_fallback=true` is not set on any zone).
+    """
     
     # Get all fallback zones
     fallback_zones = [z for z in self.all_zones if z.is_fallback]
     
+    if not fallback_zones:
+        raise RuntimeError(
+            "No fallback zones configured. "
+            "At least one zone must have is_fallback=true."
+        )
+    
     # Prefer already enabled fallbacks
     enabled_fallbacks = [z for z in fallback_zones if z.enabled]
     if enabled_fallbacks:
-        # Prefer one that's not already open
+        # Priority 1: already opening (remaining-time optimisation)
         for fb in enabled_fallbacks:
-            if fb.valve_status not in ["open", "opening"]:
+            if fb.valve_status == "opening":
                 return fb
-        # All enabled fallbacks are open, return first
+        # Priority 2: fully open
+        for fb in enabled_fallbacks:
+            if fb.valve_status == "open":
+                return fb
+        # Priority 3: any other enabled fallback (will start opening)
         return enabled_fallbacks[0]
     
-    # No enabled fallbacks, enable the first one
+    # No enabled fallbacks — enable the first configured one
     fallback = fallback_zones[0]
     fallback.enabled = True
     return fallback
