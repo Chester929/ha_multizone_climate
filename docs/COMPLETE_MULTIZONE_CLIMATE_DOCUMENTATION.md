@@ -1,11 +1,11 @@
 # Complete Multizone Climate Control System Documentation
 # Home Assistant Integration for DE DIETRICH Heat Pump System
 
-**Version**: 1.0  
-**Date**: 2026-02-19  
+**Version**: 1.2 (Cleanup Release — critical and medium bugs corrected)  
+**Date**: 2026-03-04  
 **Status**: ✅ Complete Foundation - Implementation Ready  
-**Document Type**: Comprehensive Technical Documentation (v1.0 - Complete Foundation with Dual Mechanisms A1+A2, B1+B2)  
-**Current Lines**: ~2900 (Complete foundation with technical specifications)  
+**Document Type**: Comprehensive Technical Documentation (v1.2 - Complete Foundation with Dual Mechanisms A1+A2, B1+B2, bug fixes applied)  
+**Current Lines**: ~3000 (Complete foundation with technical specifications)  
 **Future Expansion**: Business logic, implementation plan, testing sections planned
 
 ---
@@ -60,7 +60,7 @@
    - 4.4 Entity Specifications
    - 4.5 Code Examples
 
-**V. BUSINESS LOGIC & SCENARIOS** _(Lines 4551-5750)_
+**V. BUSINESS LOGIC & SCENARIOS** _(Planned — not yet written)_
    - 5.1 Scenario 1: Normal Zone Disable
    - 5.2 Scenario 2: Delayed Disable (Last Valve)
    - 5.3 Scenario 3: Fallback Already Opening
@@ -70,40 +70,44 @@
    - 5.7 Scenario 7: Main Climate Manual Change (B1)
    - 5.8 Scenario 8: Multiple Zones Interaction
 
-**VI. IMPLEMENTATION PLAN** _(Lines 5751-6550)_
+**VI. IMPLEMENTATION PLAN** _(Planned — not yet written)_
    - 6.1 Phase 1: Main Climate Override (B1+B2)
    - 6.2 Phase 2: Zone ON/OFF Control (A1+A2)
    - 6.3 Phase 3: Valve Status Tracking
    - 6.4 Phase 4: Algorithm Updates
    - 6.5 Phase 5: Testing & Integration
 
-**VII. TESTING STRATEGY** _(Lines 6551-7150)_
+**VII. TESTING STRATEGY** _(Planned — not yet written)_
    - 7.1 Unit Test Plan
    - 7.2 Integration Test Plan
    - 7.3 Test Cases with Expected I/O
    - 7.4 Manual Testing Checklist
    - 7.5 Performance Benchmarks
 
-**VIII. SECURITY & SAFETY** _(Lines 7151-7750)_
+**VIII. SECURITY & SAFETY** _(Planned — not yet written)_
    - 8.1 Safety Mechanisms
    - 8.2 Configuration Validation
    - 8.3 Error Handling
    - 8.4 State Integrity
    - 8.5 Event Loop Prevention
 
-**IX. DEVELOPER GUIDE** _(Lines 7751-8550)_
+**IX. DEVELOPER GUIDE** _(Planned — not yet written)_
    - 9.1 Home Assistant Best Practices
    - 9.2 Python Async Patterns
    - 9.3 Redis Integration
    - 9.4 Debugging Guide
    - 9.5 Common Pitfalls
 
-**X. APPENDICES** _(Lines 8551-9350)_
+**X. APPENDICES** _(Planned — not yet written)_
    - 10.1 Glossary of Terms
    - 10.2 Configuration Examples
    - 10.3 API Reference
    - 10.4 Troubleshooting Guide
    - 10.5 FAQ
+
+> ⚠️ **Note**: Sections V–X are planned for future documentation releases. Only Sections I–IV are
+> currently present in this document. The `docs/current/IMPLEMENTATION_ROADMAP.md` provides the
+> implementation plan (Section VI equivalent) in the legacy documentation.
 
 ---
 
@@ -688,8 +692,11 @@ zones:
 
 ---
 
-**END OF SECTION II - HVAC SYSTEM OVERVIEW**
-**Current Line Count: ~750 (partial completion for file size)**
+**END OF SECTION II - HVAC SYSTEM OVERVIEW (Partial)**
+**⚠️ Status: Sections 2.1.1 (Heat Pump) and 2.1.2 (Valve Switches) are complete.
+Sections 2.2 System Architecture Diagram, 2.3 additional Heat Pump Specs, 2.4 Zone
+Configuration, and 2.5 Communication Protocols are planned for a future documentation
+release.**
 **Next Section: III. SYSTEM ARCHITECTURE**
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -934,13 +941,36 @@ async def cancel_pending_disable(self):
 ```
 
 **Event Listeners (A2 - Event-Driven Control)**:
+
+> ⚠️ **A2 Feedback-Loop Risk**: The same `state_changed` event fires regardless of whether
+> the valve switch was changed by a user or by the system itself (e.g., coordinator closing
+> a valve for an overheated zone).  Without a guard, A2 could auto-disable a zone that the
+> system only meant to throttle temporarily.
+>
+> **Mitigation**: The implementation MUST distinguish system-initiated switch changes from
+> user-initiated ones.  The recommended approach is to set a short-lived flag
+> (`self._system_valve_change = True`) immediately before any system call to
+> `switch.turn_on/off`, and check + clear that flag at the top of
+> `valve_switch_state_changed`.  Events arriving while the flag is set are silently ignored.
+
 ```python
 async def async_added_to_hass(self):
     """Subscribe to valve switch state changes."""
     
     @callback
     def valve_switch_state_changed(event):
-        """Handle valve switch events (A2)."""
+        """Handle valve switch events (A2).
+        
+        NOTE: This fires for BOTH user-initiated and system-initiated switch changes.
+        The _system_valve_change flag (set by system code before calling switch services)
+        is used to skip events that originated from the system itself, preventing an
+        unintended zone-disable when the coordinator closes a valve for temperature control.
+        """
+        # Skip if this change was initiated by the system
+        if self._system_valve_change:
+            self._system_valve_change = False
+            return
+        
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
         
@@ -1087,8 +1117,9 @@ async def async_added_to_hass(self):
         # Check if this is an external/manual change
         time_diff = (change_time - self.last_coordinator_update).total_seconds()
         
-        # If > 1s after last coordinator update AND different value
-        if time_diff > 1 and new_target != self.last_target_value:
+        # If > 2s after last coordinator update AND different value
+        # (2s threshold accounts for event-processing delays; see §4.2.4 for rationale)
+        if time_diff > 2 and new_target != self.last_target_value:
             _LOGGER.warning(
                 f"Manual main climate change detected: {new_target}°C. "
                 f"Overriding to calculated value..."
@@ -1213,20 +1244,40 @@ class SafetyCoordinator:
         return True, "ok"
     
     def get_available_fallback(self):
-        """Get fallback zone to use for delayed disable."""
+        """Get fallback zone to use for delayed disable.
+        
+        Selection priority:
+        1. Prefer an already-opening fallback zone (to benefit from remaining-time
+           calculation and avoid waiting the full valve_delay again).
+        2. Fall back to any other enabled fallback.
+        3. If no fallbacks are enabled, enable the first configured fallback.
+        
+        Raises:
+            RuntimeError: If no fallback zones are configured at all.
+        """
         fallback_zones = [z for z in self.zones if z.is_fallback]
+        
+        if not fallback_zones:
+            raise RuntimeError(
+                "No fallback zones configured. "
+                "At least one zone must have is_fallback=true."
+            )
         
         # Prefer already enabled fallbacks
         enabled_fallbacks = [z for z in fallback_zones if z.enabled]
         if enabled_fallbacks:
-            # Prefer one that's not open
+            # Priority: prefer one that is already opening (remaining-time optimisation)
             for fb in enabled_fallbacks:
-                if fb.valve_status not in ["open", "opening"]:
+                if fb.valve_status in ["opening"]:
                     return fb
-            # All open, return first
+            # No already-opening fallback; prefer one that is fully open next
+            for fb in enabled_fallbacks:
+                if fb.valve_status == "open":
+                    return fb
+            # All enabled fallbacks are closed; return first (will start opening)
             return enabled_fallbacks[0]
         
-        # No enabled fallbacks, enable first one
+        # No enabled fallbacks — enable the first configured one
         fallback = fallback_zones[0]
         fallback.enabled = True
         return fallback
@@ -1293,7 +1344,7 @@ USER ACTION: climate.turn_off(bedroom)
     ├─► T=0.08s  Schedule delayed disable
     │            bedroom.pending_disable = True
     │            bedroom.pending_disable_expires_at = now() + remaining
-    │            bedroom.pending_disable_timer = asyncio.create_task(
+    │            bedroom.pending_disable_timer = hass.async_create_task(
     │                sleep(remaining) then disable()
     │            )
     │
@@ -1392,7 +1443,7 @@ USER ACTION: Manually changes main thermostat to 45°C
 │
 ├─► T=0.17s  Check if external change (timestamp check)
 │            time_diff = change_time - last_coordinator_update
-│            time_diff = 5.2s (> 1s threshold)
+│            time_diff = 5.2s (> 2s threshold)
 │            
 │            value_diff = new_target != last_target_value
 │            value_diff = 45°C != 40°C (True)
@@ -1437,7 +1488,7 @@ TOTAL RESPONSE TIME: 300ms (< 1s requirement ✅)
 Why no infinite loop?
 - T=0.25s: Setting temperature triggers another state_changed event
 - T=0.30s: Event listener checks timestamp
-- time_diff = 0.30s - 0.20s = 0.10s (< 1s threshold)
+- time_diff = 0.30s - 0.20s = 0.10s (< 2s threshold)
 - Event listener: "This is a coordinator change, ignore"
 - No override triggered ✅
 ```
@@ -1478,7 +1529,7 @@ TRIGGER: Coordinator update interval (30s)
 │
 ├─► T=0.55s  B1 event listener checks
 │            change_time - last_coordinator_update = 0.15s
-│            0.15s < 1s threshold
+│            0.15s < 2s threshold
 │            CONCLUSION: Coordinator change, ignore ✅
 │
 ├─► T=0.60s  Update valve states
@@ -1761,8 +1812,9 @@ def main_climate_target_changed(event):
     # Check if external/manual change (timestamp check)
     time_diff = (change_time - last_coordinator_update).total_seconds()
     
-    # If > 1s since last coordinator update AND value changed
-    if time_diff > 1 and new_target != last_target_value:
+    # If > 2s since last coordinator update AND value changed
+    # (2s threshold accounts for event-processing delays; see §4.2.4 for rationale)
+    if time_diff > 2 and new_target != last_target_value:
         # External change detected, override immediately
         _LOGGER.warning(
             f"Manual change to {new_target}°C detected, overriding..."
@@ -1771,7 +1823,7 @@ def main_climate_target_changed(event):
             coordinator._immediate_override(new_target)
         )
     else:
-        # Coordinator change or within 1s window, ignore
+        # Coordinator change or within 2s window, ignore
         pass
 
 # Register listener
@@ -2116,7 +2168,11 @@ async def _delayed_disable(self):
         )
         return
     
-    # Step 2: Open fallback valve
+    # Step 2: Open fallback valve.
+    # IMPORTANT: open_valve() MUST set fallback_zone.valve_state_changed_at = datetime.now(timezone.utc)
+    # so that _calculate_remaining_delay() can compute how much time has already elapsed.
+    # If the valve is already opening (from a previous operation), valve_state_changed_at
+    # will already be set and remaining time will be reduced accordingly.
     _LOGGER.info(f"Opening fallback zone {fallback_zone.name} valve")
     await fallback_zone.open_valve()
     
@@ -2152,7 +2208,12 @@ async def _delayed_disable(self):
     self.async_write_ha_state()
 
 async def _calculate_remaining_delay(self, fallback_zone):
-    """Calculate remaining delay based on when fallback valve started opening."""
+    """Calculate remaining delay based on when fallback valve started opening.
+    
+    PRECONDITION: open_valve() must have already been called on fallback_zone and
+    must have set fallback_zone.valve_state_changed_at to the moment the valve
+    started opening.  This function ONLY reads that timestamp; it does NOT set it.
+    """
     
     # Get fallback zone's valve delay configuration
     full_delay = fallback_zone.valve_delay
@@ -2170,11 +2231,11 @@ async def _calculate_remaining_delay(self, fallback_zone):
         
         return remaining
     else:
-        # Valve just started opening
-        fallback_zone.valve_state_changed_at = datetime.now(timezone.utc)
-        _LOGGER.info(
-            f"Fallback {fallback_zone.name} just started opening, "
-            f"waiting full {full_delay}s"
+        # valve_state_changed_at was not set by open_valve() — log a warning and
+        # fall back to the full delay so we never wait too short a time.
+        _LOGGER.warning(
+            f"Fallback {fallback_zone.name}: valve_state_changed_at not set by open_valve(). "
+            f"Using full valve_delay={full_delay}s as a safe default."
         )
         return full_delay
 
@@ -2372,14 +2433,19 @@ class MainClimateCoordinator(DataUpdateCoordinator):
         """Determine if change is manual (external) or from coordinator.
         
         Logic:
-        - If no previous coordinator update: treat as manual
+        - If no previous coordinator update (startup): treat as system init, NOT manual.
+          Reason: before the coordinator runs its first cycle the integration has not yet
+          established a baseline value.  Treating startup state-restore events as "manual"
+          would cause spurious overrides before the system is fully initialised.
         - If change value matches last coordinator value: not manual (B2)
         - If change occurred within 2s of coordinator update: not manual (B2)
         - Otherwise: manual change (B1)
         """
-        # First run - no coordinator update yet
+        # First run — coordinator has not yet set any value.
+        # Stay dormant until the coordinator establishes a baseline (B2 first cycle).
         if self.last_coordinator_update is None:
-            return True
+            _LOGGER.debug("B1: No coordinator baseline yet (startup). Skipping override detection.")
+            return False
         
         # Check if value matches last coordinator set value
         if new_target == self.last_target_value:
@@ -2531,18 +2597,38 @@ class MainClimateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Coordinator update failed: {e}")
     
     async def _calculate_main_target(self) -> float:
-        """Calculate main climate target from active zones.
+        """Calculate main climate target (water temperature) from active zones.
+        
+        Temperature semantics
+        ─────────────────────
+        • `main_current_temp`           — heat pump water return temperature (°C),
+                                          read from climate.main_thermostat's
+                                          `current_temperature` attribute.
+        • `zone.current_temperature`    — zone room temperature (°C).
+        • `zone.target_temperature`     — desired room temperature for that zone (°C).
+        • `max_deficit`                 — maximum room-temperature shortfall across all
+                                          enabled zones (room degrees).
+        • `calculated_target`           — new water temperature setpoint (°C).
+        
+        The formula `water_target = water_current + max_room_deficit` is an intentional
+        approximation: increasing the water temperature by the same amount as the largest
+        room deficit drives the zone with the greatest need toward its target while the
+        others are managed by valve control.
+        
+        Temperature constraints use the DE DIETRICH STRATEO 4 R32 safe operating ranges
+        and should be made configurable via min_water_temp / max_water_temp in the
+        integration config for other heat-pump models.
         
         Algorithm:
         1. Get all enabled zones
-        2. Find max deficit among zones (heating mode)
-        3. Calculate: main_target = main_current_temp + max_deficit
-        4. Apply constraints (min/max limits)
+        2. Find max room-temperature deficit (heating) or surplus (cooling)
+        3. Calculate: water_target = water_current ± max_zone_deficit
+        4. Apply HVAC-mode-specific water-temperature constraints
         
         Returns:
-            Calculated target temperature for main climate
+            Calculated water temperature setpoint for main climate entity.
         """
-        # Get main climate current temperature
+        # Get main climate current water temperature
         main_state = self.hass.states.get(self.main_climate_entity)
         if not main_state:
             raise UpdateFailed("Main climate entity not available")
@@ -2550,6 +2636,8 @@ class MainClimateCoordinator(DataUpdateCoordinator):
         main_current_temp = main_state.attributes.get("current_temperature")
         if main_current_temp is None:
             raise UpdateFailed("Main climate current temperature not available")
+        
+        hvac_mode = main_state.state  # "heat", "cool", or "off"
         
         # Get all enabled zones
         enabled_zones = [z for z in self.zones if z.enabled]
@@ -2559,22 +2647,48 @@ class MainClimateCoordinator(DataUpdateCoordinator):
             # Return safe default or last known value
             return self.last_target_value or 20.0
         
-        # Calculate max deficit (heating mode)
-        max_deficit = 0
-        for zone in enabled_zones:
-            zone_deficit = zone.target_temperature - zone.current_temperature
-            if zone_deficit > max_deficit:
-                max_deficit = zone_deficit
-        
-        # Main target = current + max deficit
-        calculated_target = main_current_temp + max_deficit
-        
-        # Apply constraints
-        calculated_target = max(15.0, min(30.0, calculated_target))
+        if hvac_mode == "heat":
+            # HEATING MODE: find zone with the largest temperature deficit
+            # (zone needs the most heat → drives the water temperature up)
+            max_deficit = 0
+            for zone in enabled_zones:
+                zone_deficit = zone.target_temperature - zone.current_temperature
+                if zone_deficit > max_deficit:
+                    max_deficit = zone_deficit
+            
+            calculated_target = main_current_temp + max_deficit
+            
+            # Apply DE DIETRICH STRATEO 4 R32 heating constraints
+            # (configurable via min_water_temp / max_water_temp in config)
+            min_wt = self.config.get("min_water_temp", 20.0)   # heat pump minimum
+            max_wt = self.config.get("max_water_temp", 65.0)   # heat pump maximum
+            calculated_target = max(min_wt, min(max_wt, calculated_target))
+            
+        elif hvac_mode == "cool":
+            # COOLING MODE: find zone with the largest temperature surplus
+            # (zone is hottest → drives the water temperature down)
+            max_surplus = 0
+            for zone in enabled_zones:
+                zone_surplus = zone.current_temperature - zone.target_temperature
+                if zone_surplus > max_surplus:
+                    max_surplus = zone_surplus
+            
+            # Lower water temp by the surplus to provide more cooling
+            calculated_target = main_current_temp - max_surplus
+            
+            # Apply DE DIETRICH STRATEO 4 R32 cooling constraints
+            min_wt = self.config.get("min_water_temp", 7.0)    # freeze protection
+            max_wt = self.config.get("max_water_temp", 25.0)   # cooling upper limit
+            calculated_target = max(min_wt, min(max_wt, calculated_target))
+            
+        else:
+            # HVAC off or unknown mode — use last known value as safe default
+            _LOGGER.warning(f"Unexpected hvac_mode '{hvac_mode}', keeping last target")
+            return self.last_target_value or 20.0
         
         _LOGGER.debug(
             f"Calculated main target: {calculated_target}°C "
-            f"(current: {main_current_temp}°C, max_deficit: {max_deficit}°C)"
+            f"(water_current: {main_current_temp}°C, hvac_mode: {hvac_mode})"
         )
         
         return round(calculated_target, 1)
@@ -2784,13 +2898,30 @@ except Exception:
     # B1 will detect and override correctly ✅
 
 # Edge Case 2: Rapid successive manual changes
+#
+# Scenario: user changes twice within 1 second of B1's own override.
+#
+# What _is_manual_change() actually does:
+#   time_diff <= 2  →  return False  (NOT manual, ignored)
+#
+# Therefore the SECOND rapid change is silently ignored by B1 because
+# it arrives within 2s of B1's own override timestamp.
+# The system does NOT detect it as a second manual change.
+#
+# Consequence: If the user makes another manual change within 2 seconds
+# of B1's override, that change will be silently swallowed.  On the NEXT
+# coordinator cycle (≤ 30s) B2 will correct any residual discrepancy.
+#
+# This is acceptable because the 2s window is the intended anti-loop guard.
+# The user sees a notification from the first B1 override; a second change
+# within 2s is an extremely rare edge case.
 User changes: 25°C at 10:00:00
 User changes: 26°C at 10:00:01
-→ B1 overrides first: 10:00:00.5 → 22.5°C
-→ B1 receives second: 10:00:01
-→ B1 checks: 01 - 00.5 = 0.5s < 2s
-→ Could be from previous override, but value different
-→ B1 detects manual, overrides again ✅
+→ B1 overrides first:  10:00:00.5 → sets 22.5°C, marks last_update=10:00:00.5
+→ Second change event arrives at 10:00:01
+→ B1 checks: time_diff = 10:00:01 - 10:00:00.5 = 0.5s ≤ 2s
+→ _is_manual_change returns False → B1 ignores second change
+→ B2 will correct on next cycle (≤ 30s) ✅
 
 # Edge Case 3: Event processing delays
 B2 marks: 10:00:00
@@ -2821,74 +2952,70 @@ class NotificationThrottle:
 
 ---
 
+## DOCUMENT STATUS - VERSION 1.2 (Cleanup Release)
 
----
+**Completion Status**: Sections I–IV.2 complete, known bugs corrected ✅
 
-## DOCUMENT STATUS - VERSION 1.1
+### Sections Present in This Document
 
-**Completion Status**: Technical Specifications Complete ✅
+| Section | Status | Notes |
+|---------|--------|-------|
+| **I. Executive Summary** | ✅ Complete | All 6 key decisions, quick start |
+| **II. HVAC System Overview** | ⚠️ Partial | Hardware intro complete; §2.2–2.5 not yet written |
+| **III. System Architecture** | ✅ Complete | Component arch, data flows, state management |
+| **IV.1 Dual Zone Control (A1+A2)** | ✅ Complete | Code examples, delayed disable |
+| **IV.2 Dual Climate Override (B1+B2)** | ✅ Complete | Code examples, timestamp tracking |
+| **IV.3 Configuration Schema** | ⏳ Planned | |
+| **IV.4 Entity Specifications** | ⏳ Planned | |
+| **V. Business Logic & Scenarios** | ⏳ Planned | 8 scenarios |
+| **VI. Implementation Plan** | ⏳ Planned | See legacy `IMPLEMENTATION_ROADMAP.md` |
+| **VII. Testing Strategy** | ⏳ Planned | |
+| **VIII. Security & Safety** | ⏳ Planned | |
+| **IX. Developer Guide** | ⏳ Planned | |
+| **X. Appendices** | ⏳ Planned | |
 
-### Sections Included in v1.1
-- ✅ **Section I: Executive Summary** - Complete strategic overview, all 6 key decisions, quick start
-- ✅ **Section II: HVAC System Overview** - Complete hardware specifications (STRATEO 4 R32, Sonoff MINI-ZB2GS, sensors)
-- ✅ **Section III: System Architecture** - Complete component architecture, data flows, state management
-- ✅ **Section IV: Technical Specifications** - **COMPLETE**
-  - ✅ 4.1 Dual Zone Control (A1+A2) - Complete implementation with code
-  - ✅ 4.2 Dual Climate Override (B1+B2) - Complete implementation with code
-  - ⏳ 4.3 Configuration Schema (planned for v1.2)
-  - ⏳ 4.4 Entity Specifications (planned for v1.2)
+### What Changed in v1.2 (this release)
 
-### What's New in v1.1
-**Added Section IV.2: Dual Main Climate Override (B1+B2)** - ~650 lines
-- Complete B1 (Immediate Event Listener) implementation
-- Complete B2 (Regular Coordinator Updates) implementation  
-- Timestamp tracking mechanism for event loop prevention
-- Integration examples and safety considerations
-- Performance characteristics and edge case handling
-- Diagnostic services and configuration options
+This is a **bug-fix / cleanup release** that corrects logic errors identified in review.
+No new sections were added; existing specifications were corrected.
 
-### Value Delivered in v1.1
-v1.1 completes the dual mechanism pattern documentation:
-1. **Zone Control (A1+A2)** - Both service calls and valve events ✅
-2. **Climate Override (B1+B2)** - Both immediate override and coordinator updates ✅
-3. **Complete code examples** - Production-ready implementations for both mechanisms
-4. **Safety mechanisms** - Event loop prevention, race condition handling, edge cases
-5. **Integration patterns** - How A1/A2 and B1/B2 work together
+#### Fixes Applied
 
-### Planned for Future Versions
-- **v1.2**: Complete Section IV (4.3 Configuration Schema, 4.4 Entity Specifications)
-- **v1.3**: Section V (8 Business Logic Scenarios with diagrams)
-- **v1.4**: Section VI (5-Phase Implementation Plan)
-- **v1.5**: Section VII-VIII (Testing Strategy, Security & Safety)
-- **v1.6**: Section IX-X (Developer Guide, Appendices)
+| # | Severity | Description |
+|---|----------|-------------|
+| 1 | 🔴 Critical | **Threshold standardised to 2 s** throughout — all `> 1` comparisons in the B1 logic changed to `> 2` to match the `_is_manual_change()` implementation in §4.2.2 |
+| 2 | 🔴 Critical | **`get_available_fallback()` preference reversed** — now correctly prefers fallbacks that are *already opening* (to benefit from remaining-time optimisation) rather than ones that are *not* open |
+| 3 | 🔴 Critical | **`IndexError` guard added** to `get_available_fallback()` — raises `RuntimeError` with a clear message if no fallback zones are configured |
+| 4 | 🔴 Critical | **`asyncio.create_task()` removed** from data-flow diagram — replaced with `hass.async_create_task()` (required in HA callback context) |
+| 5 | 🟠 Medium | **`valve_state_changed_at` contract clarified** — `open_valve()` is responsible for setting the timestamp; `_calculate_remaining_delay()` only reads it |
+| 6 | 🟠 Medium | **A2 feedback-loop risk documented** — added `_system_valve_change` guard pattern to prevent the coordinator's own switch calls from triggering zone auto-disable |
+| 7 | 🟠 Medium | **Cooling mode algorithm added** to `_calculate_main_target()` |
+| 8 | 🟠 Medium | **Temperature constraint fixed** — replaced hard-coded `max(15, min(30, …))` (wrong for heat-pump water temperatures) with HVAC-mode-specific constraints matching DE DIETRICH STRATEO 4 R32 specs; made configurable via `min_water_temp` / `max_water_temp` |
+| 9 | 🟠 Medium | **Startup race condition fixed** in `_is_manual_change()` — before first coordinator cycle (`last_coordinator_update is None`) B1 now stays dormant instead of treating state-restore events as manual overrides |
+| 10 | 🟡 Low | **Edge Case 2 corrected** in §4.2.7 — documented that the second rapid manual change (within 2 s) is *ignored* by B1 (not re-detected as manual); B2 corrects on the next cycle |
 
 ### Source Documentation
-This v1.0 consolidates content from:
+This document consolidates content from:
 - `docs/current/FINAL_APPROVED_SOLUTION.md` (1109 lines) - Primary architecture
 - `docs/current/IMPLEMENTATION_ROADMAP.md` (368 lines) - Implementation plan
 - `docs/current/INDEX_IMPLEMENTATION_READY.md` (306 lines) - Navigation guide
 - `docs/current/REFINEMENT_DELAYED_ZONE_DISABLE.md` (495 lines) - Delayed disable logic
 - Hardware research for DE DIETRICH STRATEO 4 R32 and Sonoff MINI-ZB2GS
 
-### Why Incremental Approach?
-The original plan for a complete 6800-line document in one session was not feasible due to:
-- Time constraints (59-minute session limit)
-- Complexity of consolidating 30+ documents
-- Risk of incomplete delivery
-
-**This incremental approach delivers:**
-- ✅ Usable documentation immediately
-- ✅ Each version adds value
-- ✅ Lower risk of incomplete work
-- ✅ Better for review and maintenance
+### Planned for Future Versions
+- **v1.3**: Complete Section IV (4.3 Configuration Schema, 4.4 Entity Specifications)
+- **v1.4**: Section V (8 Business Logic Scenarios with diagrams)
+- **v1.5**: Section VI (5-Phase Implementation Plan)
+- **v1.6**: Section VII-VIII (Testing Strategy, Security & Safety)
+- **v1.7**: Section IX-X (Developer Guide, Appendices)
 
 ---
 
-**Document Version**: 1.1  
-**Status**: Technical Specifications Complete  
+**Document Version**: 1.2  
+**Status**: Sections I–IV.2 complete; critical and medium bugs corrected  
 **Implementation Ready**: Yes  
 **Next Steps**: Begin implementation of dual mechanisms (A1+A2, B1+B2) following Section IV technical specifications
 
 ---
-**END OF DOCUMENT v1.1**
+**END OF DOCUMENT v1.2**
 
