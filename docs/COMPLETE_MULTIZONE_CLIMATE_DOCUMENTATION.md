@@ -1253,7 +1253,8 @@ class SafetyCoordinator:
         3. If no fallbacks are enabled, enable the first configured fallback.
         
         Raises:
-            RuntimeError: If no fallback zones are configured at all.
+            RuntimeError: Raised immediately at function entry if no fallback zones
+                are configured (i.e. `is_fallback=true` is not set on any zone).
         """
         fallback_zones = [z for z in self.zones if z.is_fallback]
         

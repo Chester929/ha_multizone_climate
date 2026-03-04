@@ -659,7 +659,8 @@ def _get_available_fallback(self):
     4. If none enabled, enable the first configured fallback.
     
     Raises:
-        RuntimeError: If no fallback zones are configured.
+        RuntimeError: Raised immediately at function entry if no fallback zones
+            are configured (i.e. `is_fallback=true` is not set on any zone).
     """
     
     # Get all fallback zones
